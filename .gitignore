@@ -1,5 +1,7 @@
-# research clones (not part of the product)
-research/
+# research clones (not part of the product), but keep our own research notes
+research/*
+!research/notes/
+!research/notes/**
 
 # node
 node_modules/

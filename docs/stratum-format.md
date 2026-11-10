@@ -12,12 +12,19 @@ Stratum 的导出菜单实际提供 3 项（文件名 `backup-yyyy-MM-dd_HHmmss.
 | --- | --- | --- |
 | Strong 加密（设置密码） | 文件以 16 字节 ASCII `AUTHENTICATORPRO` 开头 | `.stratum` |
 | 明文 JSON 备份（密码留空） | UTF-8，JSON 对象，含 `Authenticators` 键 | `.stratum` |
-| Legacy 加密（旧版本恢复用） | 文件以 16 字节 ASCII `AuthenticatorPro` 开头 | `.stratum` |
+| Legacy 加密（**仅历史文件**，当前导出 UI 不产生） | 文件以 16 字节 ASCII `AuthenticatorPro` 开头 | `.stratum` |
 | URI 列表 | UTF-8 文本，每行 `otpauth://...` | `.txt` |
 | HTML（QR + 明文，**不可导回**） | 以 `<!DOCTYPE html` / `<html` 开头 | `.html` |
 
 导入器必须按**内容**而不是扩展名判断：先做加密魔数判断 → HTML 判断（提示"HTML 导出无法导入，请用 .stratum 备份或 URI 列表"）
 → 尝试 JSON → 尝试 URI 列表。加密与明文都可能是 `.stratum`，不能靠扩展名区分。
+
+补充：
+
+- Legacy（`AuthenticatorPro` 头）**只用于恢复旧版本备份**，当前版本导出不会生成；
+- 若开启了 Stratum 的自动备份（AutoBackup），它会把 Strong 加密的 `.stratum` 写到用户选择的 SAF 目录，
+  命名规则同样为 `backup-YYYY-MM-dd_HHmmss.stratum`（需要密码时自动使用数据库密码）；
+- Stratum 的"Back up to encrypted file"在密码留空时二次确认后导出**明文** `.stratum`（无任何头）。
 
 ## Strong 加密布局
 
