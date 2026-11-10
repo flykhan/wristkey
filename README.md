@@ -67,7 +67,7 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 
 | 检查 | 结果 |
 | --- | --- |
-| 手环端 `npm test`（TOTP RFC 6238/4226、协议状态机、模型边界） | **48/48** |
+| 手环端 `npm test`（TOTP RFC 6238/4226、协议状态机、模型边界、ux 结构回归） | **51/51** |
 | 手机端 `./gradlew testDebugUnitTest`（Stratum 解密/映射、TOTP、协议） | **58/58** |
 | e2e Node 验证（跨实现加解密、协议回放、非法用例、band 模块对拍） | **121/121** |
 | e2e Python 独立验证（第三方实现解密 + RFC 向量） | **17/17** |
@@ -77,7 +77,7 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 
 产物：
 
-- 手环：`band-app/dist/dev.wristkey.app.release.1.0.0.rpk`（约 53 KB）
+- 手环：`band-app/dist/dev.wristkey.app.release.1.0.1.rpk`（约 53 KB）
 - 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（约 25 MB）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
@@ -93,3 +93,10 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 ## 免责声明
 
 TOTP Secret 等同于账号凭证。请仅在自己信任的设备上使用；使用前阅读 [安全说明](docs/security.md)。
+
+## 真机回归记录
+
+2026-11-10：v1.0.0 在小米手环 10 Pro 上打开闪退。日志显示
+`TypeError: cannot set property 'style' of null` + `appData is undefined`，根因是 `app.ux` 缺少
+`<script>` 包裹导致默认导出为 null。已修复并发布 **v1.0.1（versionCode 2）**，
+新增 `band-app/tests/uxStructure.test.mjs` 回归测试；详见 [reports/e2e-report.md](reports/e2e-report.md) 第 10 节。

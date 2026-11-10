@@ -1,6 +1,8 @@
+<script>
 export default {
   onCreate() {
     // No secrets or sync payloads are logged anywhere in this app.
   },
   onDestroy() {}
 }
+</script>

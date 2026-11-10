@@ -216,3 +216,37 @@ e2e verify、Python verify、check-signing 输出）。关键退出码均为 0�
 - e2e/README.md：夹具/框架用法、覆盖矩阵、歧义记录；
 - e2e/verify-result.json：Node 121 项逐条结果；
 - reports/e2e-build-result.json：构建检查 25 项逐条结果。
+
+---
+
+## 10. 真机回归修复（2026-11-10 15:53，v1.0.1）
+
+真机（小米手环 10 Pro）首次安装 v1.0.0 后打开闪退。用户日志（/data/offlinelog/tmp.log）关键行：
+
+~~~
+[AIOTJS] [jse_dump_obj:907] TypeError: cannot set property 'style' of null
+    at <anonymous> (@aiot/app:1)
+[AIOTJS] [initUserData:81] appData is undefined
+[AIOTJS] [initAppEnv:507] init user data failed
+[AIOTJS] [run:416] initAppEnv failed
+[qapp] state_error: [dev.wristkey.app]: [forground]-->[stopped]
+~~~
+
+根因：`band-app/src/app.ux` 只有裸 `export default {...}`，缺少 Vela 要求的 `<script>…</script>` 包裹；
+编译产物 `build/app.js` 因此得到 null 默认导出，运行到 `n.default.style = []` 时报
+`cannot set property 'style' of null`，随即 initAppEnv 失败退出。
+（页面 .ux 都有正确的 template/script/style 三段，仅 app.ux 遗漏。）
+
+修复：`app.ux` 用 `<script>` 包裹；`manifest.json` 升到 versionName 1.0.1 / versionCode 2；
+新增 `band-app/tests/uxStructure.test.mjs` 回归测试（app.ux/pages 结构 + manifest 要素），band 单测 51/51。
+
+修复后产物：
+
+| 产物 | 大小 | SHA-256 |
+| --- | --- | --- |
+| `band-app/dist/dev.wristkey.app.release.1.0.1.rpk` | 54,794 B | `ec560bed51118ec7beccb7432fa7a66fb33f01a1d5b64e709fa85077bc05abf2` |
+
+校验：`band-app/scripts/verify-rpk.mjs` 11/11 PASS；`scripts/check-signing.sh` PASS（APK 与 rpk 同证书、同包名）。
+
+> 该问题无法通过 Node/CI 构建测试发现（构建/签名均通过），只有真机运行会暴露；
+> 已用源码结构回归测试覆盖。真机复测仍需用户安装 v1.0.1 后确认。
