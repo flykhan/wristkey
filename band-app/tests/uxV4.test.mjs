@@ -10,10 +10,10 @@ function read(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), "utf8")
 }
 
-test("manifest is 2.0.1 / versionCode 7 with lock and pin routes", () => {
+test("manifest is 2.0.2 / versionCode 8 with lock and pin routes", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.0.1")
-  assert.equal(manifest.versionCode, 7)
+  assert.equal(manifest.versionName, "2.0.2")
+  assert.equal(manifest.versionCode, 8)
   assert.equal(manifest.package, "dev.wristkey.app")
   assert.equal(manifest.router.entry, "pages/index")
   for (const page of ["index", "lock", "pin", "detail", "picker", "menu", "copyright"]) {
@@ -33,10 +33,10 @@ test("app.ux relocks on cold start / after idle without breaking the script wrap
   assert.match(source, /export\s+default/)
   assert.match(source, /pinSessionStore/)
   assert.match(source, /clearSession\(/)
-  assert.match(source, /coldStartPending/)
+  assert.doesNotMatch(source, /coldStartPending/)
   assert.match(source, /shouldRelock\(Date\.now\(\)/)
   assert.match(source, /loadPin\(/)
-  assert.match(source, /router\.replace\(\{ uri: "\/pages\/lock" \}\)/)
+  assert.match(source, /router\.push\(\{ uri: "\/pages\/lock" \}\)/)
   assert.match(source, /\/pages\/lock/)
   assert.match(source, /\/pages\/pin/)
 })
@@ -51,10 +51,10 @@ test("lock page renders T/S/C pattern and handles failures with persisted lock",
   assert.match(source, /loadLock/)
   assert.match(source, /pinSessionStore/)
   assert.match(source, /markUnlocked\(Date\.now\(\),/)
-  assert.match(source, /markUnlocked[\s\S]*router\.replace\(\{ uri: "\/pages\/index" \}\)/)
+  assert.match(source, /markUnlocked[\s\S]*router\.back\(\)/)
   assert.match(source, /lockRemainingMs|isLocked/)
   assert.match(source, /shakeOffset/)
-  assert.match(source, /router\.replace\(\{ uri: "\/pages\/index" \}\)/)
+  assert.doesNotMatch(source, /router\.replace\(/)
   assert.match(source, /this\.\$app\.exit\(\)/)
   assert.match(source, /onlongpress="clearInput"/)
 })
@@ -103,9 +103,9 @@ test("detail shows username and a 10s masked password row", () => {
   assert.match(source, /onHide\(\)/)
 })
 
-test("copyright page reports 2.0.1 with protocol v3", () => {
+test("copyright page reports 2.0.2 with protocol v3", () => {
   const source = read("src/pages/copyright/copyright.ux")
-  assert.match(source, /版本 2\.0\.1/)
+  assert.match(source, /版本 2\.0\.2/)
   assert.match(source, /协议 v3/)
   assert.match(source, /PBKDF2/)
 })

@@ -79,6 +79,26 @@ test("index is the v3 layout: no top bar, 3 rows, right letter rail", () => {
   assert.ok(source.includes("this.$app.exit"), "左滑应退出应用")
 })
 
+// Regression guard for the 2026-11-10 "pattern accepted but no next screen":
+// index used to replace itself with the lock page from BOTH onInit and onShow,
+// and the lock page replaced the stack with index. Vela ends up with an empty
+// page stack, so the app exits. Entry -> lock must be a push, unlock a back.
+test("entry page pushes the lock and the lock page goes back", () => {
+  const index = read("src/pages/index/index.ux")
+  assert.match(index, /router\.push\(\{ uri: "\/pages\/lock" \}\)/)
+  assert.doesNotMatch(index, /router\.replace\(\{ uri: "\/pages\/lock" \}\)/)
+  const onInitBlock = index.slice(index.indexOf("onInit()"), index.indexOf("onShow()"))
+  assert.doesNotMatch(onInitBlock, /ensureUnlocked|pages\/lock/, "onInit 不应再次触发锁屏")
+
+  const lock = read("src/pages/lock/lock.ux")
+  assert.match(lock, /markUnlocked\([\s\S]*router\.back\(\)/)
+  assert.doesNotMatch(lock, /router\.replace\(\{ uri: "\/pages\/index" \}\)/)
+
+  for (const file of ["src/app.ux", ...pageFiles()]) {
+    assert.doesNotMatch(read(file), /router\.replace\(/, file + " 不应使用 router.replace")
+  }
+})
+
 test("menu exposes pin, sync, about and exit only", () => {
   const source = read("src/pages/menu/menu.ux")
   assert.doesNotMatch(source, /openCategory|分类|toggleTheme|显示模式/)
@@ -91,8 +111,8 @@ test("menu exposes pin, sync, about and exit only", () => {
 
 test("picker page is registered and renders the 3-page 4x4 grid", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.0.1")
-  assert.equal(manifest.versionCode, 7)
+  assert.equal(manifest.versionName, "2.0.2")
+  assert.equal(manifest.versionCode, 8)
   assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
   assert.equal(manifest.router.pages["pages/picker"].component, "picker")
 

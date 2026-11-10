@@ -1,8 +1,8 @@
 {
   "package": "dev.wristkey.app",
   "name": "腕证",
-  "versionName": "2.0.1",
-  "versionCode": 7,
+  "versionName": "2.0.2",
+  "versionCode": 8,
   "minPlatformVersion": 1000,
   "icon": "/common/logo.png",
   "deviceTypeList": [

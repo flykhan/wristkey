@@ -30,9 +30,9 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'dev.wristkey.app';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 2.0.1（v2.0.1：持久化解锁会话，修复解锁后回弹锁屏）/ APK 2.0.0（v2 重设计 + 入口图案）
-const EXPECTED_BAND_VERSION = '2.0.1';
-const EXPECTED_BAND_VERSION_CODE = 7;
+// 版本：band .rpk 2.0.2（v2.0.2：入口页 push 锁屏、解锁 back，修复页面栈为空/退出）/ APK 2.0.0（v2 重设计 + 入口图案）
+const EXPECTED_BAND_VERSION = '2.0.2';
+const EXPECTED_BAND_VERSION_CODE = 8;
 const EXPECTED_APK_VERSION = '2.0.0';
 const EXPECTED_APK_VERSION_CODE = 4;
 const EXPECTED_BAND_RPK_NAME = 'dev.wristkey.app.release.' + EXPECTED_BAND_VERSION + '.rpk';
@@ -515,13 +515,18 @@ function checkBandUiV4() {
     }
   }
 
-  // 1) 冷启动锁屏：app.ux onShow 读取图案并跳转 /pages/lock
+  // 1) 冷启动锁屏：入口页 push /pages/lock，解锁 back；禁止 replace（会清空页面栈）
   checkMarkers('UI v4 app.ux 冷启动锁屏跳转', appUx, [
-    '/pages/lock', 'router.replace', 'shouldRelock', 'loadPin'
+    '/pages/lock', 'router.push', 'shouldRelock', 'loadPin'
   ]);
+  if (appUx.indexOf('router.replace(') >= 0 || indexUx.indexOf('router.replace(') >= 0 || lockUx.indexOf('router.replace(') >= 0) {
+    fail('UI v4 锁屏页面栈', '入口页/锁屏页不应使用 router.replace');
+  } else {
+    pass('UI v4 锁屏页面栈');
+  }
   checkMarkers('UI v4 锁屏页 pages/lock', lockUx, [
     'class="slots"', 'for="{{ slots }}"', 'PATTERN_SYMBOLS', 'verifyPattern',
-    'nextLockAfterFailure', '腕证已锁定', 'class="close"'
+    'nextLockAfterFailure', '腕证已锁定', 'class="close"', 'router.back'
   ]);
   checkMarkers('UI v4 入口图案设置页 pages/pin', pinUx, [
     'class="slots"', 'for="{{ slots }}"', '设置入口密码', 'verifyPattern', 'createPinRecord', 'mode'

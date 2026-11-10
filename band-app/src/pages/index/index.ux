@@ -107,16 +107,18 @@ export default {
     this.channelReady = false
     this.loadTheme()
     this.loadLetterFilter()
-    this.ensureUnlocked(() => {
-      this.loadSnapshot()
-      this.setupChannel()
-    })
   },
 
   onShow() {
     this.loadTheme()
     this.loadLetterFilter()
+    // Only onShow decides whether to lock. Deciding in onInit as well would
+    // push two lock pages on a cold start and leave the page stack broken.
     this.ensureUnlocked(() => {
+      if (!this.channelReady) {
+        this.channelReady = true
+        this.setupChannel()
+      }
       this.loadSnapshot()
       this.startTicker()
     })
@@ -142,7 +144,9 @@ export default {
       shouldRelock(Date.now(), relock => {
         if (relock) {
           this.stopTicker()
-          router.replace({ uri: "/pages/lock" })
+          // Push, never replace: index is the entry page, so unlocking can
+          // simply go back to the live index instance.
+          router.push({ uri: "/pages/lock" })
           return
         }
         callback()

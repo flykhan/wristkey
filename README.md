@@ -80,17 +80,17 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 
 | 检查 | 结果 |
 | --- | --- |
-| 手环端 `npm test`（TOTP/Steam 向量、协议 v2/v3、pin、UI v4 结构、分页/字号/筛选） | **105/105** |
+| 手环端 `npm test`（TOTP/Steam 向量、协议 v2/v3、pin、UI v4 结构、分页/字号/筛选、页面栈回归） | **106/106** |
 | 手机端 `./gradlew testDebugUnitTest`（Stratum/Bitwarden、密码、TOTP/Steam、协议 v3、图案、合并） | **106/106** |
 | e2e Node 验证（跨实现加解密、协议回放、Bitwarden 映射、band 模块对拍、协议 v3/pin） | **171/171** |
 | e2e Python 独立验证（第三方实现解密 + RFC/Steam/Bitwarden/pin 向量） | **40/40** |
-| 构建 / 包名 / 版本 / 权限 / 签名 / UI v4 静态检查（`--build --with-tests`） | **82 PASS / 0 FAIL** |
+| 构建 / 包名 / 版本 / 权限 / 签名 / UI v4 静态检查（`--build --with-tests`） | **80 PASS / 0 FAIL** |
 | APK 与 .rpk 同证书 | ✅ `SHA-256 b7cfba…85c4`（= `signing/rpk-sign/certificate.pem` = rpk 内嵌 DER） |
 | 真机（安装、interconnect、xms、480×336 UI、锁屏/图案/详情密码） | **待验证**：v1.0 启动闪退与 Steam 问题已由真机反馈定位修复；v2.0 UI 待实拍 |
 
 产物：
 
-- 手环：`band-app/dist/dev.wristkey.app.release.2.0.1.rpk`（114,700 B，sha256 `9a1e122d63586191c3daa49d4404a1e28943ec9d8782dcb621bc6b4531d3f563`，2.0.1 / versionCode 7）
+- 手环：`band-app/dist/dev.wristkey.app.release.2.0.2.rpk`（114,640 B，sha256 `9f291264837ecd192d3bf7fe4cb727b395d9d132a9d01218f3a3a9623286b393`，2.0.2 / versionCode 8）
 - 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（26,492,665 B，sha256 `dd53148580a56881eee40e3389af96c37d5dbdee37dee7fc3b7aef85e10a47e1`，2.0.0 / versionCode 4，无 INTERNET 权限）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
@@ -128,5 +128,9 @@ TOTP Secret 与账号密码等同于账号凭证。请仅在自己信任的设�
    不跨页面共享，`/pages/index` 读不到刚写入的解锁状态又跳回锁屏。改为用 `@system.storage` 持久化
    解锁时间戳（`wristkey_unlock_v1`），跨页共享、2 分钟闲置重锁、冷启动清除；发布
    **手环 2.0.1（versionCode 7）**。
+7. **2026-11-10 输入图案后仍无法进入主界面**（2.0.1）：日志显示页面栈为空（`PageNavigator getState error: empty stack`）
+   并触发 `state_error`。根因是入口页与锁屏页都用 `router.replace` 跳转，且 index 的 onInit/onShow 与 app.ux
+   重复上锁，把页面栈清空。改为**入口 push 锁屏、解锁 back、只在 onShow 做一次门禁、彻底移除 replace**；发布
+   **手环 2.0.2（versionCode 8）**。
 
 详见 [reports/e2e-report.md](reports/e2e-report.md)。

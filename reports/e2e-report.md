@@ -1,21 +1,27 @@
-# WristKey 端到端验收报告 v4（v2.0：入口图案 + 协议 v3 + UI v4；含 v2.0.1 回归修复）
+# WristKey 端到端验收报告 v4（v2.0：入口图案 + 协议 v3 + UI v4；含 v2.0.1/v2.0.2 回归修复）
 
-- 任务：task-14（QA：v2.0 全量验收）；v2.0.1 解锁回弹回归由 Lead 复验
+- 任务：task-14（QA：v2.0 全量验收）；v2.0.1 解锁回弹、v2.0.2 页面栈回归由 Lead 复验
 - 执行：qa，2026-11-10 20:00 (Asia/Shanghai)
 - 结论：**PASS** —— v2.0 的入口图案锁屏、协议 v3（password/pin）、手环 UI v4 与 Android 重设计均已实现并通过自动化验证：
-  band-app **105/105**、android-app JVM **106/106（16 个测试类）**、Node e2e **171/171**、Python **40/40**；
-  构建/包名/版本/权限/UI/签名检查 **82 PASS / 0 FAIL / 0 SKIP**；APK 与 .rpk 同证书、包名一致。
+  band-app **106/106**、android-app JVM **106/106（16 个测试类）**、Node e2e **171/171**、Python **40/40**；
+  构建/包名/版本/权限/UI/签名检查 **80 PASS / 0 FAIL / 0 SKIP**；APK 与 .rpk 同证书、包名一致。
 - 本轮未发现 band-app / android-app 实现 bug。唯一调整是 e2e 自身的 v3 picker 静态检查与新分页网格不匹配，
   已按 v4 架构更新检查逻辑（非产品缺陷，详见 6.2）。
 - **v2.0.1 回归修复（2026-11-10 20:56）**：真机反馈“输完图案没有进入下一屏”。根因是 Vela 每页独立打包，
-  pinSession.js 的内存解锁时间戳不跨页面共享，index 读不到后跳回锁屏。改为 `pinSessionStore.js` 将时间戳
-  写入 `@system.storage`（wristkey_unlock_v1），lock 页写成功后再导航，index/app.ux 异步读取；2 分钟闲置重锁、
-  冷启动清除。手环 2.0.1 / versionCode 7：band 105/105、e2e 171/171、构建检查 82 PASS、签名 PASS。
+  内存中的解锁时间戳不跨页面共享，index 读不到后跳回锁屏。改为把解锁时间戳写入 `@system.storage`
+  （`wristkey_unlock_v1`），lock 页写成功后再导航，index/app.ux 异步读取；2 分钟闲置重锁、冷启动清除。
+  手环 2.0.1 / versionCode 7：band 105/105、e2e 171/171、构建检查 82 PASS、签名 PASS。
+- **v2.0.2 回归修复（2026-11-10 21:10）**：用户复测仍无法进入主界面。手环日志显示
+  `PageNavigator getState error: empty stack!` 与 `state_error`。根因是入口 `/pages/index` 在 onInit 与 onShow
+  各上锁一次、app.ux onShow 再上锁，且锁屏/解锁都用 `router.replace`，把页面栈清空。改为**入口 push 锁屏、
+  解锁 back、只在 onShow 做一次门禁、app.ux 只处理非入口页重锁、移除全部 replace**。
+  手环 2.0.2 / versionCode 8：band 106/106（新增页面栈回归用例）、e2e 171/171、Python 40/40、
+  构建检查 80 PASS / 0 FAIL、签名 PASS。
 - 未覆盖：小米手环 10 Pro 真机上的 UI v4/图案交互与 pin 状态同步，见第 8 节。
 
 ## 1. v2.0 交付范围与 UI v4 实现
 
-### 1.1 手环端（rpk 2.0.1 / versionCode 7；v2.0 功能 + 持久化解锁会话修复）
+### 1.1 手环端（rpk 2.0.2 / versionCode 8；v2.0 功能 + 持久化解锁会话 + 页面栈修复）
 
 依据 docs/design/ui-v4-analysis.md：
 
@@ -117,14 +123,14 @@
 
 | 产物 | 路径 | 大小 | SHA-256 | 关键属性 |
 | --- | --- | --- | --- | --- |
-| band .rpk | band-app/dist/dev.wristkey.app.release.2.0.1.rpk | 114,700 B | 9a1e122d63586191c3daa49d4404a1e28943ec9d8782dcb621bc6b4531d3f563 | package=dev.wristkey.app，name=腕证，versionName=2.0.1，versionCode=7，deviceTypeList=[watch] |
+| band .rpk | band-app/dist/dev.wristkey.app.release.2.0.2.rpk | 114,640 B | 9f291264837ecd192d3bf7fe4cb727b395d9d132a9d01218f3a3a9623286b393 | package=dev.wristkey.app，name=腕证，versionName=2.0.2，versionCode=8，deviceTypeList=[watch] |
 | android release APK | android-app/app/build/outputs/apk/release/app-release.apk | 26,492,665 B | dd53148580a56881eee40e3389af96c37d5dbdee37dee7fc3b7aef85e10a47e1 | package=dev.wristkey.app，label=腕证，versionName=2.0.0，versionCode=4，minSdk 28，targetSdk 36 |
 | 签名证书 PEM | signing/rpk-sign/certificate.pem | — | SHA-256 指纹 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4 | CN=WristKey Dev, OU=WristKey, O=WristKey, C=CN |
 | 测试夹具 | e2e/fixtures/（含 protocol-v3/） | 见 10.1 | 见 10.1 | 确定性生成，密码 test-password |
 
-> v2.0.0 rpk 为 113,923 B；v2.0.1 修复后重建为 114,700 B（构建含时间戳，非确定性）。
+> v2.0.0 rpk 为 113,923 B；v2.0.1 为 114,700 B；v2.0.2 页面栈修复后重建为 114,640 B（构建含时间戳，非确定性）。
 > APK 未改动，重建后 sha256 与交付件完全一致（dd531485…a47e1）。
-> .rpk 内嵌证书 DER 命中 offset 110674；APK 证书 = PEM = b7cfba…85c4。
+> .rpk 内嵌证书 DER 命中 offset 110614；APK 证书 = PEM = b7cfba…85c4。
 
 ## 5. 验收执行结果
 
@@ -132,14 +138,14 @@
 
 ~~~
 node e2e/check-build.mjs --build --with-tests   # 重建 rpk+APK、双端单测、全量检查
-构建检查: 82 PASS / 0 FAIL / 0 SKIP
+构建检查: 80 PASS / 0 FAIL / 0 SKIP
 ~~~
 
 覆盖：
 
 - band：manifest.package/name、deviceTypeList、features（router/storage/interconnect）、designWidth；
-- band npm test（105 用例）、npm run release；rpk 文件名 dev.wristkey.app.release.2.0.1.rpk、
-  versionName 2.0.1、versionCode 7；
+- band npm test（106 用例）、npm run release；rpk 文件名 dev.wristkey.app.release.2.0.2.rpk、
+  versionName 2.0.2、versionCode 8；
 - **手环 UI v3 回归检查 17 项**（无顶栏、56px rail、ACCOUNTS_PER_PAGE=3、picker 路由/字母桶、测试覆盖），
   其中 picker 的“全部/#”检查已兼容 v4 分页网格（由 settings.js PICKER_PAGE_KEYS 提供）；
 - **手环 UI v4 检查 20 项**：冷启动锁屏跳转、持久化解锁会话（pinSessionStore）、pages/lock、pages/pin、5 位 TSC 正则、三色、

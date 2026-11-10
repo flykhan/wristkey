@@ -103,7 +103,7 @@ export default {
     loadPin(record => {
       if (!record) {
         // No entry lock configured: never show an unlock screen.
-        router.replace({ uri: "/pages/index" })
+        router.back()
         return
       }
       this.pin = record
@@ -189,7 +189,10 @@ export default {
       // Persist the unlock before navigating: index.ux reads the same storage
       // key in its own bundle and would otherwise bounce back to the lock page.
       markUnlocked(Date.now(), () => {
-        router.replace({ uri: "/pages/index" })
+        // The lock page is always pushed on top of the entry page, so going
+        // back reveals the already-running index instead of building a new
+        // page stack (router.replace could empty the stack and exit the app).
+        router.back()
       })
       return
     }

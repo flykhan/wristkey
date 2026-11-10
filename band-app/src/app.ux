@@ -5,34 +5,34 @@ import { clearSession, shouldRelock } from "./common/scripts/pinSessionStore"
 
 export default {
   onCreate() {
-    // Cold start always asks for the pattern again. The flag covers the short
-    // window before the async storage delete completes.
-    this.coldStartPending = true
-    clearSession(() => {
-      this.coldStartPending = false
-    })
+    // A cold start always asks for the pattern again. The persisted session is
+    // kept in two page bundles only while the app stays alive.
+    clearSession(() => {})
   },
   onShow() {
+    // The page navigator may still be empty during cold start. The entry page
+    // (index.ux) owns the first lock decision; app.ux only re-locks when the
+    // app returns to the foreground on a non-entry page.
     const state = readRouteState()
     const path = (state && (state.path || state.name)) || ""
+    if (!path) {
+      return
+    }
     if (path.indexOf("/pages/lock") >= 0 || path.indexOf("/pages/pin") >= 0) {
       return
     }
-    if (this.coldStartPending) {
-      this.relock()
+    if (path.indexOf("/pages/index") >= 0) {
       return
     }
-    shouldRelock(Date.now(), relock => {
-      if (relock) {
-        this.relock()
-      }
-    })
-  },
-  relock() {
     loadPin(record => {
-      if (record) {
-        router.replace({ uri: "/pages/lock" })
+      if (!record) {
+        return
       }
+      shouldRelock(Date.now(), relock => {
+        if (relock) {
+          router.push({ uri: "/pages/lock" })
+        }
+      })
     })
   },
   onDestroy() {}
