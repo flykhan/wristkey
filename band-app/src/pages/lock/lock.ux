@@ -1,0 +1,368 @@
+<template>
+  <div class="page" onlongpress="clearInput" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
+    <div class="top" style="margin-left: {{ shakeOffset }}px">
+      <div class="close" onclick="exitApp" style="background-color: {{ theme.buttonBackground }}">
+        <text class="close-text" style="color: {{ theme.secondary }}">×</text>
+      </div>
+      <text class="title" style="color: {{ theme.title }}">腕证已锁定</text>
+      <div class="top-spacer"></div>
+    </div>
+
+    <div class="slots" style="margin-left: {{ shakeOffset }}px">
+      <div class="slot" for="{{ slots }}" style="background-color: {{ theme.itemBackground }}; border-width: {{ $item.borderWidth }}px; border-color: {{ $item.borderColor }}">
+        <text class="slot-glyph" if="{{ $item.filled }}" style="color: {{ $item.color }}">{{ $item.glyph }}</text>
+      </div>
+    </div>
+
+    <text class="hint" style="color: {{ hintColor }}">{{ hintText }}</text>
+
+    <div class="keys" style="opacity: {{ keyOpacity }}; margin-left: {{ shakeOffset }}px">
+      <div class="key" for="{{ symbols }}" onclick="tapSymbol($item.key)" style="background-color: {{ theme.cardBackground }}; border-color: {{ theme.cardBorder }}">
+        <text class="key-glyph" style="color: {{ $item.color }}">{{ $item.glyph }}</text>
+        <text class="key-label" style="color: {{ theme.secondary }}">{{ $item.label }}</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import storage from "@system.storage"
+import {
+  PATTERN_LENGTH,
+  PATTERN_SYMBOLS,
+  emptyLockState,
+  isLocked,
+  formatLockCountdown,
+  lockRemainingMs,
+  nextLockAfterFailure,
+  resetLockState,
+  verifyPattern
+} from "../../common/scripts/pin"
+import { loadLock, loadPin, saveLock } from "../../common/scripts/pinStore"
+import { markUnlocked } from "../../common/scripts/pinSession"
+import {
+  DARK_THEME,
+  DEFAULT_DARK_MODE,
+  THEME_STORAGE_KEY,
+  parseDarkMode,
+  themeFor
+} from "../../common/scripts/settings"
+
+export default {
+  private: {
+    theme: DARK_THEME,
+    symbols: PATTERN_SYMBOLS,
+    pin: null,
+    lock: emptyLockState(),
+    input: [],
+    slots: [],
+    hintText: "按顺序点击 5 个图形",
+    hintColor: DARK_THEME.secondary,
+    keyOpacity: 1,
+    shakeOffset: 0,
+    ready: false,
+    timer: null,
+    verifying: false
+  },
+
+  onInit() {
+    this.loadTheme()
+    this.loadPin()
+  },
+
+  onShow() {
+    this.refreshLock()
+    this.startTicker()
+  },
+
+  onHide() {
+    this.stopTicker()
+  },
+
+  onDestroy() {
+    this.stopTicker()
+  },
+
+  loadTheme() {
+    storage.get({
+      key: THEME_STORAGE_KEY,
+      default: DEFAULT_DARK_MODE ? "true" : "false",
+      success: value => {
+        this.theme = themeFor(parseDarkMode(value))
+        this.refreshSlots()
+      },
+      fail: () => {
+        this.theme = themeFor(DEFAULT_DARK_MODE)
+        this.refreshSlots()
+      }
+    })
+  },
+
+  loadPin() {
+    loadPin(record => {
+      if (!record) {
+        // No entry lock configured: never show an unlock screen.
+        router.replace({ uri: "/pages/index" })
+        return
+      }
+      this.pin = record
+      loadLock(lock => {
+        this.lock = lock
+        this.ready = true
+        this.refreshLock()
+        this.startTicker()
+      })
+    })
+  },
+
+  refreshLock() {
+    if (!this.ready) {
+      return
+    }
+    const now = Date.now()
+    const locked = isLocked(this.lock, now)
+    this.keyOpacity = locked ? 0.4 : 1
+    this.refreshSlots()
+    if (locked) {
+      this.hintText = "错误次数过多 · " + formatLockCountdown(lockRemainingMs(this.lock, now))
+      this.hintColor = this.theme.progressDanger
+      return
+    }
+    if (this.input.length === 0) {
+      this.hintText = "按顺序点击 5 个图形"
+      this.hintColor = this.theme.secondary
+    }
+  },
+
+  refreshSlots() {
+    const chosen = []
+    for (let index = 0; index < this.input.length; index++) {
+      const key = this.input[index]
+      for (let symbol = 0; symbol < PATTERN_SYMBOLS.length; symbol++) {
+        if (PATTERN_SYMBOLS[symbol].key === key) {
+          chosen.push(PATTERN_SYMBOLS[symbol])
+          break
+        }
+      }
+    }
+    const slots = []
+    for (let index = 0; index < PATTERN_LENGTH; index++) {
+      const symbol = chosen[index]
+      const active = !symbol && index === this.input.length && !isLocked(this.lock, Date.now())
+      slots.push({
+        filled: !!symbol,
+        glyph: symbol ? symbol.glyph : "",
+        color: symbol ? symbol.color : this.theme.secondary,
+        borderWidth: active ? 2 : 0,
+        borderColor: active ? this.theme.accent : "transparent"
+      })
+    }
+    this.slots = slots
+  },
+
+  tapSymbol(key) {
+    if (!this.ready || this.verifying || isLocked(this.lock, Date.now())) {
+      return
+    }
+    if (this.input.length >= PATTERN_LENGTH) {
+      return
+    }
+    this.input = this.input.concat([key])
+    this.refreshSlots()
+    if (this.input.length === PATTERN_LENGTH) {
+      this.verifying = true
+      setTimeout(() => {
+        this.verify()
+      }, 150)
+    }
+  },
+
+  verify() {
+    const pattern = this.input.join("")
+    const result = verifyPattern(pattern, this.pin)
+    if (result.ok && result.matched) {
+      this.lock = resetLockState(Date.now())
+      saveLock(this.lock)
+      markUnlocked(Date.now())
+      this.input = []
+      this.verifying = false
+      router.replace({ uri: "/pages/index" })
+      return
+    }
+    this.handleFailure()
+  },
+
+  handleFailure() {
+    this.lock = nextLockAfterFailure(this.lock, Date.now())
+    saveLock(this.lock)
+    this.input = []
+    this.verifying = false
+    this.refreshSlots()
+    this.shake()
+    if (isLocked(this.lock, Date.now())) {
+      this.refreshLock()
+    } else {
+      this.hintText = "图案不正确，请重试"
+      this.hintColor = this.theme.progressDanger
+    }
+  },
+
+  shake() {
+    const offsets = [7, -7, 5, -5, 0]
+    for (let index = 0; index < offsets.length; index++) {
+      setTimeout(() => {
+        this.shakeOffset = offsets[index]
+      }, index * 55)
+    }
+  },
+
+  clearInput() {
+    if (isLocked(this.lock, Date.now())) {
+      return
+    }
+    this.input = []
+    this.verifying = false
+    this.hintText = "已清空，请重新输入"
+    this.hintColor = this.theme.secondary
+    this.refreshSlots()
+  },
+
+  startTicker() {
+    if (this.timer || !this.ready) {
+      return
+    }
+    this.timer = setInterval(() => {
+      this.refreshLock()
+    }, 1000)
+  },
+
+  stopTicker() {
+    if (!this.timer) {
+      return
+    }
+    clearInterval(this.timer)
+    this.timer = null
+  },
+
+  exitApp() {
+    this.$app.exit()
+  },
+
+  handleSwipe(event) {
+    if (!event || !event.direction) {
+      return
+    }
+    if (event.direction === "left") {
+      this.$app.exit()
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  padding: 8px 18px 10px;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+.top {
+  width: 100%;
+  height: 42px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.close {
+  width: 34px;
+  height: 34px;
+  border-radius: 17px;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-text {
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.title {
+  font-size: 19px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.top-spacer {
+  width: 34px;
+  height: 34px;
+}
+
+.slots {
+  width: 100%;
+  height: 56px;
+  margin-top: 2px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot {
+  width: 46px;
+  height: 46px;
+  margin-left: 5px;
+  margin-right: 5px;
+  border-radius: 23px;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-glyph {
+  font-size: 22px;
+  text-align: center;
+}
+
+.hint {
+  height: 20px;
+  margin-top: 2px;
+  font-size: 13px;
+  text-align: center;
+  lines: 1;
+}
+
+.keys {
+  flex: 1;
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.key {
+  width: 112px;
+  height: 92px;
+  margin-left: 8px;
+  margin-right: 8px;
+  border-radius: 20px;
+  border-width: 1px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.key-glyph {
+  font-size: 34px;
+  text-align: center;
+}
+
+.key-label {
+  margin-top: 3px;
+  font-size: 12px;
+  text-align: center;
+}
+</style>

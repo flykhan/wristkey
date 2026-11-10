@@ -11,6 +11,17 @@
         </div>
       </div>
 
+      <div class="credentials">
+        <div class="credential-row">
+          <text class="credential-label" style="color: {{ theme.secondary }}">用户名</text>
+          <text class="credential-value" style="color: {{ theme.body }}">{{ token.accountName }}</text>
+        </div>
+        <div class="credential-row" onclick="togglePassword">
+          <text class="credential-label" style="color: {{ theme.secondary }}">密码</text>
+          <text class="credential-value" style="color: {{ passwordEmpty ? theme.disabledText : theme.body }}">{{ passwordText }}</text>
+        </div>
+      </div>
+
       <div class="hero">
         <text class="code" style="color: {{ theme.codeColor }}; font-size: {{ token.codeFontSize }}px">{{ token.groupedCode }}</text>
         <div class="progress-track" style="background-color: {{ theme.progressTrack }}">
@@ -38,6 +49,7 @@ import {
   maskSecret,
   findAccountById
 } from "../../common/scripts/accountModel"
+import { PASSWORD_REVEAL_MS, passwordDisplay } from "../../common/scripts/settings"
 import { loadSnapshot } from "../../common/scripts/mfaConfig"
 import {
   DARK_THEME,
@@ -70,10 +82,13 @@ export default {
       period: 30
     },
     rows: [],
+    passwordText: "—",
+    passwordEmpty: true,
     countdownText: "",
     progressColor: DARK_THEME.progressSafe,
     theme: DARK_THEME,
-    timer: null
+    timer: null,
+    passwordTimer: null
   },
 
   onInit() {
@@ -89,10 +104,12 @@ export default {
 
   onHide() {
     this.stopTicker()
+    this.hidePassword()
   },
 
   onDestroy() {
     this.stopTicker()
+    this.hidePassword()
   },
 
   loadTheme() {
@@ -137,6 +154,8 @@ export default {
         period: 0
       }
       this.rows = []
+      this.passwordText = "—"
+      this.passwordEmpty = true
       this.countdownText = "返回列表查看最新账号"
       this.progressColor = this.theme.progressDanger
       return
@@ -145,6 +164,7 @@ export default {
     const token = buildTokenState(this.account, Date.now())
     token.codeFontSize = detailCodeFontSize(token.groupedCode)
     this.token = token
+    this.refreshPassword()
     this.progressColor = progressColor(token.remaining, this.theme)
     const isSteam = token.otpType === "steam"
     this.countdownText =
@@ -159,6 +179,46 @@ export default {
       { label: "周期", value: token.period + " 秒" },
       { label: "密钥", value: maskSecret(this.account.secret) }
     ]
+  },
+
+  refreshPassword() {
+    const display = passwordDisplay(this.account.password, this.passwordRevealed === true)
+    this.passwordText = display.text
+    this.passwordEmpty = display.empty
+  },
+
+  togglePassword() {
+    if (!this.account || this.passwordEmpty) {
+      return
+    }
+    if (this.passwordRevealed) {
+      this.hidePassword()
+      return
+    }
+    this.passwordRevealed = true
+    this.refreshPassword()
+    this.clearPasswordTimer()
+    this.passwordTimer = setTimeout(() => {
+      this.passwordTimer = null
+      this.hidePassword()
+    }, PASSWORD_REVEAL_MS)
+  },
+
+  hidePassword() {
+    this.clearPasswordTimer()
+    if (!this.passwordRevealed) {
+      return
+    }
+    this.passwordRevealed = false
+    this.refreshPassword()
+  },
+
+  clearPasswordTimer() {
+    if (!this.passwordTimer) {
+      return
+    }
+    clearTimeout(this.passwordTimer)
+    this.passwordTimer = null
   },
 
   startTicker() {
@@ -214,7 +274,7 @@ export default {
 
 .header {
   width: 100%;
-  height: 52px;
+  height: 46px;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
@@ -252,6 +312,33 @@ export default {
 .back-text {
   font-size: 16px;
   font-weight: bold;
+}
+
+.credentials {
+  width: 100%;
+  margin-top: 2px;
+  flex-direction: column;
+}
+
+.credential-row {
+  width: 100%;
+  height: 20px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.credential-label {
+  width: 52px;
+  font-size: 13px;
+}
+
+.credential-value {
+  flex: 1;
+  font-size: 14px;
+  text-align: right;
+  lines: 1;
+  text-overflow: ellipsis;
 }
 
 .hero {
@@ -300,7 +387,7 @@ export default {
 
 .row {
   width: 100%;
-  height: 22px;
+  height: 20px;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
@@ -318,4 +405,3 @@ export default {
   text-overflow: ellipsis;
 }
 </style>
-

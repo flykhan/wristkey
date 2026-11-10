@@ -15,7 +15,7 @@
 
 ## 字段映射
 
-`~json
+```json
 {
   "encrypted": false,
   "folders": [ { "id": "f1", "name": "工作" } ],
@@ -26,17 +26,19 @@
       "folderId": "f1",
       "login": {
         "username": "me@example.com",
+        "password": "s3cret",
         "totp": "otpauth://totp/GitHub:me@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"
       }
     }
   ]
 }
-`~
+```
 
 | Bitwarden | 本项目 account | 说明 |
 | --- | --- | --- |
 | `items[].name` | `issuer` | 去首尾空白；为空时用 `"Bitwarden"` |
 | `login.username` | `accountName` | 为空时取 otpauth label 的账号部分；两者都空时用 issuer |
+| `login.password` | `password` | v2.0 起导入；手环详情页默认遮罩，点按显示 10 秒 |
 | `login.totp` | 解析为 secret/algorithm/digits/period/otpType | 见下 |
 | `folders` / `folderId` | — | **忽略**（用户要求），分类统一"默认分类" |
 
@@ -67,5 +69,5 @@
 ## 安全
 
 - 未加密导出文件含全部密码（不只是 TOTP），导入后请立即删除；
-- App 只读取 `login.totp` 与用户名，不保存密码字段；
+- App 读取 `login.totp`、用户名与 `login.password`；密码仅存于应用私有存储/手环快照，默认遮罩；
 - 完整 secret 仍存于手机应用私有存储并同步到手环，遵循 [security.md](security.md)。

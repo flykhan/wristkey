@@ -14,7 +14,9 @@
      并独立实现 Steam Guard 5 位字母数字码，对 6 组公开向量验证；
   5. 加密参数与 docs/stratum-format.md 的常量一致（头部/长度/迭代次数）；
   6. Bitwarden 未加密 Vault JSON 独立解析（docs/bitwarden-format.md）：6 导入 / 4 跳过、Steam 识别、
-     加密导出负例拒绝。
+     加密导出负例拒绝；
+  7. 协议 v3（docs/protocol.md）夹具跨语言对拍：tools/fixtures/protocol-v3.json（Python 生成）与
+     e2e Node 夹具的 account.id/sha1、pin PBKDF2-SHA256 hash、password 合并语义、v2 兼容与回归。
 
 用法（建议 venv）：
     python3 -m venv .venv && .venv/bin/pip install argon2-cffi cryptography
@@ -397,6 +399,28 @@ def main():
     else:
         print("  NOTE bitwarden-export.json 不存在，跳过")
 
+    print("\n## 4d. 协议 v3（密码/pin）夹具跨语言对拍（docs/protocol.md v3）")
+    tools_v3_path = os.path.join(TOOLS_FIXTURES, "protocol-v3.json")
+    if os.path.exists(tools_v3_path):
+        tools_v3 = load_json(tools_v3_path)
+        check("tools protocol-v3.json 结构：begin/account×3/commit 自洽", lambda: _protocol_v3_structure(tools_v3))
+        check("tools protocol-v3.json account.id 独立复算", lambda: _protocol_v3_ids(tools_v3))
+        check("tools protocol-v3.json 密码语义：值/空串/缺省", lambda: _protocol_v3_passwords(tools_v3))
+        check("tools protocol-v3.json pin PBKDF2-SHA256 独立复算", lambda: _protocol_v3_pin(tools_v3))
+        check("tools protocol-v3.json pin_query/pin_clear 消息合法", lambda: _protocol_v3_pin_messages(tools_v3))
+    else:
+        print("  NOTE tools/fixtures/protocol-v3.json 不存在，跳过")
+
+    v3_dir = os.path.join(FIXTURES, "protocol-v3")
+    if os.path.exists(os.path.join(v3_dir, "valid-session.json")):
+        check("e2e Node v3 valid-session：13 账号 id/字段独立复算", lambda: _e2e_v3_valid_session(v3_dir))
+        check("e2e Node v3 pin-set.json hash 独立复算", lambda: _e2e_v3_pin_set(v3_dir))
+        check("e2e Node v3 password-merge.json：缺省保留/\"\" 清空/覆盖", lambda: _e2e_v3_password_merge(v3_dir))
+        check("e2e Node v3 v2-compat：v2 消息无 password、旧密码保留", lambda: _e2e_v3_v2_compat(v3_dir))
+        check("e2e Node v2 快照回归：version=2 且无 password 字段", lambda: _e2e_v2_legacy_session())
+    else:
+        print("  NOTE e2e/fixtures/protocol-v3 不存在，跳过")
+
     print("\n## 5. 加密参数与 docs/stratum-format.md 常量一致性")
     strong = read_bytes(os.path.join(FIXTURES, "strong.stratum"))
     legacy = read_bytes(os.path.join(FIXTURES, "legacy.stratum"))
@@ -545,6 +569,248 @@ def _assert_expected_stats(expected):
     if stats.get("imported") != 13 or stats.get("skipped") != 10 or stats.get("total") != 23:
         raise AssertionError("统计不符: " + json.dumps(stats))
     return "13/10/23"
+
+
+# ---------------------------------------------------------------- 协议 v3 独立校验
+PROTOCOL_V3 = 3
+PROTOCOL_V2 = 2
+MAX_MESSAGE_BYTES = 1024
+PIN_ALGORITHM = "PBKDF2-SHA256"
+PIN_ITERATIONS = 1200
+PIN_PATTERN = "TSCCT"
+
+
+def normalize_protocol_secret(secret):
+    return "".join(ch for ch in str(secret).upper() if not ch.isspace() and ch not in "=-")
+
+
+def protocol_account_id(secret):
+    return "s_" + hashlib.sha1(normalize_protocol_secret(secret).encode()).hexdigest()[:12]
+
+
+def message_bytes(message):
+    return len(json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+
+def account_messages(messages):
+    return [message for message in messages if message.get("type") == "mfa_sync_account"]
+
+
+def _protocol_v3_structure(document):
+    messages = document["messages"]
+    if len(messages) < 3:
+        raise AssertionError("消息序列过短")
+    if messages[0]["type"] != "mfa_sync_begin" or messages[-1]["type"] != "mfa_sync_commit":
+        raise AssertionError("首条应为 begin、末条应为 commit")
+    accounts = account_messages(messages)
+    if [message.get("index") for message in accounts] != list(range(len(accounts))):
+        raise AssertionError("account.index 必须从 0 连续递增")
+    if any(message.get("version") != PROTOCOL_V3 for message in messages):
+        raise AssertionError("所有同步消息 version 应为 3")
+    if {message.get("syncId") for message in messages} != {document["syncId"]}:
+        raise AssertionError("syncId 不一致")
+    count = len(accounts)
+    if messages[0]["accountCount"] != count or messages[-1]["accountCount"] != count:
+        raise AssertionError("begin/commit accountCount 与 account 条数不一致")
+    sizes = [message_bytes(message) for message in messages]
+    if max(sizes) >= MAX_MESSAGE_BYTES:
+        raise AssertionError("存在 >=1KB 的消息: " + str(max(sizes)))
+    return str(len(messages)) + " 条, max=" + str(max(sizes)) + "B"
+
+
+def _protocol_v3_ids(document):
+    accounts = account_messages(document["messages"])
+    ids = []
+    for message in accounts:
+        payload = message["account"]
+        expected = protocol_account_id(payload["secret"])
+        if payload["id"] != expected:
+            raise AssertionError("id 复算不符: " + payload["id"] + " != " + expected)
+        ids.append(payload["id"])
+    if len(set(ids)) != len(ids):
+        raise AssertionError("account.id 重复")
+    if ids != document["expected"]["accountIds"]:
+        raise AssertionError("accountIds 与 expected 不一致")
+    return str(len(ids)) + " 个 id 复算一致"
+
+
+def _protocol_v3_passwords(document):
+    accounts = account_messages(document["messages"])
+    expected = document["expected"]["effectivePasswords"]
+    if len(accounts) != len(expected):
+        raise AssertionError("账号数与 expected 不一致")
+    for message, want in zip(accounts, expected):
+        payload = message["account"]
+        actual = payload["password"] if "password" in payload else None
+        if want is None:
+            if "password" in payload:
+                raise AssertionError("无密码账号不应带 password 字段: " + payload["id"])
+            continue
+        if actual != want:
+            raise AssertionError("密码不符: " + repr(actual) + " != " + repr(want))
+    return "值/空串/缺省 3 种语义"
+
+def _protocol_v3_pin(document):
+    expected = document["expected"]["pin"]
+    pin = expected
+    if pin["algorithm"] != PIN_ALGORITHM:
+        raise AssertionError("pin.algorithm 应为 " + PIN_ALGORITHM)
+    salt = bytes.fromhex(pin["salt"])
+    if len(salt) != 16 or len(pin["salt"]) != 32:
+        raise AssertionError("pin.salt 应为 32 hex（16 字节）")
+    if len(pin["hash"]) != 64:
+        raise AssertionError("pin.hash 应为 64 hex（32 字节）")
+    recomputed = hashlib.pbkdf2_hmac("sha256", PIN_PATTERN.encode(), salt, PIN_ITERATIONS, 32).hex()
+    if recomputed != pin["hash"]:
+        raise AssertionError("PBKDF2 hash 复算不符")
+    if pin["iterations"] != PIN_ITERATIONS:
+        raise AssertionError("pin.iterations 应为 " + str(PIN_ITERATIONS))
+    set_message = next(message for message in document["pinMessages"] if message["type"] == "mfa_pin_set")
+    if set_message["version"] != PROTOCOL_V3:
+        raise AssertionError("pin_set 仅接受 version 3")
+    if set_message["pin"] != {key: pin[key] for key in ("algorithm", "salt", "hash", "iterations")}:
+        raise AssertionError("pin_set.pin 载荷与 expected 不一致")
+    if not (len(PIN_PATTERN) == 5 and all(ch in "TSC" for ch in PIN_PATTERN)):
+        raise AssertionError("图案应为 5 位 T/S/C")
+    return "PBKDF2-SHA256 1200 次复算一致"
+
+
+def _protocol_v3_pin_messages(document):
+    messages = document["pinMessages"]
+    types = [message["type"] for message in messages]
+    if types != ["mfa_pin_set", "mfa_pin_query", "mfa_pin_clear"]:
+        raise AssertionError("pin 消息序列不符: " + str(types))
+    if any(message.get("version") != PROTOCOL_V3 for message in messages):
+        raise AssertionError("pin 消息仅接受 version 3")
+    query = messages[1]
+    if query.get("requestId") != document["expected"]["pinState"]["requestId"]:
+        raise AssertionError("pin_query.requestId 不符")
+    if "pin" in messages[2]:
+        raise AssertionError("pin_clear 不应携带 pin 载荷")
+    sizes = [message_bytes(message) for message in messages]
+    if max(sizes) >= MAX_MESSAGE_BYTES:
+        raise AssertionError("pin 消息超 1KB")
+    return "set/query/clear, max=" + str(max(sizes)) + "B"
+
+
+def _e2e_v3_valid_session(directory):
+    document = load_json(os.path.join(directory, "valid-session.json"))
+    messages = document["messages"]
+    accounts = account_messages(messages)
+    if document.get("version") != PROTOCOL_V3:
+        raise AssertionError("v3 会话 version 应为 3")
+    if messages[0]["type"] != "mfa_sync_begin" or messages[-1]["type"] != "mfa_sync_commit":
+        raise AssertionError("会话首尾类型错误")
+    if messages[0]["accountCount"] != len(accounts) or len(accounts) != 13:
+        raise AssertionError("v3 会话应为 13 个账号，实际 " + str(len(accounts)))
+    if [message["index"] for message in accounts] != list(range(len(accounts))):
+        raise AssertionError("index 不连续")
+    ids = []
+    for message in accounts:
+        payload = message["account"]
+        recomputed = protocol_account_id(payload["secret"])
+        if payload["id"] != recomputed:
+            raise AssertionError("id 复算不符: " + payload["id"] + " != " + recomputed)
+        ids.append(payload["id"])
+    if len(set(ids)) != len(ids):
+        raise AssertionError("id 重复")
+    expected_ids = [account["id"] for account in document["expected"]["accounts"]]
+    if ids != expected_ids:
+        raise AssertionError("accountIds 与 expected.accounts 不一致")
+    with_password = [message for message in accounts if "password" in message["account"]]
+    if len(with_password) != document["expected"]["passwordAccountCount"]:
+        raise AssertionError("携带 password 的账号数不符")
+    if [message["account"]["password"] for message in with_password] != ["correct horse battery staple", "p@ssw0rd-测试-Ω", ""]:
+        raise AssertionError("前 3 个账号密码内容不符")
+    if max(message_bytes(message) for message in messages) >= MAX_MESSAGE_BYTES:
+        raise AssertionError("v3 消息超 1KB")
+    return "13 账号 / 3 带密码"
+
+
+def _e2e_v3_pin_set(directory):
+    document = load_json(os.path.join(directory, "pin-set.json"))
+    pin = document["pin"]
+    if pin["algorithm"] != PIN_ALGORITHM or pin["iterations"] != PIN_ITERATIONS:
+        raise AssertionError("pin 算法/迭代次数不符")
+    if len(pin["salt"]) != 32 or len(pin["hash"]) != 64:
+        raise AssertionError("salt/hash 长度不符")
+    recomputed = hashlib.pbkdf2_hmac(
+        "sha256", document["pattern"].encode(), bytes.fromhex(pin["salt"]), pin["iterations"], 32
+    ).hex()
+    if recomputed != pin["hash"]:
+        raise AssertionError("PBKDF2 hash 复算不符")
+    if document["message"]["pin"] != pin:
+        raise AssertionError("pin_set 消息载荷与 pin 不一致")
+    expected_ack = document["expected"]["ack"]
+    if not expected_ack["ok"] or not expected_ack["enabled"] or expected_ack["version"] != PROTOCOL_V3:
+        raise AssertionError("pin_set 成功 ack 期望不符")
+    return "hash 复算一致"
+
+
+def _e2e_v3_password_merge(directory):
+    document = load_json(os.path.join(directory, "password-merge.json"))
+    checked = 0
+    for scenario in document["scenarios"]:
+        previous = {}
+        for account in scenario["initialSnapshot"]["accounts"]:
+            if "password" in account:
+                previous[account["id"]] = account["password"]
+        incoming = account_messages(scenario["messages"])
+        actual = []
+        for message in incoming:
+            payload = message["account"]
+            if "password" in payload:
+                actual.append(payload["password"] or None)
+            else:
+                actual.append(previous.get(payload["id"]))
+        if actual != scenario["expected"]["passwords"]:
+            raise AssertionError(
+                scenario["name"] + " 合并结果不符: " + repr(actual) + " != " + repr(scenario["expected"]["passwords"])
+            )
+        ids = [message["account"]["id"] for message in incoming]
+        if ids != scenario["expected"]["accountIds"]:
+            raise AssertionError(scenario["name"] + " accountIds 不符")
+        checked += 1
+    return str(checked) + " 个场景"
+
+
+def _e2e_v3_v2_compat(directory):
+    document = load_json(os.path.join(directory, "v2-compat-session.json"))
+    messages = document["messages"]
+    if any(message.get("version") != PROTOCOL_V2 for message in messages):
+        raise AssertionError("v2 兼容会话 version 应为 2")
+    for message in account_messages(messages):
+        if "password" in message["account"]:
+            raise AssertionError("v2 消息不应携带 password 字段")
+    initial = {account["id"]: account.get("password") for account in document["initialSnapshot"]["accounts"]}
+    actual = [initial.get(message["account"]["id"]) for message in account_messages(messages)]
+    expected = document["expected"]
+    if actual != expected["passwords"]:
+        raise AssertionError("旧密码保留结果不符: " + repr(actual))
+    if expected["snapshotVersion"] != PROTOCOL_V2 or expected["storageKey"] != "mfa_snapshot_v3":
+        raise AssertionError("v2→v3 快照版本/存储键期望不符")
+    ack = expected["ack"]
+    if (
+        ack["type"] != "mfa_sync_ack"
+        or ack["version"] != PROTOCOL_V3
+        or ack["ok"] is not True
+        or ack["received"] != expected["accountCount"]
+        or ack["committed"] != expected["accountCount"]
+    ):
+        raise AssertionError("v2 兼容 ack 期望不符: " + json.dumps(ack))
+    return "v2 消息无 password / 旧密码保留 / ack 语义"
+
+
+def _e2e_v2_legacy_session():
+    document = load_json(os.path.join(FIXTURES, "protocol", "valid-session.json"))
+    if document.get("version") != PROTOCOL_V2:
+        raise AssertionError("v2 回归会话 version 应为 2")
+    for message in document["messages"]:
+        if message.get("version") != PROTOCOL_V2:
+            raise AssertionError("v2 回归会话存在非 v2 消息")
+        if "account" in message and "password" in message["account"]:
+            raise AssertionError("v2 回归会话不应出现 password")
+    return "version=2 / 无 password"
 
 
 if __name__ == "__main__":

@@ -1,0 +1,45 @@
+{
+  "description": "合法 mfa_pin_set：PBKDF2-SHA256、salt 32 hex、hash 64 hex、iterations 1200；手环 ack 成功并广播 enabled=true",
+  "pattern": "TSCCT",
+  "pin": {
+    "algorithm": "PBKDF2-SHA256",
+    "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+    "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+    "iterations": 1200
+  },
+  "message": {
+    "type": "mfa_pin_set",
+    "version": 3,
+    "sentAt": 1760000003000,
+    "pin": {
+      "algorithm": "PBKDF2-SHA256",
+      "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+      "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+      "iterations": 1200
+    }
+  },
+  "expected": {
+    "ack": {
+      "type": "mfa_pin_ack",
+      "version": 3,
+      "sentAt": 1760000003000,
+      "ok": true,
+      "enabled": true,
+      "error": null
+    },
+    "state": {
+      "type": "mfa_pin_state",
+      "version": 3,
+      "sentAt": 1760000003000,
+      "enabled": true,
+      "updatedAt": 1760000003000
+    },
+    "stored": {
+      "algorithm": "PBKDF2-SHA256",
+      "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+      "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+      "iterations": 1200,
+      "updatedAt": 1760000003000
+    }
+  }
+}

@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import process from 'node:process';
@@ -30,11 +30,12 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'dev.wristkey.app';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 1.0.4（UI v3：无顶栏/3 码每页/首字母筛选）/ APK 1.2（Bitwarden 导入）
-const EXPECTED_BAND_VERSION = '1.0.4';
-const EXPECTED_BAND_VERSION_CODE = 5;
-const EXPECTED_APK_VERSION = '1.2';
-const EXPECTED_APK_VERSION_CODE = 3;
+// 版本：band .rpk 2.0.0（v2.0：入口图案锁屏/5 位图示/详情/网格）/ APK 2.0.0（v2 重设计 + 入口图案）
+const EXPECTED_BAND_VERSION = '2.0.0';
+const EXPECTED_BAND_VERSION_CODE = 6;
+const EXPECTED_APK_VERSION = '2.0.0';
+const EXPECTED_APK_VERSION_CODE = 4;
+const EXPECTED_BAND_RPK_NAME = 'dev.wristkey.app.release.' + EXPECTED_BAND_VERSION + '.rpk';
 
 const argv = process.argv.slice(2);
 const flags = {
@@ -289,6 +290,11 @@ function checkBandApp() {
   }
   const rpk = rpks[0];
   pass('band-app dist/*.rpk 存在', relativePath(rpk) + ' (' + statSync(rpk).size + 'B)');
+  if (basename(rpk) === EXPECTED_BAND_RPK_NAME) {
+    pass('band-app release rpk 文件名', EXPECTED_BAND_RPK_NAME);
+  } else {
+    fail('band-app release rpk 文件名', '期望 ' + EXPECTED_BAND_RPK_NAME + '，实际 ' + basename(rpk));
+  }
 
   const unzip = run('unzip', ['-p', rpk, 'manifest.json']);
   if (!unzip.ok) {
@@ -407,10 +413,14 @@ function checkBandUiV3() {
     } else {
       fail('UI v3 picker 标题', 'picker.ux 缺少“首字母筛选”');
     }
-    if (/LETTER_BUCKET_KEYS|LETTER_KEYS|"全部"|'全部'/.test(pickerUx) && pickerUx.indexOf('#') >= 0) {
-      pass('UI v3 picker 字母桶/全部/# 渲染', 'picker.ux 含字母桶与全部/#');
+    // v3 的 7 列字母桶已演进为 v4 的 4x4x3 分页网格：字母键/“全部”/“#”
+    // 由 settings.js PICKER_PAGE_KEYS 提供，picker.ux 只负责渲染当前行。
+    const rendersLegacyBuckets = /LETTER_BUCKET_KEYS|LETTER_KEYS|"全部"|'全部'/.test(pickerUx) && pickerUx.indexOf('#') >= 0;
+    const usesPagedKeys = settingsJs && /buildPickerPage/.test(pickerUx) && /PICKER_PAGE_KEYS|PICKER_ALL_KEY/.test(settingsJs);
+    if (rendersLegacyBuckets || usesPagedKeys) {
+      pass('UI v3 picker 字母桶/全部/# 渲染', usesPagedKeys ? 'settings.js PICKER_PAGE_KEYS + picker.ux buildPickerPage（v4 分页网格）' : 'picker.ux 含字母桶与全部/#');
     } else {
-      fail('UI v3 picker 字母桶/全部/# 渲染', 'picker.ux 缺少字母桶或全部/#');
+      fail('UI v3 picker 字母桶/全部/# 渲染', 'picker.ux 与 settings.js 均缺少字母桶/全部/#');
     }
   } else {
     fail('UI v3 picker 页存在', '缺少 src/pages/picker/picker.ux');
@@ -469,6 +479,139 @@ function checkBandUiV3() {
   } else {
     fail('UI v3 字母桶计数测试存在', 'tests/ 未覆盖 letterBucket/buildLetterCounts');
   }
+}
+
+
+// ------------------------------------------- 1c. band UI v4 静态检查
+function checkBandUiV4() {
+  process.stdout.write('\n## band UI v4（v2.0 锁屏/入口图案/网格/详情）\n');
+  const bandRoot = join(WORKSPACE, 'band-app');
+  const srcRoot = join(bandRoot, 'src');
+  const appUx = readIfExists(join(srcRoot, 'app.ux'));
+  const lockUx = readIfExists(join(srcRoot, 'pages', 'lock', 'lock.ux'));
+  const pinUx = readIfExists(join(srcRoot, 'pages', 'pin', 'pin.ux'));
+  const pinJs = readIfExists(join(srcRoot, 'common', 'scripts', 'pin.js'));
+  const pinStoreJs = readIfExists(join(srcRoot, 'common', 'scripts', 'pinStore.js'));
+  const indexUx = readIfExists(join(srcRoot, 'pages', 'index', 'index.ux'));
+  const pickerUx = readIfExists(join(srcRoot, 'pages', 'picker', 'picker.ux'));
+  const detailUx = readIfExists(join(srcRoot, 'pages', 'detail', 'detail.ux'));
+  const menuUx = readIfExists(join(srcRoot, 'pages', 'menu', 'menu.ux'));
+  const settingsJs = readIfExists(join(srcRoot, 'common', 'scripts', 'settings.js'));
+  const protocolJs = readIfExists(join(srcRoot, 'common', 'scripts', 'syncProtocol.js'));
+  const mfaConfigJs = readIfExists(join(srcRoot, 'common', 'scripts', 'mfaConfig.js'));
+
+  function checkMarkers(name, source, markers) {
+    if (!source) {
+      fail(name, '文件缺失');
+      return;
+    }
+    const missing = markers.filter(function (marker) {
+      return typeof marker === 'string' ? source.indexOf(marker) < 0 : !marker.test(source);
+    });
+    if (missing.length === 0) {
+      pass(name);
+    } else {
+      fail(name, '缺少: ' + missing.map(function (marker) { return String(marker); }).join(' / '));
+    }
+  }
+
+  // 1) 冷启动锁屏：app.ux onShow 读取图案并跳转 /pages/lock
+  checkMarkers('UI v4 app.ux 冷启动锁屏跳转', appUx, [
+    '/pages/lock', 'router.replace', 'shouldRelock', 'loadPin'
+  ]);
+  checkMarkers('UI v4 锁屏页 pages/lock', lockUx, [
+    'class="slots"', 'for="{{ slots }}"', 'PATTERN_SYMBOLS', 'verifyPattern',
+    'nextLockAfterFailure', '腕证已锁定', 'class="close"'
+  ]);
+  checkMarkers('UI v4 入口图案设置页 pages/pin', pinUx, [
+    'class="slots"', 'for="{{ slots }}"', '设置入口密码', 'verifyPattern', 'createPinRecord', 'mode'
+  ]);
+
+  // 2) 5 位 T/S/C 图案、固定三色、失败锁定
+  checkMarkers('UI v4 图案 5 位 + TSC 正则', pinJs, [
+    'PATTERN_LENGTH = 5', 'PATTERN_REGEX = /^[TSC]{5}$/', 'PATTERN_SYMBOL_KEYS = ["T", "S", "C"]'
+  ]);
+  checkMarkers('UI v4 图案三色（#6EE7C7/#7AA2F7/#F2B880）', pinJs, [
+    '#6EE7C7', '#7AA2F7', '#F2B880', '三角', '方形', '圆形'
+  ]);
+  checkMarkers('UI v4 PBKDF2-SHA256 1200 次 + 16 字节 salt', pinJs, [
+    'PBKDF2_ALGORITHM = "PBKDF2-SHA256"', 'DEFAULT_PBKDF2_ITERATIONS = 1200',
+    'SALT_BYTES = 16', 'HASH_BYTES = 32', 'randomBytesHex'
+  ]);
+  checkMarkers('UI v4 失败锁定策略（5 次 / 30s 递增）', pinJs, [
+    'LOCK_AFTER_FAILURES = 5', 'LOCK_STEP_MS = 30000'
+  ]);
+  checkMarkers('UI v4 图案仅存派生值 + 锁计数持久化', pinStoreJs, [
+    'PIN_STORAGE_KEY', 'PIN_LOCK_STORAGE_KEY', 'savePin', 'saveLock'
+  ]);
+
+  // 3) 主界面：56px rail + 菜单按钮 + 3 条/页
+  if (!indexUx) {
+    fail('UI v4 主界面 rail 56px + 菜单按钮', '缺少 src/pages/index/index.ux');
+  } else {
+    const railMatch = indexUx.match(/\.rail\s*\{[^}]*width:\s*56px/);
+    if (railMatch) {
+      pass('UI v4 主界面 rail 56px');
+    } else {
+      fail('UI v4 主界面 rail 56px', 'index.ux .rail 未声明 width: 56px');
+    }
+    checkMarkers('UI v4 主界面菜单按钮 + 3 条/页', indexUx, [
+      'class="menu-button"', 'openMenu', 'ACCOUNTS_PER_PAGE', 'paginate('
+    ]);
+  }
+
+  // 4) picker：4 列 x 4 行、3 页、全部
+  checkMarkers('UI v4 picker 4x4 / 3 页 / 全部', settingsJs, [
+    'PICKER_COLUMNS = 4', 'PICKER_ROWS = 4', 'PICKER_PAGE_SIZE = PICKER_COLUMNS * PICKER_ROWS',
+    'PICKER_PAGE_COUNT = 3', 'PICKER_ALL_KEY', 'PICKER_PAGE_KEYS'
+  ]);
+  checkMarkers('UI v4 picker 页 4 行 + 圆点 + 关闭', pickerUx, [
+    'row0', 'row1', 'row2', 'row3', 'class="dots"', 'class="close"', '按首字母筛选'
+  ]);
+
+  // 5) 详情：用户名 / 密码遮罩 10s / 验证码
+  checkMarkers('UI v4 详情页 username/password/code', detailUx, [
+    'token.accountName', '密码', 'groupedCode', 'passwordDisplay', 'PASSWORD_REVEAL_MS'
+  ]);
+  checkMarkers('UI v4 密码遮罩 10s + 未导入密码文案', settingsJs, [
+    'PASSWORD_REVEAL_MS = 10000', '••••••••', '未导入密码'
+  ]);
+
+  // 6) 菜单 4 项，分类入口彻底移除
+  checkMarkers('UI v4 菜单 4 项（入口密码/立即同步/关于/退出）', menuUx, [
+    '入口密码', '立即同步', '关于', '退出应用'
+  ]);
+
+  // 7) 协议 v3：password + pin 消息；存储键 mfa_snapshot_v3
+  checkMarkers('UI v4 协议 v3 password 字段', protocolJs, [
+    'PROTOCOL_VERSION = 3', 'SUPPORTED_PROTOCOL_VERSIONS = [2, 3]', 'password'
+  ]);
+  checkMarkers('UI v4 协议 v3 pin 消息（set/query/clear/ack/state）', protocolJs, [
+    'MESSAGE_PIN_SET', 'MESSAGE_PIN_QUERY', 'MESSAGE_PIN_CLEAR', 'MESSAGE_PIN_ACK', 'MESSAGE_PIN_STATE'
+  ]);
+  checkMarkers('UI v4 存储键 mfa_snapshot_v3', mfaConfigJs, [
+    'STORAGE_KEY = "mfa_snapshot_v3"', 'V2_STORAGE_KEY = "mfa_snapshot_v2"'
+  ]);
+
+  // 8) v4 单测存在并覆盖图案/协议/结构
+  const testsDir = join(bandRoot, 'tests');
+  if (!existsSync(testsDir)) {
+    fail('UI v4 单测存在', '缺少 band-app/tests');
+    return;
+  }
+  const v4Tests = ['pin.test.mjs', 'protocolV3.test.mjs', 'uxV4.test.mjs'];
+  const missingTests = v4Tests.filter(function (name) { return !existsSync(join(testsDir, name)); });
+  if (missingTests.length === 0) {
+    pass('UI v4 单测存在', v4Tests.join(', '));
+  } else {
+    fail('UI v4 单测存在', '缺少: ' + missingTests.join(', '));
+  }
+  const v4Source = v4Tests.map(function (name) {
+    return readIfExists(join(testsDir, name)) || '';
+  }).join('\n');
+  checkMarkers('UI v4 单测覆盖图案派生/锁定/协议', v4Source, [
+    'PATTERN_LENGTH', 'derivePatternHash', 'LOCK_AFTER_FAILURES', 'mfa_pin_set'
+  ]);
 }
 
 // ---------------------------------------------------------- 2. android-app
@@ -559,12 +702,39 @@ function checkAndroidApp() {
       if (versionName === EXPECTED_APK_VERSION) {
         pass('APK versionName', EXPECTED_APK_VERSION);
       } else {
-        fail('APK versionName', '期望 ' + EXPECTED_APK_VERSION + '（Bitwarden 导入版），实际 ' + String(versionName));
+        fail('APK versionName', '期望 ' + EXPECTED_APK_VERSION + '（v2.0 重设计版），实际 ' + String(versionName));
       }
       if (versionCode === EXPECTED_APK_VERSION_CODE) {
         pass('APK versionCode', String(EXPECTED_APK_VERSION_CODE));
       } else {
         fail('APK versionCode', '期望 ' + EXPECTED_APK_VERSION_CODE + '，实际 ' + String(versionCode));
+      }
+
+      // v2.0 离线应用：不得申请 INTERNET；仅允许 AndroidX 自动生成的
+      // DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION（应用私有权限）。
+      const permissions = run(aapt2, ['dump', 'permissions', apk]);
+      if (permissions.ok) {
+        const permissionNames = Array.from(permissions.stdout.matchAll(/uses-permission: name='([^']+)'/g)).map(function (match) {
+          return match[1];
+        });
+        const internetPermissions = permissionNames.filter(function (name) {
+          return /INTERNET/i.test(name);
+        });
+        if (internetPermissions.length === 0) {
+          pass('APK 无 INTERNET 权限', permissionNames.length === 0 ? '未声明任何权限' : '未发现 INTERNET');
+        } else {
+          fail('APK 无 INTERNET 权限', '发现: ' + internetPermissions.join(', '));
+        }
+        const unexpectedPermissions = permissionNames.filter(function (name) {
+          return !/DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION$/.test(name);
+        });
+        if (unexpectedPermissions.length === 0) {
+          pass('APK 权限仅 DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION', permissionNames.join(', ') || '无');
+        } else {
+          fail('APK 权限仅 DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION', '多余权限: ' + unexpectedPermissions.join(', '));
+        }
+      } else {
+        fail('aapt2 dump permissions', firstLine(permissions.stderr) || String(permissions.status), aapt2 + ' dump permissions ' + apk);
       }
     } else {
       fail('aapt2 dump badging', firstLine(badging.stderr) || String(badging.status), aapt2 + ' dump badging ' + apk);
@@ -573,6 +743,96 @@ function checkAndroidApp() {
     skip('aapt2 可用', '未在 ~/Android/Sdk/build-tools 找到 aapt2');
   }
   return { apk, apksigner };
+}
+
+
+// ------------------------------------------- 2b. android UI v4 静态检查
+function checkAndroidUiV4() {
+  process.stdout.write('\n## android UI v4（v2.0 重设计 / 入口图案 / 密码）\n');
+  const androidRoot = join(WORKSPACE, 'android-app');
+  const javaRoot = join(androidRoot, 'app', 'src', 'main', 'java', 'dev', 'wristkey', 'app');
+  const testRoot = join(androidRoot, 'app', 'src', 'test', 'java', 'dev', 'wristkey', 'app');
+  const patternPin = readIfExists(join(javaRoot, 'pattern', 'PatternPin.kt'));
+  const mainActivity = readIfExists(join(javaRoot, 'MainActivity.kt'));
+  const appUi = readIfExists(join(javaRoot, 'ui', 'WristKeyApp.kt'));
+  const colors = readIfExists(join(javaRoot, 'ui', 'theme', 'Color.kt'));
+  const syncProtocol = readIfExists(join(javaRoot, 'protocol', 'SyncProtocol.kt'));
+
+  function checkMarkers(name, source, markers) {
+    if (!source) {
+      fail(name, '文件缺失');
+      return;
+    }
+    const missing = markers.filter(function (marker) {
+      return typeof marker === 'string' ? source.indexOf(marker) < 0 : !marker.test(source);
+    });
+    if (missing.length === 0) {
+      pass(name);
+    } else {
+      fail(name, '缺少: ' + missing.map(function (marker) { return String(marker); }).join(' / '));
+    }
+  }
+
+  // 1) 图案派生：5 位 TSC、PBKDF2-HMAC-SHA256 1200 次、16 字节随机 salt
+  checkMarkers('Android v4 PatternPin 5 位 + TSC 正则', patternPin, [
+    'const val LENGTH = 5', 'PATTERN_REGEX = Regex("^[TSC]{5}$")'
+  ]);
+  checkMarkers('Android v4 PatternPin PBKDF2 1200 次 + 16 字节 salt', patternPin, [
+    'const val ITERATIONS = 1200', 'const val SALT_BYTES = 16',
+    'PBKDF2WithHmacSHA256', 'SALT_HEX_LENGTH'
+  ]);
+  checkMarkers('Android v4 PatternPin 随机 salt + 派生函数', patternPin, [
+    'SecureRandom', 'fun newSalt', 'fun derive('
+  ]);
+
+  // 2) 入口图案页：绘制 5 点、三图形、两次确认、保存/关闭
+  checkMarkers('Android v4 入口图案设置页', appUi, [
+    'PatternScreen', 'PatternDot', 'PatternButton', '保存入口图案', 'PatternPin.LENGTH',
+    "'T'", "'S'", "'C'"
+  ]);
+  checkMarkers('Android v4 图案页调用 set/clear/query pin', mainActivity, [
+    'PatternPin.newSaltHex()', 'PatternPin.derive(', 'controller.setPin(',
+    'controller.clearPin()', 'controller.queryPin()'
+  ]);
+
+  // 3) 主界面：3 Tab + FAB + ModalBottomSheet + 密码 10s 隐藏
+  checkMarkers('Android v4 3 Tab（账号/同步/设置）', appUi, [
+    'NavigationBar', 'MainTab', '"账号"', '"同步"', '"设置"'
+  ]);
+  checkMarkers('Android v4 FAB 导入 + ModalBottomSheet', appUi, [
+    'floatingActionButton', 'ImportEntriesSheet', 'ModalBottomSheet', 'rememberModalBottomSheetState'
+  ]);
+  checkMarkers('Android v4 密码默认遮罩 10s 后隐藏', appUi, [
+    'delay(10_000)', 'revealed', '密码'
+  ]);
+  checkMarkers('Android v4 账号详情/同步页入口图案卡', appUi, [
+    'AccountDetailSheet', '"入口图案"', 'PinStatus', 'actions.onPinQuery'
+  ]);
+
+  // 4) 深色视觉 Token
+  checkMarkers('Android v4 深色 Token（#0B0F0E/#121A16/#6EE7C7/#F2B880/#7AA2F7）', colors, [
+    'Color(0xFF0B0F0E)', 'Color(0xFF121A16)', 'Color(0xFF6EE7C7)',
+    'Color(0xFFF2B880)', 'Color(0xFF7AA2F7)'
+  ]);
+
+  // 5) 协议 v3：password + pin 消息
+  checkMarkers('Android v4 协议 v3 password/pin', syncProtocol, [
+    'const val VERSION = 3', 'setOf(2L, 3L)', 'TYPE_PIN_SET', 'TYPE_PIN_QUERY',
+    'TYPE_PIN_CLEAR', 'TYPE_PIN_ACK', 'TYPE_PIN_STATE', 'password'
+  ]);
+
+  // 6) 单测覆盖图案/协议/密码合并
+  const tests = ['pattern/PatternPinTest.kt', 'PinProtocolTest.kt', 'MergePasswordTest.kt'];
+  const missing = tests.filter(function (name) { return !existsSync(join(testRoot, name)); });
+  if (missing.length === 0) {
+    pass('Android v4 图案/协议/密码单测存在', tests.join(', '));
+  } else {
+    fail('Android v4 图案/协议/密码单测存在', '缺少: ' + missing.join(', '));
+  }
+  const testSource = tests.map(function (name) { return readIfExists(join(testRoot, name)) || ''; }).join('\n');
+  checkMarkers('Android v4 单测覆盖 derive/1200/mfa_pin', testSource, [
+    'PatternPin.derive', '1200', 'mfa_pin_set'
+  ]);
 }
 
 // ------------------------------------------------- 3. 签名与包名一致性
@@ -676,7 +936,9 @@ async function main() {
   );
   const band = checkBandApp();
   checkBandUiV3();
+  checkBandUiV4();
   const android = checkAndroidApp();
+  checkAndroidUiV4();
   checkSigning(band, android);
 
   const passed = checks.filter(function (item) { return item.status === 'PASS'; }).length;

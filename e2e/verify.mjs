@@ -14,6 +14,7 @@
 //   H. 协议非法/超时/去重用例回放（fixtures/protocol/invalid-cases.json）
 //   I. 跨端 TOTP / Steam 对拍（band-app 纯模块 vs 独立实现）
 //   J. Bitwarden 未加密 Vault JSON 导入（otpauth / Steam encoder / 纯 Base32 / 加密负例）
+//   K. 协议 v3：password 合并、pin_set/query/clear/ack/state、v2↔v3 兼容、8s ack 超时
 // 退出码：0 全部通过；1 存在失败。
 
 import { createHash } from 'node:crypto';
@@ -692,7 +693,8 @@ async function main() {
   r.test('手机端重建会话与夹具逐字节一致', function () {
     const rebuilt = protocol.buildSyncSession(expectedAccounts, {
       sentAt: stratum.FIXTURE_UPDATED_AT,
-      syncId: sessionFixture.syncId
+      syncId: sessionFixture.syncId,
+      version: 2
     });
     assertDeepEqual(rebuilt.messages, sessionMessages);
     assertEqual(rebuilt.syncId, sessionFixture.syncId);
@@ -704,7 +706,8 @@ async function main() {
     const check = protocol.validateRequest(request);
     assert(check.ok, 'request 字段非法: ' + check.reason);
     assertEqual(request.type, 'mfa_sync_request');
-    assertEqual(request.version, 2);
+    // 参考实现的手环端 buildRequest 固定发 v3；v2 手环在旧版固件中发 2，手机端两者都接受（见 K 节）
+    assertEqual(request.version, 3);
     const client = new protocol.PhoneSyncClient();
     assertEqual(client.handleRequest(request, true).action, 'resync');
     assertEqual(client.handleRequest(request, false).action, 'ignored');
@@ -850,7 +853,7 @@ async function main() {
     const session = protocol.buildSyncSession([makeValidAccount()], { sentAt: FIXED_NOW, syncId: 's-keep' });
     assertEqual(receiver.receive(session.messages[0]).status, 'accepted');
     assertEqual(receiver.receive({ type: 'future_type', version: 2, sentAt: FIXED_NOW }).status, 'ignored');
-    assertEqual(receiver.receive({ type: 'mfa_sync_account', version: 3, sentAt: FIXED_NOW }).status, 'ignored');
+    assertEqual(receiver.receive({ type: 'mfa_sync_account', version: 4, sentAt: FIXED_NOW }).status, 'ignored');
     assertEqual(receiver.receive(session.messages[1]).status, 'accepted');
     assertEqual(receiver.receive(session.messages[2]).status, 'committed');
   });
@@ -1278,6 +1281,395 @@ async function main() {
       }
     }
     return '5/5 + Steam(3DP36) + 加密负例，与 Android 单测断言一致';
+  });
+
+  // ------------------------------------------------ K. 协议 v3（密码 / pin / 兼容）
+  r.section('K. 同步协议 v3：password 合并、pin 消息、v2↔v3 兼容');
+  const v3Dir = join(FIXTURES, 'protocol-v3');
+  const v3SessionFixture = readJson(join(v3Dir, 'valid-session.json'));
+  const v3Expected = v3SessionFixture.expected;
+  const v3Messages = v3SessionFixture.messages;
+  const v3AccountMessages = v3Messages.filter(function (message) {
+    return message.type === protocol.MESSAGE_TYPES.ACCOUNT;
+  });
+  const V3_SENT_AT = v3Messages[0].sentAt;
+
+  r.test('v3 会话结构：version=3、1 begin + 13 account + 1 commit、3 个 password 字段、均 <1KB', function () {
+    assertEqual(v3SessionFixture.version, 3);
+    assertEqual(v3Messages.length, v3Expected.accountCount + 2);
+    assertEqual(v3Messages[0].type, 'mfa_sync_begin');
+    assertEqual(v3Messages[v3Messages.length - 1].type, 'mfa_sync_commit');
+    assertEqual(v3AccountMessages.length, v3Expected.accountCount);
+    let max = 0;
+    for (const message of v3Messages) {
+      const envelope = protocol.validateEnvelope(message, { versions: protocol.SYNC_VERSIONS });
+      assert(envelope.ok, message.type + ': ' + envelope.reason);
+      assertEqual(message.version, 3);
+      const bytes = protocol.messageBytes(message);
+      max = Math.max(max, bytes);
+      assert(bytes < protocol.MAX_MESSAGE_BYTES, message.type + ' 超过 1KB: ' + bytes);
+    }
+    const withPassword = v3AccountMessages.filter(function (message) {
+      return message.account.password !== undefined;
+    });
+    assertEqual(withPassword.length, v3Expected.passwordAccountCount);
+    return '最大 ' + max + 'B，' + withPassword.length + ' 条带密码';
+  });
+
+  r.test('v3 account 载荷校验：与 expected.accounts 一致，password 保留（含 ""）', function () {
+    v3AccountMessages.forEach(function (message, index) {
+      const actual = protocol.validateAccount(message.account, message.index, { version: 3 });
+      const expectedAccount = protocol.validateAccount(v3Expected.accounts[index], message.index, { version: 3 });
+      assert(actual.ok, actual.reason);
+      assert(expectedAccount.ok, expectedAccount.reason);
+      assertDeepEqual(actual.account, expectedAccount.account, '第 ' + index + ' 条 account');
+      assertEqual(actual.account.password, message.account.password);
+    });
+    return v3Expected.accountCount + ' 条';
+  });
+
+  r.test('v3 手环端回放：原子提交到 mfa_snapshot_v3，显式 "" 在快照中清空', function () {
+    const receiver = new protocol.BandSyncReceiver({ now: function () { return FIXED_NOW; } });
+    const results = v3Messages.map(function (message) { return receiver.receive(message); });
+    assertDeepEqual(
+      results.map(function (result) { return result.status; }),
+      ['accepted'].concat(Array(v3Expected.accountCount).fill('accepted'), ['committed'])
+    );
+    assert(receiver.snapshot, '应有快照');
+    assertEqual(receiver.snapshot.version, 3);
+    assertEqual(receiver.snapshot.storageKey, protocol.SNAPSHOT_KEY_V3);
+    assertEqual(receiver.snapshot.updatedAt, FIXED_NOW);
+    const expectedSnapshotAccounts = v3Expected.accounts.map(function (account, index) {
+      const copy = deepClone(account);
+      if (copy.password === '') {
+        delete copy.password;
+      }
+      const checked = protocol.validateAccount(copy, index, { version: 3 });
+      assert(checked.ok, checked.reason);
+      return checked.account;
+    });
+    assertDeepEqual(receiver.snapshot.accounts, expectedSnapshotAccounts);
+    const ack = receiver.lastAck;
+    assert(protocol.validateAck(ack).ok, 'ack 非法: ' + JSON.stringify(protocol.validateAck(ack)));
+    assertEqual(ack.ok, true);
+    assertEqual(ack.received, v3Expected.accountCount);
+    assertEqual(ack.committed, v3Expected.accountCount);
+    assertEqual(ack.syncId, v3SessionFixture.syncId);
+    return '13 条 → v3 快照';
+  });
+
+  r.test('手机端 v3 重建会话与夹具逐字节一致', function () {
+    const rebuilt = protocol.buildSyncSession(v3Expected.accounts, {
+      sentAt: v3Messages[0].sentAt,
+      syncId: v3SessionFixture.syncId,
+      version: 3
+    });
+    assertDeepEqual(rebuilt.messages, v3Messages);
+    assertEqual(rebuilt.version, 3);
+  });
+
+  r.test('password 字段边界：128 字符 / 129 拒绝 / 控制字符拒绝 / 非字符串拒绝 / Unicode 与空格允许', function () {
+    const base = makeValidAccount({});
+    const okNoPassword = protocol.validateAccount(base, 0, { version: 3 });
+    assert(okNoPassword.ok, okNoPassword.reason);
+    assertEqual(okNoPassword.account.password, undefined);
+
+    const empty = protocol.validateAccount(Object.assign({}, base, { password: '' }), 0, { version: 3 });
+    assert(empty.ok, empty.reason);
+    assertEqual(empty.account.password, '');
+
+    const max = protocol.validateAccount(Object.assign({}, base, { password: 'a'.repeat(protocol.MAX_PASSWORD_LENGTH) }), 0, { version: 3 });
+    assert(max.ok, max.reason);
+    assertEqual(max.account.password.length, 128);
+
+    const tooLong = protocol.validateAccount(Object.assign({}, base, { password: 'a'.repeat(129) }), 0, { version: 3 });
+    assertEqual(tooLong.ok, false);
+    assert(String(tooLong.reason).indexOf('128') >= 0);
+
+    const control = protocol.validateAccount(Object.assign({}, base, { password: 'abc\u0000def' }), 0, { version: 3 });
+    assertEqual(control.ok, false, 'U+0000 必须拒绝');
+    assert(String(control.reason).indexOf('控制字符') >= 0);
+    const control2 = protocol.validateAccount(Object.assign({}, base, { password: 'abc\u001f' }), 0, { version: 3 });
+    assertEqual(control2.ok, false, 'U+001F 必须拒绝');
+
+    const notString = protocol.validateAccount(Object.assign({}, base, { password: 123 }), 0, { version: 3 });
+    assertEqual(notString.ok, false);
+
+    const unicode = protocol.validateAccount(Object.assign({}, base, { password: 'p@ss w0rd-测试-Ω' }), 0, { version: 3 });
+    assert(unicode.ok, unicode.reason);
+    assertEqual(unicode.account.password, 'p@ss w0rd-测试-Ω');
+
+    const v2 = protocol.validateAccount(Object.assign({}, base, { password: 'should-be-ignored' }), 0, { version: 2 });
+    assert(v2.ok, v2.reason);
+    assertEqual(v2.account.password, undefined, 'v2 消息必须忽略 password');
+    return '9 个边界';
+  });
+
+  r.test('password 合并矩阵：缺省保留 / "" 清空 / 新值覆盖 / 同轮混合', function () {
+    const fixture = readJson(join(v3Dir, 'password-merge.json'));
+    for (const scenario of fixture.scenarios) {
+      const receiver = new protocol.BandSyncReceiver({
+        now: function () { return V3_SENT_AT + 1000; },
+        initialSnapshot: deepClone(scenario.initialSnapshot)
+      });
+      let last = null;
+      for (const message of scenario.messages) {
+        last = receiver.receive(message);
+      }
+      assertEqual(last.status, 'committed', scenario.name + ' 应提交成功');
+      assertEqual(receiver.snapshot.storageKey, protocol.SNAPSHOT_KEY_V3);
+      assertDeepEqual(
+        receiver.snapshot.accounts.map(function (account) { return account.id; }),
+        scenario.expected.accountIds,
+        scenario.name + ' 账号顺序'
+      );
+      assertDeepEqual(
+        receiver.snapshot.accounts.map(function (account) {
+          return account.password === undefined ? null : account.password;
+        }),
+        scenario.expected.passwords,
+        scenario.name + ' 密码合并结果'
+      );
+    }
+    return fixture.scenarios.length + ' 个场景';
+  });
+
+  r.test('v2 手机 → v3 手环：消息无 password，旧密码保留，新账号无密码，快照 version=2', function () {
+    const fixture = readJson(join(v3Dir, 'v2-compat-session.json'));
+    for (const message of fixture.messages) {
+      const envelope = protocol.validateEnvelope(message, { versions: protocol.SYNC_VERSIONS });
+      assert(envelope.ok, envelope.reason);
+      assertEqual(message.version, 2);
+      if (message.type === protocol.MESSAGE_TYPES.ACCOUNT) {
+        assert(!('password' in message.account), 'v2 account 不应携带 password 字段');
+      }
+    }
+    const receiver = new protocol.BandSyncReceiver({
+      now: function () { return V3_SENT_AT + 2000; },
+      initialSnapshot: deepClone(fixture.initialSnapshot)
+    });
+    const results = fixture.messages.map(function (message) { return receiver.receive(message); });
+    assertEqual(results[results.length - 1].status, 'committed');
+    assertEqual(receiver.snapshot.version, 2, '快照 version 应记录来源协议版本');
+    assertEqual(receiver.snapshot.storageKey, protocol.SNAPSHOT_KEY_V3, 'v2 同步也写入活动 v3 快照键');
+    assertEqual(receiver.snapshot.accounts.length, fixture.expected.accountCount);
+    assertDeepEqual(
+      receiver.snapshot.accounts.map(function (account) {
+        return account.password === undefined ? null : account.password;
+      }),
+      fixture.expected.passwords,
+      'v2 缺省 password = 保留旧值'
+    );
+    assert(protocol.validateAck(receiver.lastAck).ok);
+    assertEqual(receiver.lastAck.received, fixture.expected.accountCount);
+    for (const key of ['type', 'version', 'ok', 'received', 'committed', 'error']) {
+      assertDeepEqual(receiver.lastAck[key], fixture.expected.ack[key], 'v2 兼容 ack.' + key);
+    }
+    return '3 账号 / 2 个旧密码保留 + ack';
+  });
+
+  r.test('v2 手环收 v3：全部忽略、无快照；v2 手环收 v2 仍正常提交', function () {
+    const oldBand = new protocol.BandSyncReceiver({
+      supportedVersions: [2],
+      now: function () { return FIXED_NOW; }
+    });
+    const ignored = v3Messages.map(function (message) { return oldBand.receive(message); });
+    for (const result of ignored) {
+      assertEqual(result.status, 'ignored');
+      assert(String(result.reason).indexOf('version') >= 0, '忽略原因应提示 version: ' + result.reason);
+    }
+    assert(oldBand.snapshot === null, '旧手环不应写快照');
+    assert(oldBand.staging === null, '旧手环不应开始 staging');
+    assert(oldBand.lastAck === null, '旧手环不应回 ack');
+
+    const v2Fixture = readJson(join(FIXTURES, 'protocol', 'valid-session.json'));
+    const oldBand2 = new protocol.BandSyncReceiver({ supportedVersions: [2], now: function () { return FIXED_NOW; } });
+    const results = v2Fixture.messages.map(function (message) { return oldBand2.receive(message); });
+    assertEqual(results[results.length - 1].status, 'committed');
+    assertEqual(oldBand2.snapshot.version, 2);
+    return 'v3 全忽略 / v2 兼容';
+  });
+
+  r.test('v3 手机 8s 无 ack → 提示升级手环应用；手机端接受 v2 ack', function () {
+    const client = new protocol.PhoneSyncClient({ now: function () { return V3_SENT_AT; } });
+    const session = client.buildSync([makeValidAccount({})], {
+      sentAt: V3_SENT_AT,
+      syncId: 'sync-ack-timeout'
+    });
+    assertEqual(session.version, 3);
+    assertEqual(client.checkAckTimeout(V3_SENT_AT + protocol.ACK_TIMEOUT_MS - 1).timedOut, false);
+    const timedOut = client.checkAckTimeout(V3_SENT_AT + protocol.ACK_TIMEOUT_MS);
+    assertEqual(timedOut.timedOut, true);
+    assert(String(timedOut.suggestion).indexOf('升级手环应用') >= 0);
+
+    const legacyAck = {
+      type: 'mfa_sync_ack',
+      version: 2,
+      sentAt: V3_SENT_AT + 1,
+      syncId: 'sync-legacy-ack',
+      ok: true,
+      received: 1,
+      committed: 1,
+      error: null
+    };
+    assert(protocol.validateAck(legacyAck).ok, '手机端应接受 v2 ack');
+    const client2 = new protocol.PhoneSyncClient({ now: function () { return V3_SENT_AT; } });
+    assertEqual(client2.handleAck(legacyAck).status, 'confirmed');
+    return '8s 超时 + v2 ack 兼容';
+  });
+
+  const pinSetFixture = readJson(join(v3Dir, 'pin-set.json'));
+  const pinQueryFixture = readJson(join(v3Dir, 'pin-query-state.json'));
+  const pinClearFixture = readJson(join(v3Dir, 'pin-clear.json'));
+  const pinAckFixture = readJson(join(v3Dir, 'pin-ack.json'));
+  const invalidPinFixture = readJson(join(v3Dir, 'invalid-pin.json'));
+  const pinNow = pinSetFixture.expected.stored.updatedAt;
+
+  r.test('pin_set 夹具：pattern/SHA-256 hash/32+64 hex/iterations 1200，消息 <1KB', function () {
+    const pin = pinSetFixture.pin;
+    assertEqual(pin.algorithm, 'PBKDF2-SHA256');
+    assertEqual(pin.salt.length, 32);
+    assertEqual(pin.hash.length, 64);
+    assertEqual(pin.iterations, 1200);
+    assert(protocol.validatePinPattern(pinSetFixture.pattern).ok);
+    assertEqual(
+      protocol.derivePinHash(pinSetFixture.pattern, pin.salt, pin.iterations),
+      pin.hash,
+      'PBKDF2-SHA256(图案, salt, iterations, 32) 应等于夹具 hash'
+    );
+    assert(protocol.validatePinSet(pinSetFixture.message).ok, 'pin_set 消息应合法');
+    const bytes = protocol.messageBytes(pinSetFixture.message);
+    assert(bytes < protocol.MAX_MESSAGE_BYTES, 'pin_set 超过 1KB: ' + bytes);
+    assertEqual(protocol.PIN_STORAGE_KEY, 'wristkey_pin_v1');
+    return pinSetFixture.pattern + ' / ' + bytes + 'B';
+  });
+
+  r.test('图案格式边界：仅接受 5 位 TSC，大小写/长度/空值拒绝', function () {
+    const valid = ['TSCCT', 'TTTTT', 'CCCCC', 'SSSSS', 'TSCTS'];
+    for (const pattern of valid) {
+      assert(protocol.validatePinPattern(pattern).ok, pattern + ' 应合法');
+    }
+    const invalid = ['', 'TSC', 'TSCCTX', 'tscct', 'TSCCT ', ' TSCCT', 'TSCXT', '12345'];
+    for (const pattern of invalid) {
+      assertEqual(protocol.validatePinPattern(pattern).ok, false, JSON.stringify(pattern) + ' 应非法');
+    }
+    return valid.length + ' 合法 / ' + invalid.length + ' 非法';
+  });
+
+  r.test('pin_set 手环端：ack 成功、enabled=true、存 salt/hash/iterations/updatedAt', function () {
+    const receiver = new protocol.BandSyncReceiver({ now: function () { return pinNow; } });
+    const result = receiver.receive(pinSetFixture.message);
+    assertEqual(result.status, 'pin_set');
+    assertDeepEqual(result.ack, pinSetFixture.expected.ack);
+    assertDeepEqual(result.state, pinSetFixture.expected.state);
+    assertDeepEqual(receiver.pin, pinSetFixture.expected.stored);
+    assert(protocol.validatePinAck(result.ack).ok);
+    assert(protocol.validatePinState(result.state).ok);
+    assertDeepEqual(receiver.lastPinAck, result.ack);
+  });
+
+  r.test('pin_query → pin_state：requestId 回填 / 无图案 updatedAt=0；广播可被手机端处理', function () {
+    const clock = { value: pinNow };
+    const receiver = new protocol.BandSyncReceiver({ now: function () { return clock.value; } });
+    receiver.receive(pinSetFixture.message);
+    clock.value = pinNow + 1;
+    const queryResult = receiver.receive(pinQueryFixture.queryMessage);
+    assertEqual(queryResult.status, 'pin_state');
+    assertDeepEqual(queryResult.state, pinQueryFixture.expected.stateReply);
+    assert(protocol.validatePinState(queryResult.state).ok);
+
+    const fresh = new protocol.BandSyncReceiver({ now: function () { return pinNow + 1; } });
+    const freshResult = fresh.receive(pinQueryFixture.queryMessage);
+    assertEqual(freshResult.state.enabled, false);
+    assertEqual(freshResult.state.updatedAt, 0);
+    assertEqual(freshResult.state.requestId, pinQueryFixture.queryMessage.requestId);
+
+    const client = new protocol.PhoneSyncClient();
+    const handled = client.handlePinState(pinQueryFixture.expected.broadcast);
+    assertEqual(handled.ok, true);
+    assertEqual(client.pinState.enabled, true);
+    assertEqual(client.pinState.updatedAt, pinNow);
+
+    for (const bad of [
+      Object.assign({}, pinQueryFixture.expected.broadcast, { version: 2 }),
+      Object.assign({}, pinQueryFixture.expected.broadcast, { enabled: 'yes' }),
+      Object.assign({}, pinQueryFixture.expected.broadcast, { updatedAt: -1 })
+    ]) {
+      assertEqual(protocol.validatePinState(bad).ok, false);
+    }
+    return 'query / 无图案 / 广播 / 3 个非法 state';
+  });
+
+  r.test('pin_clear：ack ok/enabled=false、删除图案与失败计数、广播 enabled=false', function () {
+    const clock = { value: pinNow };
+    const receiver = new protocol.BandSyncReceiver({ now: function () { return clock.value; } });
+    receiver.receive(pinSetFixture.message);
+    receiver.pinFailures = 3;
+    clock.value = pinNow + 2;
+    const result = receiver.receive(pinClearFixture.message);
+    assertEqual(result.status, 'pin_clear');
+    assertDeepEqual(result.ack, pinClearFixture.expected.ack);
+    assertDeepEqual(result.state, pinClearFixture.expected.state);
+    assert(receiver.pin === null, '清空后不应保留 pin');
+    assertEqual(receiver.pinFailures, 0);
+    const queryAfter = receiver.receive(pinQueryFixture.queryMessage);
+    assertEqual(queryAfter.state.enabled, false);
+    assertEqual(queryAfter.state.updatedAt, 0);
+    return '清空 + 计数归零';
+  });
+
+  r.test('pin_ack 矩阵：成功不带 error、失败原因码白名单、仅 v3', function () {
+    for (const item of pinAckFixture.cases) {
+      const check = protocol.validatePinAck(item.message);
+      assertEqual(check.ok, item.valid, item.name + ': ' + (check.reason || ''));
+    }
+    const client = new protocol.PhoneSyncClient();
+    const success = pinAckFixture.cases.find(function (item) { return item.name === 'success'; });
+    const handled = client.handlePinAck(success.message);
+    assertEqual(handled.ok, true);
+    assertEqual(handled.enabled, true);
+    const failure = pinAckFixture.cases.find(function (item) { return item.name === 'failure-invalid-pin-payload'; });
+    const handledFail = client.handlePinAck(failure.message);
+    assertEqual(handledFail.ok, true, '合法失败 ack 也是可处理消息');
+    assertEqual(handledFail.enabled, false);
+    assertDeepEqual(protocol.PIN_ACK_ERRORS, ['invalid_pin_payload', 'invalid_version', 'storage_error']);
+    return pinAckFixture.cases.length + ' 个 case';
+  });
+
+  r.test('非法 pin 载荷/版本矩阵：rejected 时旧图案不变，envelope 非法则 ignored', function () {
+    let maxBytes = 0;
+    for (const item of invalidPinFixture.cases) {
+      const receiver = new protocol.BandSyncReceiver({ now: function () { return pinNow; } });
+      const result = receiver.receive(item.message);
+      assertEqual(result.status, item.expected.status, item.name);
+      if (item.expected.status === 'rejected') {
+        assert(result.ack, item.name + ' 应回 ack');
+        assertEqual(result.ack.ok, false);
+        assertEqual(result.ack.error, item.expected.error, item.name);
+        assertEqual(result.ack.enabled, false);
+        assert(receiver.pin === null, item.name + ' 不应写入 pin');
+        assert(protocol.validatePinAck(result.ack).ok, item.name + ' ack 自身应合法: ' + JSON.stringify(result.ack));
+      } else {
+        assert(receiver.pin === null);
+        assert(receiver.lastPinAck === null);
+      }
+      maxBytes = Math.max(maxBytes, protocol.messageBytes(item.message));
+    }
+
+    // 旧图案不能被非法 pin_set 覆盖；失败 ack 仍可被手机端消费
+    const clock = { value: pinNow };
+    const receiver = new protocol.BandSyncReceiver({ now: function () { return clock.value; } });
+    const setResult = receiver.receive(pinSetFixture.message);
+    const before = deepClone(receiver.pin);
+    clock.value = pinNow + 1;
+    const bad = invalidPinFixture.cases.find(function (item) { return item.name === 'salt-31-hex'; });
+    const badResult = receiver.receive(bad.message);
+    assertEqual(badResult.status, 'rejected');
+    assertEqual(badResult.ack.error, 'invalid_pin_payload');
+    assertDeepEqual(receiver.pin, before, '失败 pin_set 不得改变旧图案');
+    assertDeepEqual(receiver.lastPinAck, badResult.ack);
+    assertEqual(setResult.ack.ok, true);
+    return invalidPinFixture.cases.length + ' 个 case，最大 ' + maxBytes + 'B';
   });
 
   // ------------------------------------------------ 汇总与结果文件

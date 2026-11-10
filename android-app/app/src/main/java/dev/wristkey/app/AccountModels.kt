@@ -16,6 +16,7 @@ val SUPPORTED_OTP_TYPES: Set<String> = setOf(OTP_TYPE_TOTP, OTP_TYPE_STEAM)
 const val MAX_ISSUER_LENGTH = 64
 const val MAX_ACCOUNT_NAME_LENGTH = 64
 const val MAX_CATEGORY_LENGTH = 32
+const val MAX_PASSWORD_LENGTH = 128
 
 val SUPPORTED_ALGORITHMS: Set<String> = Totp.SUPPORTED_ALGORITHMS
 
@@ -26,10 +27,17 @@ fun normalizeOtpType(raw: String?): String {
 }
 
 /**
- * 手机端保存的 OTP 账号（与协议 v2 的 account 字段一一对应）。
+ * 密码归一化（协议 v3）：去掉 `\u0000`-`\u001f` 控制字符，并截断到 [MAX_PASSWORD_LENGTH]。
+ * 密码只用于展示，不参与 TOTP 计算；空串表示"没有密码/清空"。
+ */
+fun normalizePassword(raw: String?): String =
+    (raw ?: "").filter { it.code >= 0x20 }.take(MAX_PASSWORD_LENGTH)
+
+/**
+ * 手机端保存的 OTP 账号（与协议 v3 的 account 字段一一对应）。
  *
  * [otpType] 为 `totp`（缺省）或 `steam`；Steam 账号固定 digits=5 / period=30 / SHA1，
- * 码为 5 位字母数字（见 [SteamOtp]）。
+ * 码为 5 位字母数字（见 [SteamOtp]）。[password] 为 v3 新增的可选密码（≤128，不参与计算）。
  */
 data class WristKeyAccount(
     val id: String,
@@ -42,6 +50,7 @@ data class WristKeyAccount(
     val period: Int = DEFAULT_PERIOD,
     val updatedAt: Long = System.currentTimeMillis(),
     val otpType: String = OTP_TYPE_TOTP,
+    val password: String = "",
 ) {
     val normalizedOtpType: String
         get() = normalizeOtpType(otpType)
@@ -93,6 +102,7 @@ data class AccountDraft(
     val period: String = DEFAULT_PERIOD.toString(),
     val algorithm: String = DEFAULT_ALGORITHM,
     val otpType: String = OTP_TYPE_TOTP,
+    val password: String = "",
 ) {
     val isEditing: Boolean
         get() = id != null
@@ -116,6 +126,7 @@ fun WristKeyAccount.toDraft(): AccountDraft = AccountDraft(
     period = period.toString(),
     algorithm = algorithm,
     otpType = normalizedOtpType,
+    password = password,
 )
 
 /** 手动表单校验；导入路径不经过这里（导入按 docs/stratum-format.md 的规则校验）。 */
@@ -183,6 +194,7 @@ fun AccountDraft.validate(now: Long = System.currentTimeMillis()): DraftValidati
             period = parsedPeriod,
             updatedAt = now,
             otpType = normalizedOtpType,
+            password = normalizePassword(password),
         ),
     )
 }

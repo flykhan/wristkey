@@ -1,0 +1,129 @@
+{
+  "description": "v2 手机 → v3 手环：消息 version=2、无 password 字段；手环账号照常同步，旧密码按“缺省=保留”处理",
+  "initialSnapshot": {
+    "version": 3,
+    "storageKey": "mfa_snapshot_v3",
+    "updatedAt": 1760000000000,
+    "accounts": [
+      {
+        "id": "s_9bb1d7340577",
+        "issuer": "RFC6238",
+        "accountName": "sha1@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        "algorithm": "SHA1",
+        "digits": 8,
+        "period": 30,
+        "otpType": "totp",
+        "updatedAt": 1760000000000,
+        "password": "v2-old-1"
+      },
+      {
+        "id": "s_c31b0534e1e4",
+        "issuer": "RFC6238",
+        "accountName": "sha256@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+        "algorithm": "SHA256",
+        "digits": 8,
+        "period": 30,
+        "otpType": "totp",
+        "updatedAt": 1760000000000,
+        "password": "v2-old-2"
+      }
+    ]
+  },
+  "syncId": "sync-1760000000000-v2-compat",
+  "messages": [
+    {
+      "type": "mfa_sync_begin",
+      "version": 2,
+      "sentAt": 1760000000500,
+      "syncId": "sync-1760000000000-v2-compat",
+      "accountCount": 3
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000501,
+      "syncId": "sync-1760000000000-v2-compat",
+      "index": 0,
+      "account": {
+        "id": "s_9bb1d7340577",
+        "issuer": "RFC6238",
+        "accountName": "sha1@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        "algorithm": "SHA1",
+        "digits": 8,
+        "period": 30,
+        "otpType": "totp",
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000502,
+      "syncId": "sync-1760000000000-v2-compat",
+      "index": 1,
+      "account": {
+        "id": "s_c31b0534e1e4",
+        "issuer": "RFC6238",
+        "accountName": "sha256@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+        "algorithm": "SHA256",
+        "digits": 8,
+        "period": 30,
+        "otpType": "totp",
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000503,
+      "syncId": "sync-1760000000000-v2-compat",
+      "index": 2,
+      "account": {
+        "id": "s_537c9a35b939",
+        "issuer": "RFC6238",
+        "accountName": "sha512@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+        "algorithm": "SHA512",
+        "digits": 8,
+        "period": 30,
+        "otpType": "totp",
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_commit",
+      "version": 2,
+      "sentAt": 1760000000504,
+      "syncId": "sync-1760000000000-v2-compat",
+      "accountCount": 3
+    }
+  ],
+  "expected": {
+    "snapshotVersion": 2,
+    "storageKey": "mfa_snapshot_v3",
+    "accountCount": 3,
+    "passwords": [
+      "v2-old-1",
+      "v2-old-2",
+      null
+    ],
+    "ack": {
+      "type": "mfa_sync_ack",
+      "version": 3,
+      "ok": true,
+      "received": 3,
+      "committed": 3,
+      "error": null
+    },
+    "note": "v2 无 password 字段，等价于缺省 → 保留旧密码；新账号无密码"
+  }
+}

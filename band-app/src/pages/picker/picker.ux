@@ -1,46 +1,43 @@
 <template>
   <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
     <div class="card" style="background-color: {{ theme.cardBackground }}">
-      <text class="title" style="color: {{ theme.title }}">按首字母筛选</text>
-      <text class="hint" style="color: {{ theme.secondary }}">有账号的首字母高亮，右滑取消</text>
+      <div class="header">
+        <text class="title" style="color: {{ theme.title }}">按首字母筛选</text>
+        <text class="hint" style="color: {{ theme.secondary }}">上下滑动翻页</text>
+        <div class="close" onclick="goBack" style="background-color: {{ theme.buttonBackground }}">
+          <text class="close-text" style="color: {{ theme.secondary }}">×</text>
+        </div>
+      </div>
 
       <div class="grid">
         <div class="grid-row">
-          <div class="cell" for="{{ row0 }}" onclick="selectLetter($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ theme.accent }}">
-            <text class="cell-letter" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
-            <text class="cell-count" if="{{ $item.showCount }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
+          <div class="cell" for="{{ row0 }}" onclick="selectCell($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ $item.borderColor }}">
+            <text class="cell-letter" if="{{ !$item.placeholder }}" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
+            <text class="cell-count" if="{{ $item.countText !== '' }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
           </div>
         </div>
         <div class="grid-row">
-          <div class="cell" for="{{ row1 }}" onclick="selectLetter($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ theme.accent }}">
-            <text class="cell-letter" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
-            <text class="cell-count" if="{{ $item.showCount }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
+          <div class="cell" for="{{ row1 }}" onclick="selectCell($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ $item.borderColor }}">
+            <text class="cell-letter" if="{{ !$item.placeholder }}" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
+            <text class="cell-count" if="{{ $item.countText !== '' }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
           </div>
         </div>
         <div class="grid-row">
-          <div class="cell" for="{{ row2 }}" onclick="selectLetter($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ theme.accent }}">
-            <text class="cell-letter" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
-            <text class="cell-count" if="{{ $item.showCount }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
+          <div class="cell" for="{{ row2 }}" onclick="selectCell($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ $item.borderColor }}">
+            <text class="cell-letter" if="{{ !$item.placeholder }}" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
+            <text class="cell-count" if="{{ $item.countText !== '' }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
           </div>
         </div>
         <div class="grid-row">
-          <div class="cell" for="{{ row3 }}" onclick="selectLetter($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ theme.accent }}">
-            <text class="cell-letter" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
-            <text class="cell-count" if="{{ $item.showCount }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
+          <div class="cell" for="{{ row3 }}" onclick="selectCell($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ $item.borderColor }}">
+            <text class="cell-letter" if="{{ !$item.placeholder }}" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
+            <text class="cell-count" if="{{ $item.countText !== '' }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
           </div>
         </div>
-        <div class="grid-row">
-          <div class="cell" for="{{ row4 }}" onclick="selectLetter($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ theme.accent }}">
-            <text class="cell-letter" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
-            <text class="cell-count" if="{{ $item.showCount }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
-          </div>
-        </div>
-        <div class="grid-row">
-          <div class="cell" for="{{ row5 }}" onclick="selectLetter($item.key)" style="background-color: {{ $item.background }}; border-width: {{ $item.borderWidth }}px; border-color: {{ theme.accent }}">
-            <text class="cell-letter" style="color: {{ $item.textColor }}">{{ $item.label }}</text>
-            <text class="cell-count" if="{{ $item.showCount }}" style="color: {{ $item.countColor }}">{{ $item.countText }}</text>
-          </div>
-        </div>
+      </div>
+
+      <div class="dots">
+        <div class="dot" for="{{ dots }}" style="background-color: {{ $item.color }}"></div>
       </div>
     </div>
   </div>
@@ -54,39 +51,35 @@ import {
   DARK_THEME,
   DEFAULT_DARK_MODE,
   LETTER_FILTER_STORAGE_KEY,
-  LETTER_KEYS,
+  PICKER_COLUMNS,
+  PICKER_PAGE_COUNT,
   THEME_STORAGE_KEY,
-  buildLetterCounts,
+  buildPickerPage,
   normalizeLetterFilter,
   parseDarkMode,
   themeFor
 } from "../../common/scripts/settings"
 
-const COLUMNS = 7
-const ROWS = 6
-
 export default {
   private: {
     theme: DARK_THEME,
     accounts: [],
-    letterCounts: {},
     currentFilter: "",
+    pageIndex: 0,
     row0: [],
     row1: [],
     row2: [],
     row3: [],
-    row4: [],
-    row5: []
+    dots: []
   },
 
   onInit() {
     this.loadTheme()
-    this.loadAccounts()
+    this.loadState()
   },
 
   onShow() {
-    this.loadTheme()
-    this.loadAccounts()
+    this.loadState()
   },
 
   loadTheme() {
@@ -95,119 +88,75 @@ export default {
       default: DEFAULT_DARK_MODE ? "true" : "false",
       success: value => {
         this.theme = themeFor(parseDarkMode(value))
-        this.buildRows()
+        this.rebuild()
       },
       fail: () => {
         this.theme = themeFor(DEFAULT_DARK_MODE)
-        this.buildRows()
+        this.rebuild()
       }
     })
   },
 
-  loadAccounts() {
+  loadState() {
     storage.get({
       key: LETTER_FILTER_STORAGE_KEY,
       default: "",
       success: value => {
         this.currentFilter = normalizeLetterFilter(value)
-        this.loadFromSnapshot()
+        this.loadAccounts()
       },
       fail: () => {
         this.currentFilter = ""
-        this.loadFromSnapshot()
+        this.loadAccounts()
       }
     })
   },
 
-  loadFromSnapshot() {
+  loadAccounts() {
     loadSnapshot(snapshot => {
       this.accounts = snapshot.accounts
-      this.letterCounts = buildLetterCounts(this.accounts)
-      this.buildRows()
+      this.pageIndex = pageOfFilter(this.currentFilter)
+      this.rebuild()
     })
   },
 
-  buildRows() {
-    const cells = []
-    for (let index = 0; index < LETTER_KEYS.length; index++) {
-      const key = LETTER_KEYS[index]
-      cells.push(this.buildCell(key, key))
+  rebuild() {
+    const cells = buildPickerPage(this.accounts, this.currentFilter, this.theme, this.pageIndex)
+    this.row0 = cells.slice(0, PICKER_COLUMNS)
+    this.row1 = cells.slice(PICKER_COLUMNS, PICKER_COLUMNS * 2)
+    this.row2 = cells.slice(PICKER_COLUMNS * 2, PICKER_COLUMNS * 3)
+    this.row3 = cells.slice(PICKER_COLUMNS * 3, PICKER_COLUMNS * 4)
+    const dots = []
+    for (let index = 0; index < PICKER_PAGE_COUNT; index++) {
+      dots.push({
+        index: index,
+        color: index === this.pageIndex ? this.theme.accent : this.theme.progressTrack
+      })
     }
-    cells.push(this.buildCell("ALL", "全部"))
-    cells.push(this.buildCell("#", "#"))
-
-    const rows = []
-    let row = []
-    for (let index = 0; index < cells.length; index++) {
-      row.push(cells[index])
-      if (row.length === COLUMNS) {
-        rows.push(row)
-        row = []
-      }
-    }
-    if (row.length > 0) {
-      while (row.length < COLUMNS) {
-        row.push(this.buildPlaceholder())
-      }
-      rows.push(row)
-    }
-    while (rows.length < ROWS) {
-      const blanks = []
-      for (let column = 0; column < COLUMNS; column++) {
-        blanks.push(this.buildPlaceholder())
-      }
-      rows.push(blanks)
-    }
-
-    this.row0 = rows[0]
-    this.row1 = rows[1]
-    this.row2 = rows[2]
-    this.row3 = rows[3]
-    this.row4 = rows[4]
-    this.row5 = rows[5]
+    this.dots = dots
   },
 
-  buildCell(key, label) {
-    const counts = this.letterCounts || {}
-    const count = key === "ALL" ? this.accounts.length : (counts[key] || 0)
-    const active = key === "ALL" ? this.accounts.length > 0 : count > 0
-    const selected = key === "ALL" ? this.currentFilter === "" : this.currentFilter === key
-    return {
-      key: key,
-      label: String(label),
-      background: active ? this.theme.accentSoft : this.theme.itemBackground,
-      textColor: active ? this.theme.accent : this.theme.disabledText,
-      borderWidth: selected ? 2 : 0,
-      showCount: active && count > 0,
-      countText: String(count),
-      countColor: active ? this.theme.secondary : this.theme.disabledText
+  nextPage() {
+    if (this.pageIndex >= PICKER_PAGE_COUNT - 1) {
+      return
     }
+    this.pageIndex += 1
+    this.rebuild()
   },
 
-  buildPlaceholder() {
-    return {
-      key: "",
-      label: "",
-      background: "transparent",
-      textColor: "transparent",
-      borderWidth: 0,
-      showCount: false,
-      countText: "",
-      countColor: "transparent"
+  previousPage() {
+    if (this.pageIndex <= 0) {
+      return
     }
+    this.pageIndex -= 1
+    this.rebuild()
   },
 
-  selectLetter(key) {
+  selectCell(key) {
     if (!key) {
       return
     }
-    let value = key
-    if (key === "ALL") {
-      value = ""
-    } else if (!this.letterCounts[key]) {
-      // Grey cells (no accounts) are not selectable.
-      return
-    }
+    const value = key === "ALL" ? "" : key
     storage.set({
       key: LETTER_FILTER_STORAGE_KEY,
       value: value,
@@ -220,14 +169,36 @@ export default {
     })
   },
 
+  goBack() {
+    router.back()
+  },
+
   handleSwipe(event) {
     if (!event || !event.direction) {
       return
     }
-    if (event.direction === "right") {
+    if (event.direction === "up") {
+      this.nextPage()
+    } else if (event.direction === "down") {
+      this.previousPage()
+    } else if (event.direction === "right") {
       router.back()
     }
   }
+}
+
+function pageOfFilter(filter) {
+  const value = normalizeLetterFilter(filter)
+  if (!value) {
+    return 2
+  }
+  if (value >= "A" && value <= "P") {
+    return 0
+  }
+  if (value === "#" || (value >= "6" && value <= "9")) {
+    return 2
+  }
+  return 1
 }
 </script>
 
@@ -235,7 +206,7 @@ export default {
 .page {
   width: 100%;
   height: 100%;
-  padding: 8px;
+  padding: 6px;
   flex-direction: column;
   background-color: #000000;
 }
@@ -243,59 +214,94 @@ export default {
 .card {
   width: 100%;
   height: 100%;
-  padding: 12px 14px;
+  padding: 8px 12px;
   flex-direction: column;
   border-radius: 22px;
   background-color: #0b0f0e;
 }
 
+.header {
+  width: 100%;
+  height: 34px;
+  flex-direction: row;
+  align-items: center;
+}
+
 .title {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: bold;
   lines: 1;
-  text-overflow: ellipsis;
 }
 
 .hint {
-  margin-top: 3px;
+  flex: 1;
+  margin-left: 10px;
   font-size: 11px;
   lines: 1;
-  text-overflow: ellipsis;
+}
+
+.close {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-text {
+  font-size: 20px;
+  font-weight: bold;
 }
 
 .grid {
   flex: 1;
   width: 100%;
   flex-direction: column;
-  justify-content: center;
 }
 
 .grid-row {
+  flex: 1;
   width: 100%;
-  margin-top: 5px;
   flex-direction: row;
-  justify-content: space-between;
+  align-items: stretch;
 }
 
 .cell {
-  width: 57px;
-  height: 33px;
-  border-radius: 10px;
+  flex: 1;
+  margin: 3px;
+  border-radius: 14px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
 
 .cell-letter {
-  font-size: 16px;
+  font-size: 22px;
   font-weight: bold;
   text-align: center;
   lines: 1;
 }
 
 .cell-count {
-  font-size: 9px;
+  margin-top: 1px;
+  font-size: 10px;
   text-align: center;
   lines: 1;
+}
+
+.dots {
+  width: 100%;
+  height: 16px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  margin-right: 4px;
+  border-radius: 3px;
 }
 </style>

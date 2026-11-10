@@ -1,0 +1,136 @@
+{
+  "description": "Python 独立生成：v3 同步（含密码）+ 图案锁消息，用于语言级对拍",
+  "version": 3,
+  "syncId": "sync-tools-python-v3",
+  "sentAt": 1760000010000,
+  "messages": [
+    {
+      "type": "mfa_sync_begin",
+      "version": 3,
+      "sentAt": 1760000010000,
+      "syncId": "sync-tools-python-v3",
+      "accountCount": 3
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 3,
+      "sentAt": 1760000010001,
+      "syncId": "sync-tools-python-v3",
+      "index": 0,
+      "account": {
+        "id": "s_9bb1d7340577",
+        "issuer": "GitHub",
+        "accountName": "dev@example.com",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 30,
+        "otpType": "totp",
+        "password": "stratum-pass-1"
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 3,
+      "sentAt": 1760000010002,
+      "syncId": "sync-tools-python-v3",
+      "index": 1,
+      "account": {
+        "id": "s_c31b0534e1e4",
+        "issuer": "Google",
+        "accountName": "me@gmail.com",
+        "category": "云服务",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+        "algorithm": "SHA256",
+        "digits": 8,
+        "period": 60,
+        "otpType": "totp",
+        "password": ""
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 3,
+      "sentAt": 1760000010003,
+      "syncId": "sync-tools-python-v3",
+      "index": 2,
+      "account": {
+        "id": "s_537c9a35b939",
+        "issuer": "AWS",
+        "accountName": "root",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+        "algorithm": "SHA512",
+        "digits": 10,
+        "period": 15,
+        "otpType": "totp"
+      }
+    },
+    {
+      "type": "mfa_sync_commit",
+      "version": 3,
+      "sentAt": 1760000010004,
+      "syncId": "sync-tools-python-v3",
+      "accountCount": 3
+    }
+  ],
+  "pinMessages": [
+    {
+      "type": "mfa_pin_set",
+      "version": 3,
+      "sentAt": 1760000015000,
+      "pin": {
+        "algorithm": "PBKDF2-SHA256",
+        "salt": "000102030405060708090a0b0c0d0e0f",
+        "hash": "9443560910093caf06a05769cf3086740dd0c61d3a737b5631d5767b2646889a",
+        "iterations": 1200
+      }
+    },
+    {
+      "type": "mfa_pin_query",
+      "version": 3,
+      "sentAt": 1760000015001,
+      "requestId": "pin-tools-python-1"
+    },
+    {
+      "type": "mfa_pin_clear",
+      "version": 3,
+      "sentAt": 1760000015002
+    }
+  ],
+  "expected": {
+    "accountCount": 3,
+    "accountIds": [
+      "s_9bb1d7340577",
+      "s_c31b0534e1e4",
+      "s_537c9a35b939"
+    ],
+    "effectivePasswords": [
+      "stratum-pass-1",
+      "",
+      null
+    ],
+    "pin": {
+      "pattern": "TSCCT",
+      "algorithm": "PBKDF2-SHA256",
+      "salt": "000102030405060708090a0b0c0d0e0f",
+      "hash": "9443560910093caf06a05769cf3086740dd0c61d3a737b5631d5767b2646889a",
+      "iterations": 1200,
+      "storedAt": 1760000015000
+    },
+    "pinAck": {
+      "ok": true,
+      "enabled": true
+    },
+    "pinState": {
+      "enabled": true,
+      "updatedAt": 1760000015000,
+      "requestId": "pin-tools-python-1"
+    },
+    "pinClearAck": {
+      "ok": true,
+      "enabled": false
+    }
+  }
+}

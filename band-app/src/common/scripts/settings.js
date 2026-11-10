@@ -145,6 +145,122 @@ export function filterAccountsByLetter(accounts, letter) {
   return result
 }
 
+/* --------------------------------------------------------------------------
+ * UI v4 letter picker: full-screen 4x4 grid, 3 pages, swipe up/down.
+ * ------------------------------------------------------------------------ */
+
+export const PICKER_COLUMNS = 4
+export const PICKER_ROWS = 4
+export const PICKER_PAGE_SIZE = PICKER_COLUMNS * PICKER_ROWS
+export const PICKER_PAGE_COUNT = 3
+export const PICKER_ALL_KEY = "ALL"
+export const PASSWORD_REVEAL_MS = 10000
+
+/**
+ * 48 cells across 3 pages ("" is a decorative empty cell). Page 1 is A-P,
+ * page 2 continues with Q-Z and 0-5, page 3 holds 6-9, "#" and 全部.
+ */
+export const PICKER_PAGE_KEYS = [
+  ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P"],
+  ["Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5"],
+  ["6", "7", "8", "9", "#", PICKER_ALL_KEY, "", "", "", "", "", "", "", "", "", ""]
+]
+
+/**
+ * Build the cells of one picker page.
+ * @param {object[]} accounts all accounts (category is intentionally ignored)
+ * @param {string} currentFilter "" or one of A-Z/0-9/#
+ * @param {object} theme palette (LIGHT_THEME/DARK_THEME)
+ * @param {number} pageIndex 0..PICKER_PAGE_COUNT-1 (clamped)
+ * @returns {object[]} 16 cells
+ */
+export function buildPickerPage(accounts, currentFilter, theme, pageIndex) {
+  const palette = theme || DARK_THEME
+  const list = Array.isArray(accounts) ? accounts : []
+  const counts = buildLetterCounts(list)
+  const filter = normalizeLetterFilter(currentFilter)
+  let page = typeof pageIndex === "number" ? Math.floor(pageIndex) : 0
+  if (page < 0) {
+    page = 0
+  }
+  if (page >= PICKER_PAGE_COUNT) {
+    page = PICKER_PAGE_COUNT - 1
+  }
+  const keys = PICKER_PAGE_KEYS[page]
+  const cells = []
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index]
+    if (key === "") {
+      cells.push({
+        key: "",
+        label: "",
+        count: 0,
+        countText: "",
+        hasAccounts: false,
+        selected: false,
+        placeholder: true,
+        disabled: false,
+        background: "transparent",
+        textColor: palette.secondary,
+        countColor: palette.secondary,
+        borderColor: "transparent",
+        borderWidth: 0
+      })
+      continue
+    }
+    const isAll = key === PICKER_ALL_KEY
+    const count = isAll ? list.length : counts[key]
+    const hasAccounts = count > 0
+    const selected = isAll ? filter === "" : filter === key
+    cells.push({
+      key: key,
+      label: isAll ? "全部" : key,
+      count: count,
+      countText: String(count),
+      hasAccounts: hasAccounts,
+      selected: selected,
+      placeholder: false,
+      disabled: false,
+      background: hasAccounts || selected ? palette.accentSoft : "transparent",
+      textColor: hasAccounts ? palette.title : palette.disabledText,
+      countColor: hasAccounts ? palette.secondary : palette.disabledText,
+      borderColor: selected ? palette.accent : "transparent",
+      borderWidth: selected ? 2 : 0
+    })
+  }
+  return cells
+}
+
+/** Build all three picker pages (used by tests and simple UIs). */
+export function buildPickerPages(accounts, currentFilter, theme) {
+  const pages = []
+  for (let page = 0; page < PICKER_PAGE_COUNT; page++) {
+    pages.push(buildPickerPage(accounts, currentFilter, theme, page))
+  }
+  return pages
+}
+
+/** Number of accounts visible under the current filter (rail hint). */
+export function filteredAccountCount(accounts, letter) {
+  return filterAccountsByLetter(accounts, letter).length
+}
+
+/**
+ * Detail screen password row. Empty passwords show a placeholder; a stored
+ * password is masked until the user taps it for PASSWORD_REVEAL_MS.
+ * @returns {{text: string, empty: boolean, hidden: boolean}}
+ */
+export function passwordDisplay(password, revealed) {
+  const value = typeof password === "string" ? password : ""
+  if (value.length === 0) {
+    return { text: "未导入密码", empty: true, hidden: false }
+  }
+  if (revealed === true) {
+    return { text: value, empty: false, hidden: false }
+  }
+  return { text: "••••••••", empty: false, hidden: true }
+}
+
 /**
  * List row code font size (px): 6 digits / 5-char Steam -> 42,
  * 8 digits -> 40, 10 digits -> 34.

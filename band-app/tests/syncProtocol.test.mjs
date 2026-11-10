@@ -95,11 +95,11 @@ test("happy path: begin -> account x3 (out of order) -> commit", () => {
   assert.equal(result.ignored, false)
   assert.equal(result.committed !== null, true)
   assert.deepEqual(result.committed.accounts.map(a => a.id), ["a", "b", "c"])
-  assert.equal(result.committed.version, 2)
+  assert.equal(result.committed.version, 3)
   assert.equal(result.committed.updatedAt, T0 + 10)
 
   assert.equal(result.ack.type, MESSAGE_ACK)
-  assert.equal(result.ack.version, 2)
+  assert.equal(result.ack.version, 3)
   assert.equal(result.ack.syncId, SYNC_ID)
   assert.equal(result.ack.ok, true)
   assert.equal(result.ack.received, 3)
@@ -233,7 +233,7 @@ test("zero-account sync commits an empty snapshot (clears the band)", () => {
   assert.equal(result.ack.received, 0)
   assert.equal(result.ack.committed, 0)
   assert.deepEqual(result.committed.accounts, [])
-  assert.equal(result.committed.version, 2)
+  assert.equal(result.committed.version, 3)
 })
 
 test("a new begin discards a previous staging session", () => {
@@ -330,7 +330,7 @@ test("buildAck and buildSyncRequest shapes", () => {
   })
   assert.deepEqual(ack, {
     type: MESSAGE_ACK,
-    version: 2,
+    version: 3,
     sentAt: T0,
     syncId: SYNC_ID,
     ok: true,
@@ -347,7 +347,7 @@ test("buildAck and buildSyncRequest shapes", () => {
   const request = buildSyncRequest({ sentAt: T0, requestId: "req-1-2" })
   assert.deepEqual(request, {
     type: MESSAGE_REQUEST,
-    version: 2,
+    version: 3,
     sentAt: T0,
     requestId: "req-1-2"
   })

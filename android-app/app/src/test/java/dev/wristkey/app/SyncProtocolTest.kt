@@ -46,14 +46,14 @@ class SyncProtocolTest {
 
         val begin = JSONObject(session.messages.first())
         assertEquals(SyncProtocol.TYPE_BEGIN, begin.getString("type"))
-        assertEquals(2, begin.getInt("version"))
+        assertEquals(3, begin.getInt("version"))
         assertEquals(now, begin.getLong("sentAt"))
         assertEquals("sync-$now-7f3a", begin.getString("syncId"))
         assertEquals(2, begin.getInt("accountCount"))
 
         val firstAccount = JSONObject(session.messages[1])
         assertEquals(SyncProtocol.TYPE_ACCOUNT, firstAccount.getString("type"))
-        assertEquals(2, firstAccount.getInt("version"))
+        assertEquals(3, firstAccount.getInt("version"))
         assertEquals(now + 1, firstAccount.getLong("sentAt"))
         assertEquals("sync-$now-7f3a", firstAccount.getString("syncId"))
         assertEquals(0, firstAccount.getInt("index"))
@@ -77,7 +77,7 @@ class SyncProtocolTest {
 
         val commit = JSONObject(session.messages.last())
         assertEquals(SyncProtocol.TYPE_COMMIT, commit.getString("type"))
-        assertEquals(2, commit.getInt("version"))
+        assertEquals(3, commit.getInt("version"))
         assertEquals(now + 3, commit.getLong("sentAt"))
         assertEquals("sync-$now-7f3a", commit.getString("syncId"))
         assertEquals(2, commit.getInt("accountCount"))

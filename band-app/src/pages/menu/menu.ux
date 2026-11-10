@@ -6,17 +6,17 @@
     </div>
 
     <div class="options">
-      <div class="option" onclick="toggleTheme" style="background-color: {{ theme.cardBackground }}">
-        <text class="option-title" style="color: {{ theme.title }}">显示模式</text>
-        <text class="option-value" style="color: {{ theme.secondary }}">{{ themeAction }}</text>
+      <div class="option" onclick="openPin" style="background-color: {{ theme.cardBackground }}">
+        <text class="option-title" style="color: {{ theme.title }}">入口密码</text>
+        <text class="option-value" style="color: {{ theme.secondary }}">{{ pinLabel }}</text>
       </div>
       <div class="option" onclick="requestSync" style="background-color: {{ theme.cardBackground }}">
-        <text class="option-title" style="color: {{ theme.title }}">请求手机同步</text>
+        <text class="option-title" style="color: {{ theme.title }}">立即同步</text>
         <text class="option-value" style="color: {{ theme.secondary }}">{{ requestLabel }}</text>
       </div>
       <div class="option" onclick="openCopyright" style="background-color: {{ theme.cardBackground }}">
-        <text class="option-title" style="color: {{ theme.title }}">版权与许可</text>
-        <text class="option-value" style="color: {{ theme.secondary }}">Apache-2.0</text>
+        <text class="option-title" style="color: {{ theme.title }}">关于</text>
+        <text class="option-value" style="color: {{ theme.secondary }}">版本 2.0.0 · Apache-2.0</text>
       </div>
       <div class="option" onclick="exitApp" style="background-color: {{ theme.cardBackground }}">
         <text class="option-title exit-text" style="color: {{ theme.progressDanger }}">退出应用</text>
@@ -32,6 +32,7 @@
 import router from "@system.router"
 import storage from "@system.storage"
 import { requestSync as requestPhoneSync } from "../../common/scripts/interconnect"
+import { loadPin } from "../../common/scripts/pinStore"
 import {
   DARK_THEME,
   DEFAULT_DARK_MODE,
@@ -42,9 +43,8 @@ import {
 
 export default {
   private: {
-    isDark: DEFAULT_DARK_MODE,
     theme: DARK_THEME,
-    themeAction: "深色",
+    pinLabel: "未开启",
     requestLabel: "推送到手环",
     requestTimer: null
   },
@@ -70,26 +70,14 @@ export default {
       key: THEME_STORAGE_KEY,
       default: DEFAULT_DARK_MODE ? "true" : "false",
       success: value => {
-        this.applyTheme(parseDarkMode(value))
+        this.theme = themeFor(parseDarkMode(value))
       },
       fail: () => {
-        this.applyTheme(DEFAULT_DARK_MODE)
+        this.theme = themeFor(DEFAULT_DARK_MODE)
       }
     })
-  },
-
-  applyTheme(isDark) {
-    this.isDark = isDark
-    this.theme = themeFor(isDark)
-    this.themeAction = isDark ? "深色（点击切换浅色）" : "浅色（点击切换深色）"
-  },
-
-  toggleTheme() {
-    const next = !this.isDark
-    this.applyTheme(next)
-    storage.set({
-      key: THEME_STORAGE_KEY,
-      value: next ? "true" : "false"
+    loadPin(record => {
+      this.pinLabel = record ? "已开启 · 5 位图形" : "未开启"
     })
   },
 
@@ -118,6 +106,10 @@ export default {
       clearTimeout(this.requestTimer)
       this.requestTimer = null
     }
+  },
+
+  openPin() {
+    router.push({ uri: "/pages/pin" })
   },
 
   openCopyright() {

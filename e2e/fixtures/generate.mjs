@@ -33,7 +33,17 @@ import {
 } from '../lib/stratum.mjs';
 import { mapBitwardenToAccounts } from '../lib/bitwarden.mjs';
 import { RFC6238_SEEDS } from '../lib/totp.mjs';
-import { buildSyncSession } from '../lib/protocol.mjs';
+import {
+  PIN_ALGORITHM,
+  PIN_ITERATIONS_DEFAULT,
+  buildPinAck,
+  buildPinClear,
+  buildPinQuery,
+  buildPinSet,
+  buildPinState,
+  buildSyncSession,
+  derivePinHash
+} from '../lib/protocol.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_SYNC_ID = 'sync-1760000000000-e2e';
@@ -273,6 +283,145 @@ function buildBitwardenEncryptedExport() {
   };
 }
 
+// ---------------------------------------------------------------- 协议 v3 夹具
+
+const V3_SYNC_ID = 'sync-1760000000000-v3';
+const V3_SENT_AT = FIXTURE_SENT_AT;
+const V3_PASSWORD_FIELD_COUNT = 3;
+
+const PIN_PATTERN = 'TSCCT';
+const PIN_SALT = deterministicBytes('wristkey-e2e-pin-salt', 16).toString('hex');
+const PIN_ITERATIONS = PIN_ITERATIONS_DEFAULT;
+const PIN_HASH = derivePinHash(PIN_PATTERN, PIN_SALT, PIN_ITERATIONS);
+const PIN_NOW = FIXTURE_SENT_AT + 3000;
+
+/** 给前 3 个映射账号加 password：空格、Unicode、显式空串（清空语义）。 */
+function buildV3Accounts(mappedAccounts) {
+  const passwords = ['correct horse battery staple', 'p@ssw0rd-测试-Ω', ''];
+  return mappedAccounts.map(function (account, index) {
+    const copy = Object.assign({}, account);
+    if (index < passwords.length) {
+      copy.password = passwords[index];
+    }
+    return copy;
+  });
+}
+
+function buildPasswordMergeScenarios(mappedAccounts) {
+  const first = mappedAccounts[0];
+  const second = mappedAccounts[1];
+  const third = mappedAccounts[2];
+  const withPassword = function (account, password) {
+    return Object.assign({}, account, { password });
+  };
+
+  const scenarios = [
+    {
+      name: 'v3-password-default-preserved',
+      description: 'v3 账号缺省 password → 保留手环旧密码',
+      version: 3,
+      initialAccounts: [withPassword(first, 'old-pass-1')],
+      incomingAccounts: [Object.assign({}, first)],
+      expectedPasswords: ['old-pass-1']
+    },
+    {
+      name: 'v3-password-empty-clears',
+      description: 'v3 账号显式 password:"" → 清空旧密码',
+      version: 3,
+      initialAccounts: [withPassword(first, 'old-pass-1')],
+      incomingAccounts: [withPassword(first, '')],
+      expectedPasswords: [null]
+    },
+    {
+      name: 'v3-password-new-value-overwrites',
+      description: 'v3 账号非空 password → 覆盖旧密码',
+      version: 3,
+      initialAccounts: [withPassword(first, 'old-pass-1')],
+      incomingAccounts: [withPassword(first, 'new-pass-2')],
+      expectedPasswords: ['new-pass-2']
+    },
+    {
+      name: 'v3-snapshot-mixed-merge',
+      description: '同轮混合：缺省保留 / 空串清空 / 新账号无密码',
+      version: 3,
+      initialAccounts: [withPassword(first, 'old-pass-1'), withPassword(second, 'old-pass-2')],
+      incomingAccounts: [Object.assign({}, first), withPassword(second, ''), Object.assign({}, third)],
+      expectedPasswords: ['old-pass-1', null, null]
+    }
+  ];
+
+  return scenarios.map(function (scenario, index) {
+    const syncId = 'sync-1760000000000-merge-' + index;
+    const session = buildSyncSession(scenario.incomingAccounts, {
+      sentAt: FIXTURE_SENT_AT + 100 + index * 10,
+      syncId,
+      version: scenario.version
+    });
+    return {
+      name: scenario.name,
+      description: scenario.description,
+      initialSnapshot: {
+        version: 3,
+        storageKey: 'mfa_snapshot_v3',
+        updatedAt: FIXTURE_UPDATED_AT,
+        accounts: scenario.initialAccounts
+      },
+      syncId,
+      messages: session.messages,
+      expected: {
+        accountIds: scenario.incomingAccounts.map(function (account) { return account.id; }),
+        passwords: scenario.expectedPasswords
+      }
+    };
+  });
+}
+
+function buildV2CompatFixture(mappedAccounts) {
+  const first = mappedAccounts[0];
+  const second = mappedAccounts[1];
+  const third = mappedAccounts[2];
+  const initialAccounts = [
+    Object.assign({}, first, { password: 'v2-old-1' }),
+    Object.assign({}, second, { password: 'v2-old-2' })
+  ];
+  // 旧手机（v1.2/v2 协议）全量同步：不带 password 字段
+  const incomingAccounts = [Object.assign({}, first), Object.assign({}, second), Object.assign({}, third)];
+  const session = buildSyncSession(incomingAccounts, {
+    sentAt: FIXTURE_SENT_AT + 500,
+    syncId: 'sync-1760000000000-v2-compat',
+    version: 2
+  });
+  return {
+    description: 'v2 手机 → v3 手环：消息 version=2、无 password 字段；手环账号照常同步，旧密码按“缺省=保留”处理',
+    initialSnapshot: {
+      version: 3,
+      storageKey: 'mfa_snapshot_v3',
+      updatedAt: FIXTURE_UPDATED_AT,
+      accounts: initialAccounts
+    },
+    syncId: session.syncId,
+    messages: session.messages,
+    expected: {
+      snapshotVersion: 2,
+      storageKey: 'mfa_snapshot_v3',
+      accountCount: 3,
+      passwords: ['v2-old-1', 'v2-old-2', null],
+      ack: { type: 'mfa_sync_ack', version: 3, ok: true, received: 3, committed: 3, error: null },
+      note: 'v2 无 password 字段，等价于缺省 → 保留旧密码；新账号无密码'
+    }
+  };
+}
+
+function buildPinMessages() {
+  const setMessage = buildPinSet(
+    { algorithm: PIN_ALGORITHM, salt: PIN_SALT, hash: PIN_HASH, iterations: PIN_ITERATIONS },
+    { sentAt: PIN_NOW }
+  );
+  const queryMessage = buildPinQuery('pin-' + PIN_NOW, { sentAt: PIN_NOW + 1 });
+  const clearMessage = buildPinClear({ sentAt: PIN_NOW + 2 });
+  return { setMessage, queryMessage, clearMessage };
+}
+
 function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
@@ -344,12 +493,171 @@ async function main() {
   uriLines.push('otpauth://totp/BadUri:bad?secret=NOT-BASE32!');
   writeFileSync(join(HERE, 'uri-list.txt'), uriLines.join('\n') + '\n', 'utf8');
 
-  // 4) 协议合法会话
-  const session = buildSyncSession(mapped.accounts, { sentAt: FIXTURE_SENT_AT, syncId: FIXTURE_SYNC_ID });
+  // 4) 协议 v2 合法会话（保留给旧手环/旧手机兼容回归）
+  const session = buildSyncSession(mapped.accounts, {
+    sentAt: FIXTURE_SENT_AT,
+    syncId: FIXTURE_SYNC_ID,
+    version: 2
+  });
   writeJson(join(HERE, 'protocol', 'valid-session.json'), {
-    description: '合法同步消息序列：begin → account×N → commit；account 来自 expected-import.json',
+    description: '协议 v2 合法同步消息序列：begin → account×N → commit；account 来自 expected-import.json；无 password 字段',
+    version: 2,
     syncId: session.syncId,
     messages: session.messages
+  });
+
+  // 4b) 协议 v3 夹具
+  const v3Dir = join(HERE, 'protocol-v3');
+  mkdirSync(v3Dir, { recursive: true });
+  const v3Accounts = buildV3Accounts(mapped.accounts);
+  const sessionV3 = buildSyncSession(v3Accounts, { sentAt: V3_SENT_AT, syncId: V3_SYNC_ID });
+  writeJson(join(v3Dir, 'valid-session.json'), {
+    description: '协议 v3 全量同步：13 账号；前 3 个账号分别携带空格密码 / Unicode 密码 / 显式空串（清空语义）',
+    version: 3,
+    syncId: sessionV3.syncId,
+    messages: sessionV3.messages,
+    expected: {
+      accountCount: v3Accounts.length,
+      passwordAccountCount: V3_PASSWORD_FIELD_COUNT,
+      accounts: v3Accounts
+    }
+  });
+
+  const mergeScenarios = buildPasswordMergeScenarios(mapped.accounts);
+  writeJson(join(v3Dir, 'password-merge.json'), {
+    description: 'v3 password 合并矩阵：缺省=保留旧值；""=清空；新值=覆盖；同一轮可混合',
+    baseClock: FIXTURE_SENT_AT + 100,
+    scenarios: mergeScenarios
+  });
+
+  const v2Compat = buildV2CompatFixture(mapped.accounts);
+  writeJson(join(v3Dir, 'v2-compat-session.json'), v2Compat);
+
+  const pinMessages = buildPinMessages();
+  writeJson(join(v3Dir, 'pin-set.json'), {
+    description: '合法 mfa_pin_set：PBKDF2-SHA256、salt 32 hex、hash 64 hex、iterations 1200；手环 ack 成功并广播 enabled=true',
+    pattern: PIN_PATTERN,
+    pin: {
+      algorithm: PIN_ALGORITHM,
+      salt: PIN_SALT,
+      hash: PIN_HASH,
+      iterations: PIN_ITERATIONS
+    },
+    message: pinMessages.setMessage,
+    expected: {
+      ack: buildPinAck({ ok: true, enabled: true, error: null, now: PIN_NOW }),
+      state: buildPinState({ enabled: true, updatedAt: PIN_NOW, now: PIN_NOW }),
+      stored: {
+        algorithm: PIN_ALGORITHM,
+        salt: PIN_SALT,
+        hash: PIN_HASH,
+        iterations: PIN_ITERATIONS,
+        updatedAt: PIN_NOW
+      }
+    }
+  });
+
+  const pinAckCases = [
+    { name: 'success', valid: true, message: buildPinAck({ ok: true, enabled: true, error: null, now: PIN_NOW }) },
+    { name: 'failure-invalid-pin-payload', valid: true, message: buildPinAck({ ok: false, enabled: false, error: 'invalid_pin_payload', now: PIN_NOW }) },
+    { name: 'failure-invalid-version', valid: true, message: buildPinAck({ ok: false, enabled: false, error: 'invalid_version', now: PIN_NOW }) },
+    { name: 'failure-storage-error', valid: true, message: buildPinAck({ ok: false, enabled: true, error: 'storage_error', now: PIN_NOW }) },
+    { name: 'invalid-success-with-error', valid: false, message: buildPinAck({ ok: true, enabled: true, error: 'storage_error', now: PIN_NOW }) },
+    { name: 'invalid-failure-without-error', valid: false, message: buildPinAck({ ok: false, enabled: false, error: null, now: PIN_NOW }) },
+    { name: 'invalid-version-2', valid: false, message: {
+      type: 'mfa_pin_ack', version: 2, sentAt: PIN_NOW, ok: true, enabled: true, error: null
+    } },
+    { name: 'invalid-enabled-type', valid: false, message: {
+      type: 'mfa_pin_ack', version: 3, sentAt: PIN_NOW, ok: true, enabled: 'true', error: null
+    } },
+    { name: 'invalid-error-code', valid: false, message: buildPinAck({ ok: false, enabled: false, error: 'invalid_pin', now: PIN_NOW }) },
+    { name: 'invalid-missing-sentAt', valid: false, message: {
+      type: 'mfa_pin_ack', version: 3, ok: true, enabled: true, error: null
+    } }
+  ];
+  writeJson(join(v3Dir, 'pin-ack.json'), {
+    description: 'mfa_pin_ack 合法/非法矩阵：成功不得带 error；失败必须在原因码白名单内；仅 v3',
+    cases: pinAckCases
+  });
+
+  writeJson(join(v3Dir, 'pin-query-state.json'), {
+    description: 'mfa_pin_query → mfa_pin_state(enabled=true, updatedAt=设置时刻, requestId 回填)；另含手环主动广播样例（无 requestId）',
+    setupMessage: pinMessages.setMessage,
+    queryMessage: pinMessages.queryMessage,
+    expected: {
+      stateReply: buildPinState({ enabled: true, updatedAt: PIN_NOW, requestId: pinMessages.queryMessage.requestId, now: PIN_NOW + 1 }),
+      broadcast: buildPinState({ enabled: true, updatedAt: PIN_NOW, now: PIN_NOW + 2 })
+    }
+  });
+
+  writeJson(join(v3Dir, 'pin-clear.json'), {
+    description: 'mfa_pin_clear：删除图案、失败计数归零；ack ok=true/enabled=false；广播 enabled=false',
+    message: pinMessages.clearMessage,
+    expected: {
+      ack: buildPinAck({ ok: true, enabled: false, error: null, now: PIN_NOW + 2 }),
+      state: buildPinState({ enabled: false, updatedAt: PIN_NOW + 2, now: PIN_NOW + 2 })
+    }
+  });
+
+  const validPinPayload = {
+    algorithm: PIN_ALGORITHM,
+    salt: PIN_SALT,
+    hash: PIN_HASH,
+    iterations: PIN_ITERATIONS
+  };
+  const rawPinSet = function (pin, version) {
+    return {
+      type: 'mfa_pin_set',
+      version: version == null ? 3 : version,
+      sentAt: PIN_NOW,
+      pin
+    };
+  };
+  const invalidPinCases = [
+    { name: 'missing-pin', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: {
+      type: 'mfa_pin_set', version: 3, sentAt: PIN_NOW
+    } },
+    { name: 'pin-not-object', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: {
+      type: 'mfa_pin_set', version: 3, sentAt: PIN_NOW, pin: PIN_HASH
+    } },
+    { name: 'pin-null', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: {
+      type: 'mfa_pin_set', version: 3, sentAt: PIN_NOW, pin: null
+    } },
+    { name: 'algorithm-unsupported', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { algorithm: 'PBKDF2-SHA1' })) },
+    { name: 'salt-31-hex', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { salt: PIN_SALT.slice(1) })) },
+    { name: 'salt-uppercase', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { salt: PIN_SALT.toUpperCase() })) },
+    { name: 'hash-63-hex', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { hash: PIN_HASH.slice(1) })) },
+    { name: 'hash-uppercase', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { hash: PIN_HASH.toUpperCase() })) },
+    { name: 'hash-non-hex', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { hash: 'g'.repeat(64) })) },
+    { name: 'iterations-999', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { iterations: 999 })) },
+    { name: 'iterations-20001', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { iterations: 20001 })) },
+    { name: 'iterations-fraction', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { iterations: 1200.5 })) },
+    { name: 'version-2-set', expected: { status: 'rejected', error: 'invalid_version' }, message: rawPinSet(validPinPayload, 2) },
+    { name: 'version-2-query', expected: { status: 'rejected', error: 'invalid_version' }, message: {
+      type: 'mfa_pin_query', version: 2, sentAt: PIN_NOW, requestId: 'legacy-query'
+    } },
+    { name: 'version-2-clear', expected: { status: 'rejected', error: 'invalid_version' }, message: {
+      type: 'mfa_pin_clear', version: 2, sentAt: PIN_NOW
+    } },
+    { name: 'missing-sentAt', expected: { status: 'ignored' }, message: {
+      type: 'mfa_pin_set', version: 3, pin: validPinPayload
+    } },
+    { name: 'pin-query-missing-requestId', expected: { status: 'ignored' }, message: {
+      type: 'mfa_pin_query', version: 3, sentAt: PIN_NOW
+    } }
+  ];
+  writeJson(join(v3Dir, 'invalid-pin.json'), {
+    description: '非法 pin 载荷/版本矩阵：除 envelope 非法（status=ignored）外，pin_set 失败统一 ack invalid_pin_payload，旧图案不变；pin 消息仅 v3',
+    cases: invalidPinCases
   });
 
   // 5) Bitwarden 未加密 Vault 夹具（含加密导出负例）
@@ -376,6 +684,14 @@ async function main() {
     'legacy.stratum',
     'uri-list.txt',
     'protocol/valid-session.json',
+    'protocol-v3/valid-session.json',
+    'protocol-v3/password-merge.json',
+    'protocol-v3/v2-compat-session.json',
+    'protocol-v3/pin-set.json',
+    'protocol-v3/pin-ack.json',
+    'protocol-v3/pin-query-state.json',
+    'protocol-v3/pin-clear.json',
+    'protocol-v3/invalid-pin.json',
     'bitwarden-export.json',
     'bitwarden-encrypted-export.json',
     'bitwarden-expected-import.json'
@@ -391,6 +707,29 @@ async function main() {
     categories: Array.from(new Set(mapped.accounts.map(function (account) { return account.category; }))),
     otpTypes: Array.from(new Set(mapped.accounts.map(function (account) { return account.otpType; }))).sort(),
     skippedCodes: mapped.skipped.map(function (item) { return item.code; })
+  };
+  coverage.protocolV3 = {
+    validSession: {
+      version: 3,
+      accountCount: v3Accounts.length,
+      passwordAccountCount: V3_PASSWORD_FIELD_COUNT,
+      syncId: sessionV3.syncId
+    },
+    passwordMergeScenarios: mergeScenarios.length,
+    v2Compat: {
+      accountCount: v2Compat.expected.accountCount,
+      snapshotVersion: v2Compat.expected.snapshotVersion
+    },
+    pin: {
+      pattern: PIN_PATTERN,
+      algorithm: PIN_ALGORITHM,
+      iterations: PIN_ITERATIONS,
+      saltHex: PIN_SALT,
+      storageKey: 'wristkey_pin_v1',
+      setMessageBytes: Buffer.byteLength(JSON.stringify(pinMessages.setMessage), 'utf8'),
+      invalidCases: invalidPinCases.length,
+      ackCases: pinAckCases.length
+    }
   };
   writeJson(join(HERE, 'manifest.json'), {
     generator: 'e2e/fixtures/generate.mjs',
@@ -430,7 +769,9 @@ async function main() {
   console.log('夹具已生成：' + HERE);
   console.log('  明文 ' + plainBuffer.length + ' bytes，映射 ' + mapped.stats.imported + ' 导入 / ' + mapped.stats.skipped + ' 跳过');
   console.log('  strong ' + strong.length + ' bytes，legacy ' + legacy.length + ' bytes，uri ' + uriLines.length + ' 行');
-  console.log('  协议消息 ' + session.messages.length + ' 条（syncId=' + session.syncId + '）');
+  console.log('  协议 v2 消息 ' + session.messages.length + ' 条（syncId=' + session.syncId + '）');
+  console.log('  协议 v3 消息 ' + sessionV3.messages.length + ' 条（syncId=' + sessionV3.syncId + '），密码合并场景 ' + mergeScenarios.length + ' 个');
+  console.log('  pin 夹具：set/query/clear + ' + pinAckCases.length + ' 个 ack case + ' + invalidPinCases.length + ' 个非法 payload case');
   console.log('  Bitwarden 条目 ' + bitwardenMapped.stats.total + ' 条，映射 ' + bitwardenMapped.stats.imported + ' 导入 / ' + bitwardenMapped.stats.skipped + ' 跳过（含加密导出负例）');
 }
 

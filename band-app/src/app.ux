@@ -1,8 +1,36 @@
 <script>
+import router from "@system.router"
+import { loadPin } from "./common/scripts/pinStore"
+import { resetSession, shouldRelock } from "./common/scripts/pinSession"
+
 export default {
   onCreate() {
     // No secrets or sync payloads are logged anywhere in this app.
+    resetSession()
+  },
+  onShow() {
+    const state = readRouteState()
+    const path = (state && (state.path || state.name)) || ""
+    if (path.indexOf("/pages/lock") >= 0 || path.indexOf("/pages/pin") >= 0) {
+      return
+    }
+    if (!shouldRelock(Date.now())) {
+      return
+    }
+    loadPin(record => {
+      if (record) {
+        router.replace({ uri: "/pages/lock" })
+      }
+    })
   },
   onDestroy() {}
+}
+
+function readRouteState() {
+  try {
+    return router.getState()
+  } catch (error) {
+    return null
+  }
 }
 </script>

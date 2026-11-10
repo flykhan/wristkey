@@ -4,7 +4,8 @@
  * Pure validation/normalisation shared by the sync protocol, storage and UI.
  * No Vela runtime dependency, so it is covered by tests/accountModel.test.mjs.
  *
- * Validation rules follow docs/protocol.md v2 (including otpType="steam"):
+ * Validation rules follow docs/protocol.md v3 (including otpType="steam" and
+ * the optional account password added in v3):
  *   id           non-empty string, <= 64 (falls back to the message index)
  *   issuer       string, <= 64; issuer and accountName must not both be empty
  *   accountName  string, <= 64
@@ -16,6 +17,9 @@
  *   digits       6-10 integer, default 6; forced to 5 for Steam
  *                (digits=5 is only legal together with otpType="steam")
  *   period       5-300 integer seconds, default 30; forced to 30 for Steam
+ *   password     optional v3 string, <= 128 UTF-16 code units, spaces and
+ *                Unicode allowed, control characters U+0000-U+001F rejected;
+ *                missing/null defaults to "" (no password on this account)
  *   updatedAt    optional Unix milliseconds
  *
  * Fields that are present but invalid make the whole account invalid (the
@@ -35,10 +39,11 @@ import {
 } from "./totp.js"
 
 export const DEFAULT_CATEGORY = "默认分类"
-export const SNAPSHOT_VERSION = 2
+export const SNAPSHOT_VERSION = 3
 export const MAX_ID_LENGTH = 64
 export const MAX_NAME_LENGTH = 64
 export const MAX_CATEGORY_LENGTH = 32
+export const MAX_PASSWORD_LENGTH = 128
 export const MAX_ACCOUNTS = 500
 
 const ALGORITHM_SET = {}
@@ -151,6 +156,11 @@ export function normalizeAccount(raw, options) {
     }
   }
 
+  const passwordResult = normalizePassword(raw.password)
+  if (!passwordResult.ok) {
+    return fail(passwordResult.error, "password")
+  }
+
   let updatedAt = now
   if (raw.updatedAt !== undefined && raw.updatedAt !== null) {
     const parsed = Number(raw.updatedAt)
@@ -171,9 +181,34 @@ export function normalizeAccount(raw, options) {
       algorithm: algorithm,
       digits: digits,
       period: period,
+      password: passwordResult.value,
       updatedAt: updatedAt
     }
   }
+}
+
+/**
+ * Normalise an optional account password. Missing/null means "no password"
+ * (v2 snapshots and plain TOTP accounts). The value is never trimmed: spaces
+ * are legal password characters.
+ * @returns {{ok: true, value: string} | {ok: false, error: string}}
+ */
+export function normalizePassword(value) {
+  if (value === undefined || value === null) {
+    return { ok: true, value: "" }
+  }
+  if (typeof value !== "string") {
+    return { ok: false, error: "password_invalid" }
+  }
+  if (value.length > MAX_PASSWORD_LENGTH) {
+    return { ok: false, error: "password_too_long" }
+  }
+  for (let index = 0; index < value.length; index++) {
+    if (value.charCodeAt(index) < 0x20) {
+      return { ok: false, error: "password_control_character" }
+    }
+  }
+  return { ok: true, value: value }
 }
 
 /**
@@ -212,7 +247,7 @@ export function normalizeAccounts(list, options) {
   return { accounts: accounts, errors: errors }
 }
 
-/** Build a storage payload from accounts (never called with untrusted strings). */
+/** Build a v3 storage payload from accounts (never called with untrusted strings). */
 export function createSnapshot(accounts, updatedAt) {
   const timestamp = typeof updatedAt === "number" ? updatedAt : Date.now()
   const normalized = normalizeAccounts(Array.isArray(accounts) ? accounts : [], {
@@ -226,9 +261,11 @@ export function createSnapshot(accounts, updatedAt) {
 }
 
 /**
- * Parse a stored/built snapshot payload. Tolerant: accepts v2 payloads
+ * Parse a stored/built snapshot payload. Tolerant: accepts v2/v3 payloads
  * ({"accounts": [...]}) and legacy v1 shapes ({"configs": [...]}) produced by
- * BandOTP, returning a v2 snapshot or null when the payload is not a snapshot.
+ * BandOTP, returning a v3 snapshot or null when the payload is not a snapshot.
+ * Accounts without a password (v1/v2 data) load with password "" instead of
+ * being rejected, which is required for the v2 -> v3 migration.
  */
 export function parseSnapshotPayload(raw) {
   let payload = raw
@@ -269,7 +306,7 @@ export function parseSnapshotPayload(raw) {
   }
 }
 
-/** Empty v2 snapshot. */
+/** Empty v3 snapshot. */
 export function emptySnapshot() {
   return { version: SNAPSHOT_VERSION, updatedAt: 0, accounts: [] }
 }

@@ -1,0 +1,124 @@
+{
+  "description": "mfa_pin_ack 合法/非法矩阵：成功不得带 error；失败必须在原因码白名单内；仅 v3",
+  "cases": [
+    {
+      "name": "success",
+      "valid": true,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": true,
+        "enabled": true,
+        "error": null
+      }
+    },
+    {
+      "name": "failure-invalid-pin-payload",
+      "valid": true,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": false,
+        "enabled": false,
+        "error": "invalid_pin_payload"
+      }
+    },
+    {
+      "name": "failure-invalid-version",
+      "valid": true,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": false,
+        "enabled": false,
+        "error": "invalid_version"
+      }
+    },
+    {
+      "name": "failure-storage-error",
+      "valid": true,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": false,
+        "enabled": true,
+        "error": "storage_error"
+      }
+    },
+    {
+      "name": "invalid-success-with-error",
+      "valid": false,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": true,
+        "enabled": true,
+        "error": "storage_error"
+      }
+    },
+    {
+      "name": "invalid-failure-without-error",
+      "valid": false,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": false,
+        "enabled": false,
+        "error": null
+      }
+    },
+    {
+      "name": "invalid-version-2",
+      "valid": false,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 2,
+        "sentAt": 1760000003000,
+        "ok": true,
+        "enabled": true,
+        "error": null
+      }
+    },
+    {
+      "name": "invalid-enabled-type",
+      "valid": false,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": true,
+        "enabled": "true",
+        "error": null
+      }
+    },
+    {
+      "name": "invalid-error-code",
+      "valid": false,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "ok": false,
+        "enabled": false,
+        "error": "invalid_pin"
+      }
+    },
+    {
+      "name": "invalid-missing-sentAt",
+      "valid": false,
+      "message": {
+        "type": "mfa_pin_ack",
+        "version": 3,
+        "ok": true,
+        "enabled": true,
+        "error": null
+      }
+    }
+  ]
+}

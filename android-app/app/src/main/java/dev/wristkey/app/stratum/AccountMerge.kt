@@ -33,24 +33,32 @@ object AccountMerge {
         val deduplicated = imported.distinctBy { it.id }
         val existingById = existing.associateBy { it.id }
         val existingBySecret = existing.associateBy { Secret.normalize(it.secret) }
-        val importedIds = deduplicated.mapTo(HashSet()) { it.id }
-        val importedSecrets = deduplicated.mapTo(HashSet()) { Secret.normalize(it.secret) }
 
-        val updated = deduplicated.filter { account ->
-            existingById.containsKey(account.id) ||
-                existingBySecret.containsKey(Secret.normalize(account.secret))
+        fun match(account: WristKeyAccount): WristKeyAccount? =
+            existingById[account.id] ?: existingBySecret[Secret.normalize(account.secret)]
+
+        // 密码合并规则（docs/design/android-v2-spec.md §4）：同 id 时新密码非空才覆盖；
+        // 为空则保留旧密码（Stratum 备份不带密码，导入后不能丢掉 Bitwarden 带进来的密码）。
+        val mergedImported = deduplicated.map { account ->
+            val old = match(account)
+            if (old != null && account.password.isEmpty()) {
+                account.copy(password = old.password)
+            } else {
+                account
+            }
         }
-        val added = deduplicated.filter { account ->
-            !existingById.containsKey(account.id) &&
-                !existingBySecret.containsKey(Secret.normalize(account.secret))
-        }
+        val importedIds = mergedImported.mapTo(HashSet()) { it.id }
+        val importedSecrets = mergedImported.mapTo(HashSet<String>()) { Secret.normalize(it.secret) }
+
+        val updated = mergedImported.filter { account -> match(account) != null }
+        val added = mergedImported.filter { account -> match(account) == null }
 
         val accounts = when (mode) {
-            ImportMode.MERGE -> deduplicated + existing.filter { account ->
+            ImportMode.MERGE -> mergedImported + existing.filter { account ->
                 account.id !in importedIds && Secret.normalize(account.secret) !in importedSecrets
             }
 
-            ImportMode.REPLACE -> deduplicated
+            ImportMode.REPLACE -> mergedImported
         }
 
         return ImportSummary(

@@ -9,6 +9,7 @@ import dev.wristkey.app.OtpAuthParseException
 import dev.wristkey.app.OtpAuthParser
 import dev.wristkey.app.Secret
 import dev.wristkey.app.WristKeyAccount
+import dev.wristkey.app.normalizePassword
 import dev.wristkey.app.stratum.StratumFormat
 import dev.wristkey.app.stratum.StratumImportException
 import dev.wristkey.app.stratum.StratumImportResult
@@ -22,6 +23,7 @@ import org.json.JSONObject
  * - 只支持未加密导出；顶层 {@code encrypted:true} 给出明确提示，不当作密码错误；
  * - 忽略 folders/分类，全部归入「默认分类」；
  * - `issuer = item.name`（trim，空则 "Bitwarden"）；`accountName = login.username`（空则 otpauth label 账号）；
+ * - `login.password`（v2.0 新增）：带入账号密码（≤128、去控制字符），用于手环详情页展示；
  * - `login.totp`：otpauth:// 复用 [OtpAuthParser]（含 Steam 识别与各字段）；纯 Base32 按 SHA1/6/30；
  * - 空 totp、非法 secret/URI、重复 secret 逐条报告为 skipped，不中断导入。
  *
@@ -56,6 +58,8 @@ object BitwardenImporter {
             val login = item.optJSONObject("login")
             val username = login?.optString("username")?.trim().orEmpty()
             val rawTotp = login?.optString("totp")?.trim().orEmpty()
+            // v3：未加密导出里的 login.password 直接带入（手环只展示，不参与计算）。
+            val password = normalizePassword(login?.optString("password"))
             val issuer = name.ifBlank { FALLBACK_ISSUER }
 
             fun skip(code: String, reason: String) {
@@ -94,6 +98,7 @@ object BitwardenImporter {
                 category = DEFAULT_CATEGORY,
                 secret = canonicalSecret,
                 updatedAt = updatedAt,
+                password = password,
             )
         }
 

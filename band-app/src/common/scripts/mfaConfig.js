@@ -1,19 +1,21 @@
 /**
  * WristKey band app - snapshot persistence on top of @system.storage.
  *
- * Storage model (docs/architecture.md):
- *   key: mfa_snapshot_v2
- *   value: {"version":2,"updatedAt":<ms>,"accounts":[...]}
+ * Storage model (docs/architecture.md, protocol v3):
+ *   key: mfa_snapshot_v3
+ *   value: {"version":3,"updatedAt":<ms>,"accounts":[...]}
  *
  * The whole snapshot is written with a single storage.set() call, which is the
  * atomic unit available on Vela: either the old snapshot or the new one is
  * present. A failed write leaves the previous value untouched and is reported
  * to the caller so the UI can keep showing the last known good snapshot.
  *
- * Legacy compatibility: if the v2 key is missing, the BandOTP v1 key
- * ("mfa_config_snapshot", {"configs":[...]}) is read and, when it contains
- * valid accounts, migrated into the v2 key (best effort). v1 snapshots are
- * never used by the v2 sync protocol itself.
+ * Legacy compatibility, in order: if the v3 key is missing the v2 key
+ * ("mfa_snapshot_v2") is read and migrated into v3, and if that is missing too
+ * the BandOTP v1 key ("mfa_config_snapshot", {"configs":[...]}) is migrated.
+ * Migration keeps the source key untouched so an app downgrade can still read
+ * the old data (rollback safety). Login passwords do not exist in v1/v2 data,
+ * so migrated accounts load with password "".
  */
 
 import storage from "@system.storage"
@@ -23,7 +25,8 @@ import {
   parseSnapshotPayload
 } from "./accountModel.js"
 
-export const STORAGE_KEY = "mfa_snapshot_v2"
+export const STORAGE_KEY = "mfa_snapshot_v3"
+export const V2_STORAGE_KEY = "mfa_snapshot_v2"
 export const LEGACY_STORAGE_KEY = "mfa_config_snapshot"
 
 /**
@@ -38,22 +41,31 @@ export function loadSnapshot(callback) {
       done(parsed)
       return
     }
-    // Missing/empty v2 snapshot: try the legacy BandOTP key once.
-    readValue(LEGACY_STORAGE_KEY, function (legacyError, legacyValue) {
-      const legacy = legacyError ? null : parseSnapshotPayload(legacyValue)
-      if (legacy && legacy.accounts.length > 0) {
-        migrateLegacy(legacy)
-        done(legacy)
+    // Missing/empty v3 snapshot: migrate from v2 (kept for rollback), then
+    // from the BandOTP v1 key as a last resort.
+    readValue(V2_STORAGE_KEY, function (v2Error, v2Value) {
+      const v2 = v2Error ? null : parseSnapshotPayload(v2Value)
+      if (v2 && v2.accounts.length > 0) {
+        migrateFromV2(v2)
+        done(v2)
         return
       }
-      done(emptySnapshot())
+      readValue(LEGACY_STORAGE_KEY, function (legacyError, legacyValue) {
+        const legacy = legacyError ? null : parseSnapshotPayload(legacyValue)
+        if (legacy && legacy.accounts.length > 0) {
+          migrateLegacy(legacy)
+          done(legacy)
+          return
+        }
+        done(emptySnapshot())
+      })
     })
   })
 }
 
 /**
  * Persist a snapshot atomically (single-key write).
- * @param {object} snapshot {"version":2,"updatedAt":<ms>,"accounts":[...]}
+ * @param {object} snapshot {"version":3,"updatedAt":<ms>,"accounts":[...]}
  * @param {(result: {ok: boolean, error?: string}) => void} [callback]
  */
 export function saveSnapshot(snapshot, callback) {
@@ -99,7 +111,7 @@ export function loadAccounts(callback) {
 export function saveAccounts(accounts, updatedAt, callback) {
   saveSnapshot(
     {
-      version: 2,
+      version: 3,
       updatedAt: typeof updatedAt === "number" ? updatedAt : Date.now(),
       accounts: Array.isArray(accounts) ? accounts : []
     },
@@ -122,10 +134,19 @@ export function applyCommittedSnapshot(committed, callback) {
   saveSnapshot(committed, callback)
 }
 
+/** Copy a parsed v2 snapshot into the v3 key; the v2 key is left in place. */
+function migrateFromV2(v2Snapshot) {
+  saveSnapshot({
+    version: 3,
+    updatedAt: v2Snapshot.updatedAt || Date.now(),
+    accounts: v2Snapshot.accounts
+  })
+}
+
 function migrateLegacy(legacySnapshot) {
   saveSnapshot(
     {
-      version: 2,
+      version: 3,
       updatedAt: legacySnapshot.updatedAt || Date.now(),
       accounts: legacySnapshot.accounts
     },

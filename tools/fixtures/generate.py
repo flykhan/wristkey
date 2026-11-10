@@ -113,6 +113,96 @@ def encrypt_legacy(plain: bytes, password: str) -> bytes:
     encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
     return LEGACY_HEADER + salt + iv + encryptor.update(padded) + encryptor.finalize()
 
+# ---------------------------------------------------------------- 协议 v3 夹具（docs/protocol.md）
+# 由 Python 独立生成，用于与 e2e Node 实现做语言级对拍（不依赖 Node 代码）。
+PROTOCOL_V3_SYNC_ID = "sync-tools-python-v3"
+PROTOCOL_V3_SENT_AT = 1760000010000
+PIN_PATTERN = "TSCCT"
+PIN_SALT = bytes(range(16))
+PIN_ITERATIONS = 1200
+PIN_SENT_AT = PROTOCOL_V3_SENT_AT + 5000
+
+
+def normalize_protocol_secret(secret):
+    return "".join(ch for ch in str(secret).upper() if not ch.isspace() and ch not in "=-")
+
+
+def account_id(secret):
+    canonical = normalize_protocol_secret(secret)
+    return "s_" + hashlib.sha1(canonical.encode()).hexdigest()[:12]
+
+
+def build_protocol_v3():
+    accounts = [
+        {
+            "id": account_id(SECRET_SHA1), "issuer": "GitHub", "accountName": "dev@example.com",
+            "category": "开发", "secret": SECRET_SHA1, "algorithm": "SHA1", "digits": 6,
+            "period": 30, "otpType": "totp", "password": "stratum-pass-1",
+        },
+        {
+            "id": account_id(SECRET_SHA256), "issuer": "Google", "accountName": "me@gmail.com",
+            "category": "云服务", "secret": SECRET_SHA256, "algorithm": "SHA256", "digits": 8,
+            "period": 60, "otpType": "totp", "password": "",
+        },
+        {
+            "id": account_id(SECRET_SHA512), "issuer": "AWS", "accountName": "root",
+            "category": "开发", "secret": SECRET_SHA512, "algorithm": "SHA512", "digits": 10,
+            "period": 15, "otpType": "totp",
+        },
+    ]
+    messages = [{
+        "type": "mfa_sync_begin", "version": 3, "sentAt": PROTOCOL_V3_SENT_AT,
+        "syncId": PROTOCOL_V3_SYNC_ID, "accountCount": len(accounts),
+    }]
+    for index, account in enumerate(accounts):
+        payload = {
+            "id": account["id"], "issuer": account["issuer"], "accountName": account["accountName"],
+            "category": account["category"], "secret": account["secret"], "algorithm": account["algorithm"],
+            "digits": account["digits"], "period": account["period"], "otpType": account["otpType"],
+        }
+        if "password" in account:
+            payload["password"] = account["password"]
+        messages.append({
+            "type": "mfa_sync_account", "version": 3, "sentAt": PROTOCOL_V3_SENT_AT + index + 1,
+            "syncId": PROTOCOL_V3_SYNC_ID, "index": index, "account": payload,
+        })
+    messages.append({
+        "type": "mfa_sync_commit", "version": 3,
+        "sentAt": PROTOCOL_V3_SENT_AT + len(accounts) + 1,
+        "syncId": PROTOCOL_V3_SYNC_ID, "accountCount": len(accounts),
+    })
+    pin_hash = hashlib.pbkdf2_hmac("sha256", PIN_PATTERN.encode(), PIN_SALT, PIN_ITERATIONS, 32).hex()
+    pin_payload = {
+        "algorithm": "PBKDF2-SHA256", "salt": PIN_SALT.hex(), "hash": pin_hash,
+        "iterations": PIN_ITERATIONS,
+    }
+    pin_messages = [
+        {"type": "mfa_pin_set", "version": 3, "sentAt": PIN_SENT_AT, "pin": pin_payload},
+        {"type": "mfa_pin_query", "version": 3, "sentAt": PIN_SENT_AT + 1, "requestId": "pin-tools-python-1"},
+        {"type": "mfa_pin_clear", "version": 3, "sentAt": PIN_SENT_AT + 2},
+    ]
+    return {
+        "description": "Python 独立生成：v3 同步（含密码）+ 图案锁消息，用于语言级对拍",
+        "version": 3,
+        "syncId": PROTOCOL_V3_SYNC_ID,
+        "sentAt": PROTOCOL_V3_SENT_AT,
+        "messages": messages,
+        "pinMessages": pin_messages,
+        "expected": {
+            "accountCount": len(accounts),
+            "accountIds": [account["id"] for account in accounts],
+            "effectivePasswords": ["stratum-pass-1", "", None],
+            "pin": {
+                "pattern": PIN_PATTERN, "algorithm": "PBKDF2-SHA256", "salt": PIN_SALT.hex(),
+                "hash": pin_hash, "iterations": PIN_ITERATIONS, "storedAt": PIN_SENT_AT,
+            },
+            "pinAck": {"ok": True, "enabled": True},
+            "pinState": {"enabled": True, "updatedAt": PIN_SENT_AT, "requestId": "pin-tools-python-1"},
+            "pinClearAck": {"ok": True, "enabled": False},
+        },
+    }
+
+
 def main():
     backup = build_backup()
     plain = json.dumps(backup, ensure_ascii=False, indent=2).encode()
@@ -130,7 +220,10 @@ def main():
     ]
     with open(os.path.join(HERE, "uri-list.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(uri_lines) + "\n")
-    print("已生成:", ", ".join(os.listdir(HERE)))
+    protocol_v3 = build_protocol_v3()
+    with open(os.path.join(HERE, "protocol-v3.json"), "w", encoding="utf-8") as f:
+        f.write(json.dumps(protocol_v3, ensure_ascii=False, indent=2) + "\n")
+    print("已生成:", ", ".join(sorted(os.listdir(HERE))))
 
 if __name__ == "__main__":
     main()

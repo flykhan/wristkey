@@ -4,7 +4,7 @@
 覆盖两件事：
 
 1. **夹具**：明文 Stratum 备份、Strong/Legacy 加密备份、otpauth:// URI 列表、
-   同步协议 v2 消息序列与非法/边界用例；
+   同步协议 v2/v3 消息序列（含密码/图案锁）与非法/边界用例；
 2. **验证**：Node 端 verify.mjs（RFC 向量、解密、映射、协议状态机、跨实现对拍）、
    Python 端独立解密验证、构建产物（.rpk / APK）与签名一致性检查。
 
@@ -22,7 +22,7 @@ e2e/
 │   ├── encoding.mjs             Base32 编解码/归一化
 │   ├── totp.mjs                 独立 TOTP/HOTP 实现（node:crypto）+ RFC 向量表
 │   ├── stratum.mjs              Stratum 格式参考实现（嗅探/加解密/映射/URI）
-│   ├── protocol.mjs             协议 v2 参考实现（手环接收状态机 + 手机端状态机）
+│   ├── protocol.mjs             协议 v2/v3 参考实现（手环接收状态机 + 手机端状态机 + 密码/图案锁）
 │   ├── bitwarden.mjs            Bitwarden 未加密 Vault JSON 参考解析/映射
 │   └── runner.mjs               PASS/FAIL 运行器与断言
 ├── fixtures/
@@ -36,9 +36,18 @@ e2e/
 │   ├── bitwarden-encrypted-export.json  加密导出负例（识别并拒绝）
 │   ├── bitwarden-expected-import.json   参考映射结果（供 Android 单测对拍）
 │   ├── manifest.json            文件哈希、加密参数、覆盖矩阵
-│   └── protocol/
-│       ├── valid-session.json   合法同步消息序列（1 begin + 13 account + 1 commit）
-│       └── invalid-cases.json   25 个非法/边界用例与期望
+│   ├── protocol/
+│   │   ├── valid-session.json   合法同步消息序列（v2：1 begin + 13 account + 1 commit）
+│   │   └── invalid-cases.json   25 个非法/边界用例与期望
+│   └── protocol-v3/
+│       ├── valid-session.json   v3 合法同步（13 账号，前 3 个带 password/空串）
+│       ├── password-merge.json  4 个密码合并场景（缺省保留 / "" 清空 / 覆盖 / 混合）
+│       ├── v2-compat-session.json  v2 手机 → v3 手环兼容样例（无 password）
+│       ├── pin-set.json         合法 mfa_pin_set + 手环 ack/state 期望
+│       ├── pin-ack.json         mfa_pin_ack 10 个合法/非法用例
+│       ├── pin-query-state.json pin_query → pin_state（requestId 回填/广播）
+│       ├── pin-clear.json       pin_clear → ack/state
+│       └── invalid-pin.json     17 个非法 pin 载荷/版本用例
 ├── python/
 │   ├── verify_fixtures.py       Python 独立解密 + RFC 向量验证
 │   └── requirements.txt
@@ -133,8 +142,11 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 
 ## 协议夹具
 
+### v2（兼容回归）
+
 - protocol/valid-session.json：mfa_sync_begin → mfa_sync_account × 13 → mfa_sync_commit，
-  syncId=sync-1760000000000-e2e，account 载荷含 otpType，单条消息最大约 490B（< 1KB 限制）。
+  syncId=sync-1760000000000-e2e，version=2，account 载荷含 otpType 但**无 password 字段**，
+  单条消息最大约 490B（< 1KB 限制）。
 - protocol/invalid-cases.json：25 个手环端接收状态机用例，逐条声明期望（依据 docs/protocol.md
   的校验规则与“确定性约定”）：版本 1/未知 type 忽略、非法 JSON、v1 快照忽略、非法 begin 保留 staging、
   空标签/非法字段/超长 id/字符串 digits 丢弃、commit 条数/syncId 不匹配（account_count_mismatch /
@@ -143,7 +155,26 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
   Steam 非法字段丢弃、新 begin 丢弃旧 staging、空同步清空、120s staging 超时。
   每个用例给出 expect.results（逐条状态）、finalSnapshot（不变/账号数）、lastAck 等断言。
 
-## verify.mjs 覆盖（A–J）
+### v3（docs/protocol.md v3：密码 + 图案锁）
+
+- protocol-v3/valid-session.json：version=3，13 账号；前 3 个账号分别带
+  `"correct horse battery staple"`、`"p@ssw0rd-测试-Ω"`、显式空串 `""`（清空语义）；
+  单条消息最大 430B（pin_set 227B，均 < 1KB）。
+- protocol-v3/password-merge.json：4 个场景独立回放，断言同 account.id
+  **password 缺省=保留旧值、显式 `""`=清空、非空=覆盖**，同一轮可混合。
+- protocol-v3/v2-compat-session.json：v2 手机消息（version=2、无 password）→ v3 手环；
+  旧密码按“缺省=保留”处理，快照 version=2，但写入活动存储键 `mfa_snapshot_v3`。
+- protocol-v3/pin-set.json：合法 mfa_pin_set（PBKDF2-SHA256、salt 32 hex、hash 64 hex、
+  iterations 1200、图案 TSCCT）；expected.ack={ok:true,enabled:true}，state enabled=true。
+- protocol-v3/pin-ack.json：成功不得带 error、失败原因码必须在
+  invalid_pin_payload/invalid_version/storage_error 白名单内，共 10 例。
+- protocol-v3/pin-query-state.json / pin-clear.json：pin_query → pin_state（requestId 回填、
+  广播无 requestId）；pin_clear 删除图案、失败计数归零、ack/state enabled=false。
+- protocol-v3/invalid-pin.json：17 个非法载荷（pin 缺失/非对象、algorithm 错、salt/hash
+  长度或大小写/非 hex、iterations 999/20001/小数、version=2 的 set/query/clear、缺 sentAt 等）；
+  失败 ack=invalid_pin_payload 且**旧图案不变**，envelope 非法则整体忽略。
+
+## verify.mjs 覆盖（A–K）
 
 | 节 | 内容 |
 | --- | --- |
@@ -157,6 +188,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 | H | 回放 invalid-cases.json 的 25 个用例（含 Steam / duplicate_index / 非法 begin / 失败 ack 原因码） |
 | I | **跨端 TOTP/Steam**：band-app 纯模块 vs 独立实现（RFC 向量、HOTP、3×5×5×5 矩阵、夹具 TOTP 账号、**Steam 6 向量 + Steam 账号跨端对拍**） |
 | J | **Bitwarden 未加密 Vault**：内容嗅探（vault/encrypted/非 Bitwarden）、otpauth TOTP / Steam encoder / 纯 Base32 三类、name/username 兜底、文件夹忽略、加密导出拒绝、映射账号经协议同步、Android 单测夹具对拍（若已复制） |
+| K | **协议 v3**：v3 会话结构与大小、13 账号 id 复算、password 边界（无/空串/128/129/控制字符/非字符串/Unicode）、4 个密码合并场景、v2→v3 兼容（旧密码保留、快照 version=2、storageKey=mfa_snapshot_v3）、旧手环 supportedVersions=[2] 忽略 v3、8s ack 超时提示“升级手环应用”、pin_set/pin_ack/pin_query/pin_state/pin_clear、图案格式与 PBKDF2 复算、非法 pin 17 例（失败不覆盖旧图案） |
 
 ## 交叉验证证据（双向、非自证）
 
@@ -168,7 +200,11 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 4. **e2e 加密逻辑 → tools/src/stratum.mjs 解密**：e2e 生成的密文可被另一套 Node 实现还原；
 5. **固定 salt/iv 再加密**：用 tools 夹具的固定 salt/iv 重新加密其明文，与 Python 产物**逐字节一致**，
    证明参数/填充/序列化完全对齐；
-6. **映射对拍**：e2e 与 tools/src/stratum.mjs 对同一备份按 id 集合完全一致。
+6. **映射对拍**：e2e 与 tools/src/stratum.mjs 对同一备份按 id 集合完全一致；
+7. **协议 v3 对拍**：tools/fixtures/protocol-v3.json 由 Python 独立生成（begin/account×3/commit
+   + pin_set/query/clear），e2e Node 参考状态机回放；python/verify_fixtures.py 4d 节用
+   hashlib.pbkdf2_hmac 独立复算 pin hash、sha1 复算 account.id，并反向校验 e2e Node 的
+   valid-session / pin-set / password-merge / v2-compat 夹具（10 项断言）。
 
 ## 构建产物检查（check-build.mjs）
 
@@ -177,7 +213,8 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - band-app/dist/*.rpk 存在，manifest.package == dev.wristkey.app、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
 - Android APK 存在，包名 dev.wristkey.app、应用名 腕证；
-- 版本号：rpk 1.0.4 / versionCode 5（UI v3），APK 1.2 / versionCode 3（Bitwarden 导入）；
+- 版本号：rpk 2.0.0 / versionCode 6（UI v4 + 协议 v3），APK 2.0.0 / versionCode 4（Android v2 重设计 + 入口图案）；
+- APK 无 INTERNET；权限列表仅允许 *DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
 - 三者指纹一致，并可选择调用团队统一的 scripts/check-signing.sh；
@@ -186,6 +223,15 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
   settings.js 的 ACCOUNTS_PER_PAGE == 3、字母筛选函数与 wristkey_letter_filter 持久化 key；
   pages/picker/picker.ux 存在（标题“首字母筛选”、字母桶/全部/#）且 manifest 注册路由；
   band-app/tests 覆盖字母桶/筛选与分页（ACCOUNTS_PER_PAGE/paginate）；
+- **band UI v4 静态检查**（docs/design/ui-v4-analysis.md）：
+  app.ux 冷启动跳锁屏、pages/lock/pages/pin 存在、5 位 TSC 图案与三色 #6EE7C7/#7AA2F7/#F2B880、
+  PBKDF2-SHA256 1200 次/16 B salt、失败 5 次锁 30 s 递增、只存派生值 + 锁计数持久化、
+  主界面 56px rail + 菜单 + 3 条/页、picker 4×4×3 分页、详情 username/password/code、
+  密码遮罩 10 s、菜单 4 项、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
+- **Android UI v4 静态检查**（docs/design/android-v2-spec.md）：
+  PatternPin 5 位/TSC/PBKDF2 1200/16 B 随机 salt、入口图案设置页、set/clear/query pin、
+  3 Tab、FAB + ModalBottomSheet、密码 10 s 遮罩、详情/入口图案卡、深色 token、
+  协议 v3 password/pin、图案/协议/密码单测存在；
 - 结果写入 ../reports/e2e-build-result.json，退出码 0 = 无 FAIL（SKIP 可接受）。
 
 ## 协议/格式的确定性约定（与 docs/protocol.md 对齐）
@@ -202,7 +248,12 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 7. **staging 超时**：120s 无新消息自动丢弃，不计入错误；
 8. **otpType**：可选 totp（缺省）/steam（大小写不敏感）；Steam 固定 digits=5/period=30/SHA1，
    码为 5 位字母数字（docs/protocol.md Steam Guard 一节）；
-9. **URI 列表**：无分类 → 默认分类；Steam 三种识别形式见夹具覆盖矩阵。
+9. **URI 列表**：无分类 → 默认分类；Steam 三种识别形式见夹具覆盖矩阵；
+10. **password（v3）**：仅 v3 account 允许；string ≤128、允许空格/Unicode、禁 U+0000–U+001F；
+    缺省=保留旧值，显式 `""`=清空；v2 消息忽略该字段（等价缺省）；
+11. **pin 消息**：仅接受 version==3；pin_ack/pin_state 版本同为 3；pin_clear 无载荷；
+12. **v2 同步 → v3 手环**：快照 `version` 记录来源版本（2），写入活动键 `mfa_snapshot_v3`，
+    v2 快照键保留用于回滚。
 
 ## 安全与许可
 

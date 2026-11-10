@@ -1,5 +1,6 @@
 {
-  "description": "合法同步消息序列：begin → account×N → commit；account 来自 expected-import.json",
+  "description": "协议 v2 合法同步消息序列：begin → account×N → commit；account 来自 expected-import.json；无 password 字段",
+  "version": 2,
   "syncId": "sync-1760000000000-e2e",
   "messages": [
     {

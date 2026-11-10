@@ -1,0 +1,275 @@
+{
+  "description": "非法 pin 载荷/版本矩阵：除 envelope 非法（status=ignored）外，pin_set 失败统一 ack invalid_pin_payload，旧图案不变；pin 消息仅 v3",
+  "cases": [
+    {
+      "name": "missing-pin",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000
+      }
+    },
+    {
+      "name": "pin-not-object",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51"
+      }
+    },
+    {
+      "name": "pin-null",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": null
+      }
+    },
+    {
+      "name": "algorithm-unsupported",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA1",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "salt-31-hex",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "a4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "salt-uppercase",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "FA4C1F4802B3CD594BBD46A5A1D3BDBC",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "hash-63-hex",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "hash-uppercase",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "B441B8703B78FBBA9143E8DF4D494F399B52EAE709D6308B524C9422A340FD51",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "hash-non-hex",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "iterations-999",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 999
+        }
+      }
+    },
+    {
+      "name": "iterations-20001",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 20001
+        }
+      }
+    },
+    {
+      "name": "iterations-fraction",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_pin_payload"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 1200.5
+        }
+      }
+    },
+    {
+      "name": "version-2-set",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_version"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 2,
+        "sentAt": 1760000003000,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "version-2-query",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_version"
+      },
+      "message": {
+        "type": "mfa_pin_query",
+        "version": 2,
+        "sentAt": 1760000003000,
+        "requestId": "legacy-query"
+      }
+    },
+    {
+      "name": "version-2-clear",
+      "expected": {
+        "status": "rejected",
+        "error": "invalid_version"
+      },
+      "message": {
+        "type": "mfa_pin_clear",
+        "version": 2,
+        "sentAt": 1760000003000
+      }
+    },
+    {
+      "name": "missing-sentAt",
+      "expected": {
+        "status": "ignored"
+      },
+      "message": {
+        "type": "mfa_pin_set",
+        "version": 3,
+        "pin": {
+          "algorithm": "PBKDF2-SHA256",
+          "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
+          "hash": "b441b8703b78fbba9143e8df4d494f399b52eae709d6308b524c9422a340fd51",
+          "iterations": 1200
+        }
+      }
+    },
+    {
+      "name": "pin-query-missing-requestId",
+      "expected": {
+        "status": "ignored"
+      },
+      "message": {
+        "type": "mfa_pin_query",
+        "version": 3,
+        "sentAt": 1760000003000
+      }
+    }
+  ]
+}

@@ -19,11 +19,13 @@ import dev.wristkey.app.WristKeyAccount
 import dev.wristkey.app.protocol.SyncProtocol
 
 /**
- * 小米穿戴服务（xms-wearable-lib 1.4）连接管理与协议 v2 发送。
+ * 小米穿戴服务（xms-wearable-lib 1.4）连接管理与协议 v3 发送。
  *
  * - 发送：begin → account×N → commit，每条调用 `MessageApi.sendMessage(nodeId, bytes)`；
  *   任一步失败即中止，保留手机端账号数据不变。
- * - 接收：`MessageApi.addListener(nodeId, OnMessageReceivedListener)` 接收手环 ack / 重新同步请求。
+ * - 入口图案（v3）：setPin（只发派生值）/ clearPin / queryPin。
+ * - 接收：`MessageApi.addListener(nodeId, OnMessageReceivedListener)` 接收手环 ack / 重新同步请求 /
+ *   pin_ack / pin_state。
  */
 class WearableSyncController(
     context: Context,
@@ -38,6 +40,15 @@ class WearableSyncController(
         fun onAck(ack: SyncProtocol.Ack)
 
         fun onSyncRequest(requestId: String)
+
+        /** `mfa_pin_ack`（v3）：设置/关闭入口图案的结果。 */
+        fun onPinAck(info: SyncProtocol.PinAckInfo)
+
+        /** `mfa_pin_state`（v3）：查询结果或手环端主动广播。 */
+        fun onPinState(info: SyncProtocol.PinStateInfo)
+
+        /** 入口图案消息发送失败（未连接/未授权/xms 异常）。 */
+        fun onPinError(message: String)
     }
 
     data class ConnectionState(
@@ -156,7 +167,54 @@ class WearableSyncController(
             }
     }
 
-    /** 全量替换语义：把当前账号列表整体发送给手环（协议 v2）。 */
+    /** 入口图案（v3）：只把派生结果（salt/hash/iterations）发给手环，不发送图案明文。 */
+    fun setPin(saltHex: String, hashHex: String, iterations: Int = SyncProtocol.PIN_ITERATIONS) {
+        val connected = node
+        if (connected == null) {
+            listener.onPinError("未连接手环，无法设置入口图案")
+            return
+        }
+        if (!hasDeviceManagerPermission) {
+            listener.onPinError("未授权设备管理权限，无法设置入口图案")
+            return
+        }
+        sendPinMessage(connected, SyncProtocol.buildPinSet(saltHex, hashHex, iterations))
+    }
+
+    /** 关闭入口图案（v3）。 */
+    fun clearPin() {
+        val connected = node
+        if (connected == null) {
+            listener.onPinError("未连接手环，无法关闭入口图案")
+            return
+        }
+        if (!hasDeviceManagerPermission) {
+            listener.onPinError("未授权设备管理权限，无法关闭入口图案")
+            return
+        }
+        sendPinMessage(connected, SyncProtocol.buildPinClear())
+    }
+
+    /** 连接上手环后查询入口图案状态（v3）；结果经 [Listener.onPinState] 返回。 */
+    fun queryPin() {
+        val connected = node ?: return
+        if (!hasDeviceManagerPermission) {
+            return
+        }
+        sendPinMessage(connected, SyncProtocol.buildPinQuery())
+    }
+
+    private fun sendPinMessage(connected: Node, message: String) {
+        messageApi.sendMessage(connected.id, message.toByteArray(Charsets.UTF_8))
+            .addOnSuccessListener {
+                Log.d(TAG, "已发送入口图案消息")
+            }
+            .addOnFailureListener { error ->
+                listener.onPinError("发送失败：${describeError(error)}")
+            }
+    }
+
+    /** 全量替换语义：把当前账号列表整体发送给手环（协议 v3，全量替换）。 */
     fun sync(accounts: List<WristKeyAccount>) {
         val connected = node
         if (connected == null) {
@@ -187,7 +245,7 @@ class WearableSyncController(
                 running = true,
                 sent = 0,
                 total = session.messages.size,
-                message = "开始同步 ${accounts.size} 个账号（协议 v2）…",
+                message = "开始同步 ${accounts.size} 个账号（协议 v3）…",
             ),
         )
         sendAt(connected, session, 0)
@@ -265,6 +323,8 @@ class WearableSyncController(
             }
 
             is SyncProtocol.Incoming.Request -> listener.onSyncRequest(incoming.request.requestId)
+            is SyncProtocol.Incoming.PinAck -> listener.onPinAck(incoming.info)
+            is SyncProtocol.Incoming.PinState -> listener.onPinState(incoming.info)
             is SyncProtocol.Incoming.Ignored -> Log.d(TAG, "忽略手环消息: ${incoming.reason}")
         }
     }

@@ -128,6 +128,16 @@ export function sendAck(ack, callback) {
   return send(ack, callback)
 }
 
+/** Send a mfa_pin_ack (best effort; a lost reply is retried by the phone). */
+export function sendPinAck(ack, callback) {
+  return send(ack, callback)
+}
+
+/** Broadcast/send a mfa_pin_state (best effort). */
+export function sendPinState(state, callback) {
+  return send(state, callback)
+}
+
 /** Ask the phone for a fresh full snapshot (mfa_sync_request). */
 export function requestSync(callback) {
   const request = buildSyncRequest({ sentAt: Date.now() })

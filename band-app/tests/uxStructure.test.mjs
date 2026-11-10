@@ -79,18 +79,20 @@ test("index is the v3 layout: no top bar, 3 rows, right letter rail", () => {
   assert.ok(source.includes("this.$app.exit"), "左滑应退出应用")
 })
 
-test("menu no longer exposes category selection", () => {
+test("menu exposes pin, sync, about and exit only", () => {
   const source = read("src/pages/menu/menu.ux")
-  assert.doesNotMatch(source, /openCategory|分类/)
-  assert.match(source, /请求手机同步/)
-  assert.match(source, /toggleTheme/)
+  assert.doesNotMatch(source, /openCategory|分类|toggleTheme|显示模式/)
+  assert.match(source, /入口密码/)
+  assert.match(source, /立即同步/)
+  assert.match(source, /关于/)
+  assert.match(source, /openPin/)
   assert.match(source, /exitApp/)
 })
 
-test("picker page is registered and renders the 7-column grid", () => {
+test("picker page is registered and renders the 3-page 4x4 grid", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "1.0.4")
-  assert.equal(manifest.versionCode, 5)
+  assert.equal(manifest.versionName, "2.0.0")
+  assert.equal(manifest.versionCode, 6)
   assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
   assert.equal(manifest.router.pages["pages/picker"].component, "picker")
 
@@ -98,8 +100,11 @@ test("picker page is registered and renders the 7-column grid", () => {
   assert.match(source, /按首字母筛选/)
   assert.match(source, /LETTER_FILTER_STORAGE_KEY/)
   assert.match(source, /router.back()/)
-  // Six explicit row loops keep the A-Z / 0-9 / 全部 / # grid at 7 columns.
-  for (let row = 0; row < 6; row++) {
+  // Four explicit row loops keep each 4x4 page tall enough to fill the screen.
+  for (let row = 0; row < 4; row++) {
     assert.match(source, new RegExp('for="\{\{ row' + row + ' \}\}"'), "缺少 row" + row)
   }
+  assert.match(source, /PICKER_PAGE_COUNT/)
+  assert.match(source, /nextPage/)
+  assert.doesNotMatch(source, /7 列/)
 })

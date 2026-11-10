@@ -29,8 +29,11 @@
         <div class="letter-button" onclick="openPicker" style="background-color: {{ letterButtonBackground }}; border-width: {{ letterButtonBorderWidth }}px; border-color: {{ theme.accent }}">
           <text class="letter-text" style="color: {{ theme.accent }}">{{ filterLabel }}</text>
         </div>
+        <text class="rail-count" style="color: {{ theme.secondary }}">共 {{ filteredCount }} 个</text>
         <text class="page-indicator" style="color: {{ theme.secondary }}" onclick="nextPage">{{ page + 1 }}/{{ pageCount }}</text>
-        <text class="page-hint" style="color: {{ theme.secondary }}">翻页</text>
+        <div class="menu-button" onclick="openMenu" style="background-color: {{ theme.buttonBackground }}">
+          <text class="menu-button-text" style="color: {{ theme.body }}">菜单</text>
+        </div>
       </div>
     </div>
   </div>
@@ -50,14 +53,21 @@ import {
   connect,
   disconnect,
   requestSync as requestPhoneSync,
-  sendAck
+  sendAck,
+  sendPinAck,
+  sendPinState
 } from "../../common/scripts/interconnect"
 import {
   buildAck,
+  buildPinAck,
+  buildPinState,
   createSyncState,
   handleMessage,
   parseLegacySnapshot
 } from "../../common/scripts/syncProtocol"
+import { loadPin, savePin, deletePin, saveLock } from "../../common/scripts/pinStore"
+import { resetLockState } from "../../common/scripts/pin"
+import { shouldRelock } from "../../common/scripts/pinSession"
 import {
   ACCOUNTS_PER_PAGE,
   DARK_THEME,
@@ -80,6 +90,7 @@ export default {
     page: 0,
     pageCount: 1,
     pageAccounts: [],
+    filteredCount: 0,
     ready: false,
     theme: DARK_THEME,
     letterFilter: "",
@@ -93,17 +104,22 @@ export default {
 
   onInit() {
     this.syncState = createSyncState()
+    this.channelReady = false
     this.loadTheme()
     this.loadLetterFilter()
-    this.loadSnapshot()
-    this.setupChannel()
+    this.ensureUnlocked(() => {
+      this.loadSnapshot()
+      this.setupChannel()
+    })
   },
 
   onShow() {
     this.loadTheme()
     this.loadLetterFilter()
-    this.loadSnapshot()
-    this.startTicker()
+    this.ensureUnlocked(() => {
+      this.loadSnapshot()
+      this.startTicker()
+    })
   },
 
   onHide() {
@@ -113,6 +129,19 @@ export default {
   onDestroy() {
     this.stopTicker()
     disconnect()
+  },
+
+  /* ---------------------------------------------------------------- lock */
+
+  ensureUnlocked(callback) {
+    loadPin(pin => {
+      if (pin && shouldRelock(Date.now())) {
+        this.stopTicker()
+        router.replace({ uri: "/pages/lock" })
+        return
+      }
+      callback()
+    })
   },
 
   /* ---------------------------------------------------------------- data */
@@ -174,6 +203,7 @@ export default {
     const pageData = paginate(filtered, this.page, ACCOUNTS_PER_PAGE)
     this.page = pageData.page
     this.pageCount = pageData.pageCount
+    this.filteredCount = filtered.length
 
     const now = Date.now()
     const tokens = []
@@ -205,6 +235,10 @@ export default {
   /* ---------------------------------------------------------------- sync */
 
   setupChannel() {
+    if (this.channelReady) {
+      return
+    }
+    this.channelReady = true
     connect({
       onMessage: message => {
         this.handleChannelMessage(message)
@@ -226,9 +260,19 @@ export default {
       return
     }
 
-    const result = handleMessage(this.syncState, message, Date.now())
+    const result = handleMessage(this.syncState, message, Date.now(), {
+      previousAccounts: this.rawAccounts
+    })
     this.syncState = result.state
+
+    if (result.pinCommand) {
+      this.applyPinCommand(result.pinCommand)
+      return
+    }
     if (!result.committed) {
+      if (result.ack) {
+        sendAck(result.ack)
+      }
       return
     }
     applyCommittedSnapshot(result.committed, saveResult => {
@@ -251,6 +295,41 @@ export default {
         })
       )
     })
+  },
+
+  applyPinCommand(command) {
+    const sentAt = Date.now()
+    if (command.type === "set" && command.record) {
+      savePin(command.record, result => {
+        if (!result.ok) {
+          sendPinAck(buildPinAck({ ok: false, error: "storage_error", sentAt: sentAt }))
+          return
+        }
+        saveLock(resetLockState(sentAt))
+        sendPinAck(buildPinAck({ ok: true, enabled: true, sentAt: sentAt }))
+        sendPinState(buildPinState(command.record, { sentAt: sentAt }))
+      })
+      return
+    }
+    if (command.type === "query") {
+      loadPin(record => {
+        sendPinState(
+          buildPinState(record, { sentAt: sentAt, requestId: command.requestId })
+        )
+      })
+      return
+    }
+    if (command.type === "clear") {
+      deletePin(result => {
+        if (!result.ok) {
+          sendPinAck(buildPinAck({ ok: false, error: "storage_error", sentAt: sentAt }))
+          return
+        }
+        saveLock(resetLockState(sentAt))
+        sendPinAck(buildPinAck({ ok: true, enabled: false, sentAt: sentAt }))
+        sendPinState(buildPinState(null, { sentAt: sentAt }))
+      })
+    }
   },
 
   requestSync() {
@@ -424,6 +503,7 @@ export default {
   margin-left: 6px;
   flex-direction: column;
   align-items: center;
+  justify-content: space-between;
 }
 
 .letter-button {
@@ -441,16 +521,31 @@ export default {
   lines: 1;
 }
 
+.rail-count {
+  margin-top: 2px;
+  font-size: 11px;
+  text-align: center;
+  lines: 1;
+}
+
 .page-indicator {
-  margin-top: 8px;
+  margin-top: 2px;
   font-size: 13px;
   text-align: center;
   lines: 1;
 }
 
-.page-hint {
-  margin-top: 2px;
-  font-size: 12px;
+.menu-button {
+  width: 44px;
+  height: 34px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-button-text {
+  font-size: 13px;
   text-align: center;
   lines: 1;
 }

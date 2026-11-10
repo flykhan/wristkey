@@ -40,11 +40,11 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
 
 ## 手环端存储模型
 
-`system.storage` 单 key `mfa_snapshot_v2`：
+`system.storage` key `mfa_snapshot_v3`（旧版 `mfa_snapshot_v2` 在首次启动时迁移）：
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "updatedAt": 1760000000000,
   "accounts": [
     {
@@ -56,6 +56,8 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
       "algorithm": "SHA1",
       "digits": 6,
       "period": 30,
+      "otpType": "totp",
+      "password": "",
       "updatedAt": 1760000000000
     }
   ]
@@ -63,6 +65,7 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
 ```
 
 - 快照整体写入（commit 时一次 set），避免半写；写入失败时保留旧快照。
+- 入口图案单独存在 `wristkey_pin_v1`（salt/hash/iterations），锁定计数在 `wristkey_pin_lock_v1`，二者都不进快照。
 - 列表标题脱敏显示；完整 secret 仅用于本地计算。
 - 手环无网络，无云备份；卸载/清除数据会删除快照。
 
@@ -70,11 +73,11 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
 
 1. **消息分片而非单条大 JSON**：兼容未知的消息大小上限，丢包可重试，进度可见；单条消息 < 1 KB。
 2. **替换式同步**：每次同步都是全量快照，手环 commit 后整体替换；删除账号无需增量协议。
-3. **Stratum 只支持的子集**：TOTP + SHA1/SHA256/SHA512 + 6–10 位 + 自定义周期；HOTP/Steam/
-   Mobile-OTP/Yandex 会跳过并在导入报告中列出。
+3. **支持的 OTP 子集**：TOTP + SHA1/SHA256/SHA512 + 6–10 位 + 自定义周期，以及 Steam Guard 5 位字母数字；
+   HOTP/Mobile-OTP/Yandex 会跳过并在导入报告中列出。
 4. **不做二维码扫描（v1）**：本次需求是导入 Stratum 导出文件；设备管理界面保留手动新增/编辑。
 5. **派生自 BandOTP 但重新设计协议与身份**：`band-app/` 与 `android-app/` 分别基于 BandOTP 两端
-   （Apache-2.0）改造，保留 LICENSE/NOTICE；包名改为 `dev.wristkey.app`、自签证书、协议升级为 v2，
+   （Apache-2.0）改造，保留 LICENSE/NOTICE；包名改为 `dev.wristkey.app`、自签证书、协议升级为 v3（v2 兼容），
    与上游互不兼容（这是预期行为：两端必须成对安装）。
 
 ## 失败与边界
@@ -83,3 +86,4 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
 - 同步中途断开：手环丢弃 staging，旧快照不受影响；手机端可重发。
 - 大账号列表（>100）：按 N 条消息发送，耗时可见；手环 UI 分页展示。
 - 手环屏幕分辨率 480×336（小米手环 10 Pro）：`config.designWidth = "device-width"`，按实际宽度缩放。
+- 手环端 PBKDF2 为纯 JS 实现（1200 次），首次解锁可能有可感知延迟；协议下限 1000 次。

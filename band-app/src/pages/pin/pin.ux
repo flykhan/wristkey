@@ -1,0 +1,457 @@
+<template>
+  <div class="page" onlongpress="clearInput" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
+    <div class="top" style="margin-left: {{ shakeOffset }}px">
+      <div class="back" onclick="goBack" style="background-color: {{ theme.buttonBackground }}">
+        <text class="back-text" style="color: {{ theme.secondary }}">返回</text>
+      </div>
+      <text class="title" style="color: {{ theme.title }}">{{ titleText }}</text>
+      <div class="top-spacer"></div>
+    </div>
+
+    <text class="subtitle" style="color: {{ theme.secondary }}">{{ subtitleText }}</text>
+
+    <div class="slots" if="{{ mode !== 'manage' }}" style="margin-left: {{ shakeOffset }}px">
+      <div class="slot" for="{{ slots }}" style="background-color: {{ theme.itemBackground }}; border-width: {{ $item.borderWidth }}px; border-color: {{ $item.borderColor }}">
+        <text class="slot-glyph" if="{{ $item.filled }}" style="color: {{ $item.color }}">{{ $item.glyph }}</text>
+      </div>
+    </div>
+
+    <text class="hint" style="color: {{ hintColor }}">{{ hintText }}</text>
+
+    <div class="keys" if="{{ mode !== 'manage' }}" style="margin-left: {{ shakeOffset }}px">
+      <div class="key" for="{{ symbols }}" onclick="tapSymbol($item.key)" style="background-color: {{ theme.cardBackground }}; border-color: {{ theme.cardBorder }}">
+        <text class="key-glyph" style="color: {{ $item.color }}">{{ $item.glyph }}</text>
+        <text class="key-label" style="color: {{ theme.secondary }}">{{ $item.label }}</text>
+      </div>
+    </div>
+
+    <div class="manage" if="{{ mode === 'manage' }}">
+      <div class="manage-button" onclick="startChange" style="background-color: {{ theme.cardBackground }}">
+        <text class="manage-title" style="color: {{ theme.title }}">修改图案</text>
+        <text class="manage-copy" style="color: {{ theme.secondary }}">重新设置 5 位图形密码</text>
+      </div>
+      <div class="manage-button" onclick="disablePin" style="background-color: {{ theme.cardBackground }}">
+        <text class="manage-title" style="color: {{ theme.progressDanger }}">关闭入口密码</text>
+        <text class="manage-copy" style="color: {{ theme.secondary }}">关闭后打开腕证不再验证</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import storage from "@system.storage"
+import {
+  PATTERN_LENGTH,
+  PATTERN_SYMBOLS,
+  createPinRecord,
+  normalizePattern,
+  resetLockState,
+  verifyPattern
+} from "../../common/scripts/pin"
+import { deletePin, loadPin, saveLock, savePin } from "../../common/scripts/pinStore"
+import { markUnlocked } from "../../common/scripts/pinSession"
+import { sendPinState } from "../../common/scripts/interconnect"
+import { buildPinState } from "../../common/scripts/syncProtocol"
+import {
+  DARK_THEME,
+  DEFAULT_DARK_MODE,
+  THEME_STORAGE_KEY,
+  parseDarkMode,
+  themeFor
+} from "../../common/scripts/settings"
+
+export default {
+  private: {
+    theme: DARK_THEME,
+    symbols: PATTERN_SYMBOLS,
+    mode: "loading",
+    pin: null,
+    input: [],
+    firstPattern: "",
+    slots: [],
+    titleText: "入口密码",
+    subtitleText: "设置后每次打开腕证都需要验证",
+    hintText: "",
+    hintColor: DARK_THEME.secondary,
+    shakeOffset: 0,
+    verifying: false,
+    saving: false
+  },
+
+  onInit() {
+    this.loadTheme()
+    this.loadCurrentPin()
+  },
+
+  onShow() {
+    // Returning from the lock screen must not re-run a pending confirm step.
+    if (this.mode === "loading") {
+      this.loadCurrentPin()
+    }
+  },
+
+  loadTheme() {
+    storage.get({
+      key: THEME_STORAGE_KEY,
+      default: DEFAULT_DARK_MODE ? "true" : "false",
+      success: value => {
+        this.theme = themeFor(parseDarkMode(value))
+        this.refreshSlots()
+      },
+      fail: () => {
+        this.theme = themeFor(DEFAULT_DARK_MODE)
+        this.refreshSlots()
+      }
+    })
+  },
+
+  loadCurrentPin() {
+    loadPin(record => {
+      this.pin = record
+      if (record) {
+        this.mode = "verify"
+        this.titleText = "验证当前图案"
+        this.subtitleText = "验证后可修改或关闭入口密码"
+        this.hintText = "输入当前 5 位图案"
+      } else {
+        this.startChange()
+        return
+      }
+      this.refreshSlots()
+    })
+  },
+
+  startChange() {
+    this.mode = "new"
+    this.titleText = this.pin ? "设置新图案" : "设置入口密码"
+    this.subtitleText = "图案为 5 个图形，可重复"
+    this.firstPattern = ""
+    this.input = []
+    this.hintText = "输入 5 位新图案"
+    this.hintColor = this.theme.secondary
+    this.refreshSlots()
+  },
+
+  tapSymbol(key) {
+    if (this.mode === "manage" || this.mode === "loading" || this.verifying || this.saving) {
+      return
+    }
+    if (this.input.length >= PATTERN_LENGTH) {
+      return
+    }
+    this.input = this.input.concat([key])
+    this.refreshSlots()
+    if (this.input.length === PATTERN_LENGTH) {
+      this.verifying = true
+      setTimeout(() => {
+        this.handleComplete()
+      }, 150)
+    }
+  },
+
+  handleComplete() {
+    const pattern = this.input.join("")
+    this.input = []
+    this.refreshSlots()
+    this.verifying = false
+
+    if (this.mode === "verify") {
+      this.verifyCurrent(pattern)
+      return
+    }
+    if (this.mode === "new") {
+      this.firstPattern = pattern
+      this.mode = "confirm"
+      this.titleText = "再次输入"
+      this.subtitleText = "两次输入一致才会保存"
+      this.hintText = "请再次输入相同图案"
+      this.hintColor = this.theme.secondary
+      return
+    }
+    if (this.mode === "confirm") {
+      this.confirmNew(pattern)
+    }
+  },
+
+  verifyCurrent(pattern) {
+    const result = verifyPattern(pattern, this.pin)
+    if (result.ok && result.matched) {
+      this.mode = "manage"
+      this.titleText = "入口密码"
+      this.subtitleText = "入口密码已开启"
+      this.hintText = ""
+      this.input = []
+      return
+    }
+    this.shake()
+    this.hintText = "图案不正确，请重试"
+    this.hintColor = this.theme.progressDanger
+  },
+
+  confirmNew(pattern) {
+    if (!normalizePattern(this.firstPattern) || pattern !== this.firstPattern) {
+      this.shake()
+      this.mode = "new"
+      this.firstPattern = ""
+      this.titleText = "设置新图案"
+      this.subtitleText = "两次输入不一致，请重新设置"
+      this.hintText = "输入 5 位新图案"
+      this.hintColor = this.theme.progressDanger
+      return
+    }
+    const created = createPinRecord(pattern, { updatedAt: Date.now() })
+    if (!created.ok) {
+      this.hintText = "生成图案失败，请重试"
+      this.hintColor = this.theme.progressDanger
+      return
+    }
+    this.saving = true
+    savePin(created.record, result => {
+      this.saving = false
+      if (!result.ok) {
+        this.hintText = "保存失败，请重试"
+        this.hintColor = this.theme.progressDanger
+        return
+      }
+      this.pin = created.record
+      saveLock(resetLockState(Date.now()))
+      markUnlocked(Date.now())
+      this.broadcastPin(created.record)
+      this.hintText = "入口密码已保存"
+      this.hintColor = this.theme.accent
+      setTimeout(() => {
+        router.back()
+      }, 600)
+    })
+  },
+
+  disablePin() {
+    if (this.saving) {
+      return
+    }
+    this.saving = true
+    deletePin(result => {
+      this.saving = false
+      if (!result.ok) {
+        this.hintText = "关闭失败，请重试"
+        this.hintColor = this.theme.progressDanger
+        return
+      }
+      this.pin = null
+      saveLock(resetLockState(Date.now()))
+      markUnlocked(Date.now())
+      this.broadcastPin(null)
+      this.hintText = "入口密码已关闭"
+      this.hintColor = this.theme.accent
+      setTimeout(() => {
+        router.back()
+      }, 600)
+    })
+  },
+
+  broadcastPin(record) {
+    // Best effort: the phone also re-queries state after a sync request.
+    sendPinState(buildPinState(record, { sentAt: Date.now() }), function () {})
+  },
+
+  refreshSlots() {
+    const chosen = []
+    for (let index = 0; index < this.input.length; index++) {
+      const key = this.input[index]
+      for (let symbol = 0; symbol < PATTERN_SYMBOLS.length; symbol++) {
+        if (PATTERN_SYMBOLS[symbol].key === key) {
+          chosen.push(PATTERN_SYMBOLS[symbol])
+          break
+        }
+      }
+    }
+    const slots = []
+    for (let index = 0; index < PATTERN_LENGTH; index++) {
+      const symbol = chosen[index]
+      const active = !symbol && index === this.input.length && this.mode !== "manage"
+      slots.push({
+        filled: !!symbol,
+        glyph: symbol ? symbol.glyph : "",
+        color: symbol ? symbol.color : this.theme.secondary,
+        borderWidth: active ? 2 : 0,
+        borderColor: active ? this.theme.accent : "transparent"
+      })
+    }
+    this.slots = slots
+  },
+
+  shake() {
+    const offsets = [7, -7, 5, -5, 0]
+    for (let index = 0; index < offsets.length; index++) {
+      setTimeout(() => {
+        this.shakeOffset = offsets[index]
+      }, index * 55)
+    }
+  },
+
+  clearInput() {
+    if (this.mode === "manage" || this.mode === "loading") {
+      return
+    }
+    this.input = []
+    this.refreshSlots()
+  },
+
+  goBack() {
+    router.back()
+  },
+
+  handleSwipe(event) {
+    if (!event || !event.direction) {
+      return
+    }
+    if (event.direction === "right") {
+      router.back()
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  padding: 8px 18px 8px;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+.top {
+  width: 100%;
+  height: 42px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.back {
+  width: 62px;
+  height: 32px;
+  border-radius: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-text {
+  font-size: 14px;
+}
+
+.top-spacer {
+  width: 62px;
+  height: 32px;
+}
+
+.title {
+  font-size: 19px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.subtitle {
+  height: 18px;
+  font-size: 12px;
+  text-align: center;
+  lines: 1;
+}
+
+.slots {
+  width: 100%;
+  height: 50px;
+  margin-top: 4px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot {
+  width: 42px;
+  height: 42px;
+  margin-left: 5px;
+  margin-right: 5px;
+  border-radius: 21px;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-glyph {
+  font-size: 20px;
+  text-align: center;
+}
+
+.hint {
+  height: 20px;
+  margin-top: 2px;
+  font-size: 13px;
+  text-align: center;
+  lines: 1;
+}
+
+.keys {
+  flex: 1;
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.key {
+  width: 112px;
+  height: 82px;
+  margin-left: 8px;
+  margin-right: 8px;
+  border-radius: 20px;
+  border-width: 1px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.key-glyph {
+  font-size: 30px;
+  text-align: center;
+}
+
+.key-label {
+  margin-top: 2px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.manage {
+  flex: 1;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.manage-button {
+  width: 78%;
+  height: 64px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding: 8px 18px;
+  border-radius: 18px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.manage-title {
+  font-size: 19px;
+  font-weight: bold;
+  lines: 1;
+}
+
+.manage-copy {
+  margin-top: 2px;
+  font-size: 12px;
+  lines: 1;
+}
+</style>

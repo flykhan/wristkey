@@ -21,8 +21,8 @@ android {
         applicationId = "dev.wristkey.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "2.0.0"
     }
 
     signingConfigs {

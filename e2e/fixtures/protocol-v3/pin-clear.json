@@ -1,0 +1,25 @@
+{
+  "description": "mfa_pin_clear：删除图案、失败计数归零；ack ok=true/enabled=false；广播 enabled=false",
+  "message": {
+    "type": "mfa_pin_clear",
+    "version": 3,
+    "sentAt": 1760000003002
+  },
+  "expected": {
+    "ack": {
+      "type": "mfa_pin_ack",
+      "version": 3,
+      "sentAt": 1760000003002,
+      "ok": true,
+      "enabled": false,
+      "error": null
+    },
+    "state": {
+      "type": "mfa_pin_state",
+      "version": 3,
+      "sentAt": 1760000003002,
+      "enabled": false,
+      "updatedAt": 1760000003002
+    }
+  }
+}

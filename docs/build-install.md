@@ -74,8 +74,9 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
    按提示跳转"小米健康研究"授权，或使用账号方式）→ 确认设备型号为 `xmb10p`；
 3. AstroBox → 快应用 → 「+」选择 `band-app/dist/*.release.rpk` → 安装（原文件直传，不重签名）；
 4. 手机安装 `app-release.apk`（与 rpk 同包名同证书）；打开 App → 授予"设备管理"权限；
-5. 导入 Stratum 备份 → 同步（或先在手环打开一次「腕证」，再回到 App 同步）；
-6. 在手环应用列表打开「腕证」，检查是否显示验证码、分类与同步时间。
+5. 导入 Stratum/Bitwarden 备份 → 在「同步」页同步（或先在手环打开一次「腕证」，再回到 App 同步）；
+6. 首次到「设置 → 入口图案」设置 5 位图形序列（或稍后在菜单里改）；
+7. 在手环应用列表打开「腕证」：先解锁图案，再检查 3 条/页、A-Z 筛选、详情密码与验证码。
 
 > 包名/签名不一致时，同步会失败（xms 返回签名校验失败 / 手环提示 fingerprint verify failed）；
 > 先重装配套版本。安装工具本身不会重签名；但"快应用封装/改名"类工具会破坏签名，导致通信失效。
@@ -87,6 +88,8 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
 - [ ] App 能发现手环并授予设备管理权限；
 - [ ] 导入加密/明文/URI 列表三种备份均成功，跳过项报告正确；
 - [ ] 同步后手环显示 N 个账号，分类正确；
+- [ ] 手机设置入口图案后，手环锁屏生效；手环本地改图案需旧图案；输错 5 次锁定；
+- [ ] 手环冷启动/2 分钟重锁后要求图案；
 - [ ] 手环端验证码与手机端（或 oathtool）对同一时刻一致；
 - [ ] 手机关蓝牙/离开后，手环仍可离线显示验证码；
 - [ ] 删除账号后重新同步，手环端同步移除。
@@ -102,3 +105,5 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
 | 手环收不到消息 | 手环端应用是否打开过（interconnect 需两端都安装）；重开 App；查看 xms 错误码 |
 | 验证码不一致 | 手环时间是否准确；算法/位数/周期是否导入正确 |
 | Gradle 构建失败 | JAVA_HOME 是否为 17+；SDK 平台/build-tools 是否安装；网络能否访问 Google Maven |
+| 手环图案与手机不一致 | 手机设置页改图案会自动下发；若失败，手机「同步」页确认连接后重新设置；手环端本地改需旧图案 |
+| 解锁很慢 | 纯 JS PBKDF2 1200 次，低端设备可能数百毫秒级；若不可接受可在协议允许范围内下调（下限 1000） |

@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.WristKey" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- 深色起步主题，避免启动瞬间白屏（Compose 主题见 ui/theme/Theme.kt）。 -->
+    <style name="Theme.WristKey" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/wristkey_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/wristkey_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
 </resources>

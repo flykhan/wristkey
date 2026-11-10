@@ -33,6 +33,7 @@ function validAccount(overrides) {
       algorithm: "SHA1",
       digits: 6,
       period: 30,
+      password: "",
       updatedAt: 1759999999000
     },
     overrides || {}
@@ -231,25 +232,27 @@ test("createSnapshot stores version, updatedAt and normalized accounts", () => {
   assert.equal(snapshot.accounts[0].algorithm, "SHA256")
 
   const empty = createSnapshot([], NOW)
-  assert.deepEqual(empty, { version: 2, updatedAt: NOW, accounts: [] })
+  assert.deepEqual(empty, { version: 3, updatedAt: NOW, accounts: [] })
 })
 
-test("parseSnapshotPayload accepts v2 JSON and legacy v1 configs", () => {
+test("parseSnapshotPayload upgrades v2/v1 snapshots to v3", () => {
   const v2 = parseSnapshotPayload(
     JSON.stringify({ version: 2, updatedAt: NOW, accounts: [validAccount()] })
   )
-  assert.equal(v2.version, 2)
+  assert.equal(v2.version, 3)
+  assert.equal(v2.sourceVersion, 2)
   assert.equal(v2.updatedAt, NOW)
   assert.equal(v2.accounts.length, 1)
+  assert.equal(v2.accounts[0].password, "")
   assert.equal(v2.errors.length, 0)
 
-  // BandOTP v1 snapshot shape ({configs:[...]}) is mapped to v2 accounts.
+  // BandOTP v1 snapshot shape ({configs:[...]}) is mapped to v3 accounts.
   const v1 = parseSnapshotPayload({
     version: 1,
     updatedAt: 1759999999000,
     configs: [validAccount({ id: "legacy" })]
   })
-  assert.equal(v1.version, 2)
+  assert.equal(v1.version, 3)
   assert.equal(v1.accounts.length, 1)
   assert.equal(v1.accounts[0].id, "legacy")
   assert.equal(v1.sourceVersion, 1)
@@ -259,7 +262,7 @@ test("parseSnapshotPayload accepts v2 JSON and legacy v1 configs", () => {
   assert.equal(parseSnapshotPayload(null), null)
   assert.equal(parseSnapshotPayload({ version: 2 }), null)
   assert.equal(parseSnapshotPayload([]), null)
-  assert.deepEqual(emptySnapshot(), { version: 2, updatedAt: 0, accounts: [] })
+  assert.deepEqual(emptySnapshot(), { version: 3, updatedAt: 0, accounts: [] })
 })
 
 test("category helpers keep first-appearance order and counts", () => {
