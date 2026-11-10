@@ -11,7 +11,11 @@ APK="${1:-android-app/app/build/outputs/apk/release/app-release.apk}"
 if [ "${2:-}" != "" ]; then
   RPK="$2"
 else
-  RPK="$(ls -t band-app/dist/*.rpk 2>/dev/null | head -1 || true)"
+  # 优先 release 产物，避免误选 debug rpk
+  RPK="$(ls -t band-app/dist/*.release.*.rpk 2>/dev/null | head -1 || true)"
+  if [ -z "$RPK" ]; then
+    RPK="$(ls -t band-app/dist/*.rpk 2>/dev/null | head -1 || true)"
+  fi
 fi
 
 APKSIGNER="$(ls ~/Android/Sdk/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"

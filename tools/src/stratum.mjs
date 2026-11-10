@@ -123,6 +123,29 @@ export function parseOtpAuthUri(raw) {
   const accountName = (parts.length > 1 ? parts.slice(1).join(":") : label).trim();
   const issuer = (params.get("issuer") || labelIssuer || "").trim();
   if (!issuer && !accountName) throw new Error("issuer 与 accountName 均为空");
+  // Steam 标记：裸 &steam（Stratum）、encoder=steam（Aegis）或 issuer/label 前缀 Steam
+  const encoder = (params.get("encoder") || "").toLowerCase();
+  const isSteam =
+    params.has("steam") ||
+    encoder === "steam" ||
+    issuer.toLowerCase() === "steam" ||
+    labelIssuer.toLowerCase() === "steam";
+
+  if (isSteam) {
+    return {
+      id: deriveId(secret),
+      issuer: issuer || "Steam",
+      accountName,
+      category: DEFAULT_CATEGORY,
+      secret,
+      algorithm: "SHA1",
+      digits: 5,
+      period: 30,
+      otpType: "steam",
+      updatedAt: Date.now()
+    };
+  }
+
   const algorithm = (params.get("algorithm") || "SHA1").toUpperCase();
   if (!["SHA1", "SHA256", "SHA512"].includes(algorithm)) throw new Error("不支持的算法 " + algorithm);
   const digits = Number(params.get("digits") || 6);
@@ -138,6 +161,7 @@ export function parseOtpAuthUri(raw) {
     algorithm,
     digits,
     period,
+    otpType: "totp",
     updatedAt: Date.now()
   };
 }
@@ -188,7 +212,8 @@ export function mapStratumBackup(backup) {
     const label = issuer || accountName || "(无名称)";
     const skip = (reason) => skipped.push({ issuer, accountName, secret: maskSecret(secret), reason });
 
-    if (type !== 2) {
+    const isSteam = type === 4;
+    if (type !== 2 && !isSteam) {
       skip("不支持的 OTP 类型：" + (TYPE_NAMES[type] || type));
       continue;
     }
@@ -204,20 +229,30 @@ export function mapStratumBackup(backup) {
       skip("secret 重复（Stratum 主键重复）");
       continue;
     }
-    const algorithm = algorithmName(num(getKey(auth, "Algorithm"), 0));
-    if (!algorithm) {
-      skip("不支持的算法编号");
-      continue;
-    }
-    const digits = num(getKey(auth, "Digits"), 6);
-    if (!(digits >= 6 && digits <= 10)) {
-      skip("digits 越界：" + digits);
-      continue;
-    }
-    const period = num(getKey(auth, "Period"), 30);
-    if (!(period >= 5 && period <= 300)) {
-      skip("period 越界：" + period);
-      continue;
+    // Steam Guard 固定 5 位 / 30 秒 / SHA1（忽略备份中的 Digits/Period/Algorithm）
+    let algorithm;
+    let digits;
+    let period;
+    if (isSteam) {
+      algorithm = "SHA1";
+      digits = 5;
+      period = 30;
+    } else {
+      algorithm = algorithmName(num(getKey(auth, "Algorithm"), 0));
+      if (!algorithm) {
+        skip("不支持的算法编号");
+        continue;
+      }
+      digits = num(getKey(auth, "Digits"), 6);
+      if (!(digits >= 6 && digits <= 10)) {
+        skip("digits 越界：" + digits);
+        continue;
+      }
+      period = num(getKey(auth, "Period"), 30);
+      if (!(period >= 5 && period <= 300)) {
+        skip("period 越界：" + period);
+        continue;
+      }
     }
 
     const category = secretCategory.get(secret)?.name || DEFAULT_CATEGORY;
@@ -233,6 +268,7 @@ export function mapStratumBackup(backup) {
       algorithm,
       digits,
       period,
+      otpType: isSteam ? "steam" : "totp",
       updatedAt,
       // 内部排序用，输出 snapshot 前删除
       _ranking: ranking,
@@ -264,6 +300,7 @@ export function buildSnapshot(accounts, now) {
       algorithm: a.algorithm,
       digits: a.digits,
       period: a.period,
+      otpType: a.otpType || "totp",
       updatedAt: a.updatedAt
     }))
   };

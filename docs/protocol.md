@@ -42,6 +42,7 @@
     "algorithm": "SHA1",
     "digits": 6,
     "period": 30,
+    "otpType": "totp",
     "updatedAt": 1760000000000
   } }
 ```
@@ -54,10 +55,25 @@
 | `issuer` / `accountName` | 字符串，各 ≤64；不能同时为空（否则丢弃） |
 | `category` | 字符串，缺省 `"默认分类"`，≤32 |
 | `secret` | Base32，A–Z2–7（可含空格/`=`，手环端归一化）；长度为 8 的倍数最优，非 8 倍数按位补齐 |
-| `algorithm` | `SHA1` / `SHA256` / `SHA512`，缺省 `SHA1` |
-| `digits` | 6–10 整数，缺省 6 |
-| `period` | 5–300 整数秒，缺省 30 |
+| `otpType` | 可选：`"totp"`（缺省）或 `"steam"`（大小写不敏感）；见下方 Steam 规则 |
+| `algorithm` | `SHA1` / `SHA256` / `SHA512`，缺省 `SHA1`；Steam 固定 SHA1 |
+| `digits` | 6–10 整数，缺省 6；Steam 固定 5（表示 5 位字母数字码，不是 5 位数字） |
+| `period` | 5–300 整数秒，缺省 30；Steam 固定 30 |
 | `updatedAt` | 可选，毫秒时间戳 |
+
+#### Steam Guard（`otpType: "steam"`）
+
+Steam 的验证码**不是纯数字**，而是 5 位字母数字（字母表 `23456789BCDFGHJKMNPQRTVWXY`）。算法与
+Stratum 的 `SteamOtp` 一致：
+
+1. HMAC-SHA1(secret, `floor(unixSeconds / 30)` 的 8 字节大端)；
+2. RFC 4226 动态截断得到 31 位整数 `material`；
+3. 重复 5 次：`char = ALPHABET[material % 26]; material = floor(material / 26)`，从**低位字符**开始输出
+   （即 Steam 客户端显示的 5 位顺序）。
+
+因此 Steam 账号必须满足：`digits=5`、`period=30`、`algorithm=SHA1`、`otpType="steam"`；
+手环端不得按 10 的幂取模、不得补零成 6 位数字。旧版手环会把 `digits=5` 视为非法并丢弃该账号，
+这是预期的降级行为（升级两端即可）。
 
 ### 3. `mfa_sync_commit`
 

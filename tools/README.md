@@ -22,6 +22,8 @@ node src/cli.mjs fixtures/uri-list.txt --report
 - `otpauth://` 文本列表。
 
 输出为协议 v2 快照（`{version, updatedAt, accounts[]}`），可用于手环端/手机端联调与夹具。
+支持 TOTP（SHA1/256/512、6–10 位）与 **Steam Guard**（`otpType: "steam"`，5 位字母数字，固定 30 秒/SHA1）；
+Steam 识别覆盖备份 `Type=4` 与 URI 标记（裸 `&steam`、`encoder=steam`、issuer/label 前缀 Steam）。
 
 ## 夹具
 
@@ -37,6 +39,6 @@ npm test
 
 ## 限制
 
-- 不导入 HOTP / Steam / Yandex / Mobile-OTP（与 App 行为一致，会列入跳过报告）；
+- 不导入 HOTP / Yandex / Mobile-OTP（Steam 已支持；不支持项会列入跳过报告）；
 - 不处理图标（`CustomIcons` 忽略）；
 - 不保存密码，不做联网。

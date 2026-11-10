@@ -77,13 +77,13 @@ Stratum 的导出菜单实际提供 3 项（文件名 `backup-yyyy-MM-dd_HHmmss.
 
 | 字段 | 取值/约束 |
 | --- | --- |
-| `Type` | 1=HOTP，2=TOTP，3=Mobile-OTP，4=Steam，5=Yandex |
-| `Algorithm` | 0=SHA1，1=SHA256，2=SHA512（HOTP/TOTP 有效） |
+| `Type` | 1=HOTP，2=TOTP，3=Mobile-OTP，**4=Steam（支持）**，5=Yandex |
+| `Algorithm` | 0=SHA1，1=SHA256，2=SHA512（HOTP/TOTP 有效；Steam 固定 SHA1） |
 | `Secret` | 大写 Base32，无空格，可带 `=` 填充；**是 Authenticator 的主键**（全局唯一） |
 | `Issuer` | 非空，≤32（Stratum 限制） |
 | `Username` | 可为 null，≤40 |
-| `Digits` | TOTP 6–10，HOTP 6–8 |
-| `Period` | >0（秒） |
+| `Digits` | TOTP 6–10，HOTP 6–8；Steam 固定 5（SteamOtp.Digits=5） |
+| `Period` | >0（秒）；Steam 固定 30 |
 | `Ranking` | 排序；分类内按 AuthenticatorCategories.Ranking 排序 |
 | `Category.Id` | 名称 SHA-1 前 8 位十六进制（可忽略，按 Name 关联） |
 | `Icon` | 以 `@` 开头表示自定义图标 id（本项目忽略图标） |
@@ -96,18 +96,37 @@ Stratum 的导出菜单实际提供 3 项（文件名 `backup-yyyy-MM-dd_HHmmss.
 | `Issuer` | `issuer` | 保持原值（可为空，仅当 Username 也空时跳过并报错） |
 | `Username` | `accountName` | null → `""` |
 | 分类（AuthenticatorCategories → Category.Name） | `category` | 无分类 → `"默认分类"`；多个分类取排名最靠前者 |
-| `Algorithm` 0/1/2 | `SHA1`/`SHA256`/`SHA512` | |
-| `Digits` | `digits` | 6–10 原样 |
-| `Period` | `period` | 5–300 原样，越界则丢弃并报错 |
+| `Algorithm` 0/1/2 | `algorithm` | TOTP 原样；Steam 强制 `SHA1` |
+| `Digits` | `digits` | TOTP 6–10 原样；Steam 强制 5 |
+| `Period` | `period` | TOTP 5–300 原样，越界则丢弃；Steam 强制 30 |
+| `Type` | `otpType` | 2 → `"totp"`（缺省）；4 → `"steam"` |
 | `Secret` 的 SHA-1 前 12 位（十六进制） | `id` | `"s_" + sha1(secret)[0:12]`，跨次导入稳定，用于去重 |
 | `Ranking` | — | 用于排序；快照按排序输出 |
+
+### Steam（Type=4）的特殊处理
+
+Stratum 的 `SteamOtp` 固定 5 位、30 秒、SHA1，验证码来自字母表
+`23456789BCDFGHJKMNPQRTVWXY`（不是 6 位数字）。导入时必须：
+
+- `otpType="steam"`，`digits=5`，`period=30`，`algorithm=SHA1`；
+- 忽略备份里存储的 Digits/Period/Algorithm 字段（Stratum 也只会写 5/30/0）；
+- secret 仍为 Base32，可直接沿用。
+
+URI 列表（`.txt`）里 Steam 账号的识别（Stratum 导出为 `otpauth://totp/Steam:...`）：
+
+- 查询参数含裸 `steam` 标记（Stratum 在 issuer ≠ "Steam" 时会追加 `&steam`）；
+- 或 `encoder=steam`（Aegis 等实现的约定）；
+- 或 issuer / label 前缀为 `Steam`（大小写不敏感）；
+- 或 `digits=5` 且 issuer 为 Steam。
+
+以上任一命中即按 Steam 导入，而不是普通 TOTP。
 
 ## 跳过与报告
 
 以下条目**不导入**，但在导入结果中逐条列出（issuer/username/原因）：
 
-- `Type != 2`（HOTP/Steam/Mobile-OTP/Yandex）；
-- `period` 不在 5–300、`digits` 不在 6–10；
+- `Type` 为 HOTP(1)/Mobile-OTP(3)/Yandex(5)（Steam(4) 现已支持）；
+- TOTP 的 `period` 不在 5–300、`digits` 不在 6–10；
 - 非法 Base32（包含 A–Z2–7 之外字符）、空 secret；
 - issuer 与 username 同时为空。
 

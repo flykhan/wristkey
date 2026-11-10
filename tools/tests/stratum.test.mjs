@@ -71,10 +71,63 @@ test("映射: 跳过原因可读", () => {
   const { skipped } = mapStratumBackup(backup);
   const reasons = skipped.map((s) => s.reason).join(" | ");
   assert.match(reasons, /HOTP/);
-  assert.match(reasons, /Steam/);
+  // 夹具里的 Steam 条目与 GitHub 共用 secret（Stratum 以 secret 为主键），因此按重复跳过；
+  // 独立 secret 的 Steam 导入由下方专测覆盖。
+  assert.match(reasons, /secret 重复/);
   assert.match(reasons, /Base32/);
   assert.match(reasons, /period/);
   assert.match(reasons, /issuer 与 accountName 均为空/);
+});
+
+test("Steam: Type=4 映射为 otpType=steam（强制 5/30/SHA1）", () => {
+  const steamBackup = {
+    Authenticators: [
+      {
+        Type: 4,
+        Issuer: "Steam",
+        Username: "steamuser",
+        Secret: "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU",
+        Algorithm: 1,
+        Digits: 6,
+        Period: 60,
+        Ranking: 0
+      }
+    ],
+    Categories: [],
+    AuthenticatorCategories: [],
+    CustomIcons: []
+  };
+  const { accounts, skipped } = mapStratumBackup(steamBackup);
+  assert.equal(accounts.length, 1);
+  assert.equal(skipped.length, 0);
+  const steam = accounts[0];
+  assert.equal(steam.otpType, "steam");
+  assert.equal(steam.algorithm, "SHA1");
+  assert.equal(steam.digits, 5);
+  assert.equal(steam.period, 30);
+  const snap = buildSnapshot([steam], 1760000000000);
+  assert.equal(snap.accounts[0].otpType, "steam");
+  assert.equal(snap.accounts[0].digits, 5);
+});
+
+test("URI: Steam 三种形式识别为 steam", () => {
+  const lines = [
+    "otpauth://totp/Steam:user1?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Steam",
+    "otpauth://totp/Other:user2?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Other&steam",
+    "otpauth://totp/Other:user3?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Other&encoder=steam",
+    "otpauth://totp/GitHub:user4?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"
+  ].join("\n");
+  const { accounts, skipped } = parseUriList(lines);
+  assert.equal(skipped.length, 0);
+  assert.equal(accounts.length, 4);
+  for (let i = 0; i < 3; i++) {
+    assert.equal(accounts[i].otpType, "steam", "line " + i);
+    assert.equal(accounts[i].digits, 5);
+    assert.equal(accounts[i].period, 30);
+    assert.equal(accounts[i].algorithm, "SHA1");
+  }
+  assert.equal(accounts[3].otpType, "totp");
+  assert.equal(accounts[3].digits, 6);
 });
 
 test("URI 列表: HOTP 行被跳过", () => {
@@ -100,7 +153,7 @@ test("buildSnapshot: 输出协议 v2 结构且不含内部字段", () => {
   assert.equal(snap.updatedAt, 1760000000000);
   assert.equal(snap.accounts.length, 3);
   for (const a of snap.accounts) {
-    for (const k of ["id", "issuer", "accountName", "category", "secret", "algorithm", "digits", "period"]) {
+    for (const k of ["id", "issuer", "accountName", "category", "secret", "algorithm", "digits", "period", "otpType"]) {
       assert.ok(k in a, "缺少字段 " + k);
     }
     assert.ok(!("_ranking" in a));
