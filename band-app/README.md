@@ -10,7 +10,7 @@
   筛选页（A-Z / 0-9 / # / 全部，带每桶账号数）；上/下滑翻页、右滑菜单、左滑退出。
 - 详情页、空状态与"请求手机同步"；筛选在全部账号内进行（忽略分类），并持久化到 storage。
 
-包名 **dev.wristkey.app**，应用名「腕证」。**必须与手机 APK 同包名、同签名证书**，否则
+包名 **com.flykhan.wristkey**，应用名「腕证」。**必须与手机 APK 同包名、同签名证书**，否则
 system.interconnect 拒绝建立通道。
 
 ## 目录结构
@@ -45,8 +45,8 @@ band-app/
 ~~~bash
 npm install
 npm test          # 纯 Node 单元测试（RFC 6238 向量 + 协议状态机 + 模型边界）
-npm run build     # aiot build   -> dist/dev.wristkey.app.debug.<version>.rpk
-npm run release   # aiot release -> dist/dev.wristkey.app.release.<version>.rpk
+npm run build     # aiot build   -> dist/com.flykhan.wristkey.debug.<version>.rpk
+npm run release   # aiot release -> dist/com.flykhan.wristkey.release.<version>.rpk
 npm run verify:rpk  # 校验最新的 dist/*.rpk 签名与包名
 ~~~
 

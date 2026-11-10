@@ -10,7 +10,7 @@ val releaseStoreFile: File = System.getenv("SIGNING_STORE_FILE")?.let { file(it)
     ?: rootProject.file("../signing/dev-release.jks")
 
 android {
-    namespace = "dev.wristkey.app"
+    namespace = "com.flykhan.wristkey"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -18,11 +18,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.wristkey.app"
+        applicationId = "com.flykhan.wristkey"
         minSdk = 28
         targetSdk = 36
-        versionCode = 4
-        versionName = "2.0.0"
+        versionCode = 5
+        versionName = "2.1.0"
     }
 
     signingConfigs {

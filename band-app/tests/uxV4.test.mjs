@@ -10,11 +10,11 @@ function read(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), "utf8")
 }
 
-test("manifest is 2.0.2 / versionCode 8 with lock and pin routes", () => {
+test("manifest is 2.1.0 / versionCode 9 with lock and pin routes", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.0.2")
-  assert.equal(manifest.versionCode, 8)
-  assert.equal(manifest.package, "dev.wristkey.app")
+  assert.equal(manifest.versionName, "2.1.0")
+  assert.equal(manifest.versionCode, 9)
+  assert.equal(manifest.package, "com.flykhan.wristkey")
   assert.equal(manifest.router.entry, "pages/index")
   for (const page of ["index", "lock", "pin", "detail", "picker", "menu", "copyright"]) {
     assert.ok(manifest.router.pages["pages/" + page], "缺少 pages/" + page)
@@ -103,9 +103,9 @@ test("detail shows username and a 10s masked password row", () => {
   assert.match(source, /onHide\(\)/)
 })
 
-test("copyright page reports 2.0.2 with protocol v3", () => {
+test("copyright page reports 2.1.0 with protocol v3", () => {
   const source = read("src/pages/copyright/copyright.ux")
-  assert.match(source, /版本 2\.0\.2/)
+  assert.match(source, /版本 2\.1\.0/)
   assert.match(source, /协议 v3/)
   assert.match(source, /PBKDF2/)
 })

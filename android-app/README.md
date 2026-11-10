@@ -3,7 +3,7 @@
 小米手环 10 Pro 的 TOTP 伴侣应用：从 [Stratum](https://github.com/stratumauth/app) 导出的备份文件
 导入 OTP，经小米穿戴服务（xms-wearable-lib）同步到 Vela 快应用；手环端离线计算验证码。
 
-- 包名：`dev.wristkey.app`，应用名：腕证
+- 包名：`com.flykhan.wristkey`，应用名：腕证
 - 最低 Android 9（API 28），targetSdk / compileSdk 36.1
 - 同步协议：[../docs/protocol.md](../docs/protocol.md)（v2：begin / account×N / commit + ack / request）
 - 备份格式：[../docs/stratum-format.md](../docs/stratum-format.md)

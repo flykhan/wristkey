@@ -210,10 +210,10 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 
 判定项：
 
-- band-app/dist/*.rpk 存在，manifest.package == dev.wristkey.app、name == 腕证、
+- band-app/dist/*.rpk 存在，manifest.package == com.flykhan.wristkey、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
-- Android APK 存在，包名 dev.wristkey.app、应用名 腕证；
-- 版本号：rpk 2.0.2 / versionCode 8（UI v4 + 协议 v3 + 持久化解锁会话 + 页面栈修复），APK 2.0.0 / versionCode 4（Android v2 重设计 + 入口图案）；
+- Android APK 存在，包名 com.flykhan.wristkey、应用名 腕证；
+- 版本号：rpk 2.1.0 / versionCode 9（UI v4 + 协议 v3 + 持久化解锁会话 + 页面栈修复 + 包名迁移），APK 2.1.0 / versionCode 5（Android v2 重设计 + 入口图案）；
 - APK 无 INTERNET；权限列表仅允许 *DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
@@ -224,7 +224,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
   pages/picker/picker.ux 存在（标题“首字母筛选”、字母桶/全部/#）且 manifest 注册路由；
   band-app/tests 覆盖字母桶/筛选与分页（ACCOUNTS_PER_PAGE/paginate）；
 - **band UI v4 静态检查**（docs/design/ui-v4-analysis.md）：
-  app.ux 冷启动跳锁屏、pages/lock/pages/pin 存在、5 位 TSC 图案与三色 #6EE7C7/#7AA2F7/#F2B880、
+  入口 index push 锁屏、非入口页重锁、pages/lock/pages/pin 存在、5 位 TSC 图案与三色 #6EE7C7/#7AA2F7/#F2B880、
   PBKDF2-SHA256 1200 次/16 B salt、失败 5 次锁 30 s 递增、只存派生值 + 锁计数持久化、
   主界面 56px rail + 菜单 + 3 条/页、picker 4×4×3 分页、详情 username/password/code、
   密码遮罩 10 s、菜单 4 项、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；

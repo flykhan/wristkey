@@ -46,7 +46,7 @@ test("each page .ux has template, script and style blocks", () => {
 
 test("manifest declares quick app runtime requirements", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.package, "dev.wristkey.app")
+  assert.equal(manifest.package, "com.flykhan.wristkey")
   assert.equal(manifest.name, "腕证")
   assert.ok(Array.isArray(manifest.deviceTypeList) && manifest.deviceTypeList.includes("watch"))
   assert.ok(Number(manifest.minPlatformVersion) >= 1000)
@@ -111,8 +111,8 @@ test("menu exposes pin, sync, about and exit only", () => {
 
 test("picker page is registered and renders the 3-page 4x4 grid", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.0.2")
-  assert.equal(manifest.versionCode, 8)
+  assert.equal(manifest.versionName, "2.1.0")
+  assert.equal(manifest.versionCode, 9)
   assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
   assert.equal(manifest.router.pages["pages/picker"].component, "picker")
 

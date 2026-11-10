@@ -24,6 +24,9 @@ android-app/captures/
 !signing/dev-release.jks
 *.keystore
 
+# local delivery folder
+成功/
+
 # ide / os
 .idea/
 .vscode/

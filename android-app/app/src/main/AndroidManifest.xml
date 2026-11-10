@@ -11,7 +11,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.WristKey">
         <activity
-            android:name="dev.wristkey.app.MainActivity"
+            android:name="com.flykhan.wristkey.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"

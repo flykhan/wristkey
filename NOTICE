@@ -1,0 +1,25 @@
+WristKey（腕证）
+Copyright (C) 2026 WristKey contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party attributions
+------------------------
+
+1. BandOTP — https://github.com/lin945/mi_band_mfa
+   Copyright (c) 2026 林唯心 (lin945). Apache License 2.0.
+   band-app/ 派生自其手环快应用，android-app/ 派生自其 Android 端
+   (https://github.com/lin945/mi_band_mfa_android)。各子目录保留自己的
+   LICENSE/NOTICE，并记录本项目所做修改。
+
+2. Stratum — https://github.com/stratumauth/app
+   Copyright (C) Stratum contributors. GPL-3.0.
+   仅依据其公开备份格式文档独立实现导入解析器，未复制或链接其源代码；
+   详见 docs/stratum-format.md 与 research/notes/。
+
+3. AndroidX / Jetpack Compose、Kotlin、BouncyCastle、aiot-toolkit 等
+   构建与运行时依赖，遵循各自许可证；发布产物中仅包含 APK/RPK 所需的
+   已编译代码与资源。
+
+开发签名材料（signing/、band-app/sign/、android-app 的 release signingConfig）
+仅供开发联调使用，不是生产密钥；发布前应按 docs/security.md 替换。

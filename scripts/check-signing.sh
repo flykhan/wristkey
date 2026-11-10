@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-EXPECTED_PACKAGE="dev.wristkey.app"
+EXPECTED_PACKAGE="com.flykhan.wristkey"
 APK="${1:-android-app/app/build/outputs/apk/release/app-release.apk}"
 if [ "${2:-}" != "" ]; then
   RPK="$2"
