@@ -30,11 +30,11 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'dev.wristkey.app';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 1.0.3（大字体 2 码/页）/ APK 1.1（Steam 修复）
-const EXPECTED_BAND_VERSION = '1.0.3';
-const EXPECTED_BAND_VERSION_CODE = 4;
-const EXPECTED_APK_VERSION = '1.1';
-const EXPECTED_APK_VERSION_CODE = 2;
+// 版本：band .rpk 1.0.4（UI v3：无顶栏/3 码每页/首字母筛选）/ APK 1.2（Bitwarden 导入）
+const EXPECTED_BAND_VERSION = '1.0.4';
+const EXPECTED_BAND_VERSION_CODE = 5;
+const EXPECTED_APK_VERSION = '1.2';
+const EXPECTED_APK_VERSION_CODE = 3;
 
 const argv = process.argv.slice(2);
 const flags = {
@@ -315,7 +315,7 @@ function checkBandApp() {
   if (rpkManifest.versionName === EXPECTED_BAND_VERSION) {
     pass('rpk versionName', EXPECTED_BAND_VERSION);
   } else {
-    fail('rpk versionName', '期望 ' + EXPECTED_BAND_VERSION + '（Steam 修复版），实际 ' + String(rpkManifest.versionName));
+    fail('rpk versionName', '期望 ' + EXPECTED_BAND_VERSION + '（UI v3 版），实际 ' + String(rpkManifest.versionName));
   }
   if (rpkManifest.versionCode === EXPECTED_BAND_VERSION_CODE) {
     pass('rpk versionCode', String(EXPECTED_BAND_VERSION_CODE));
@@ -323,6 +323,152 @@ function checkBandApp() {
     fail('rpk versionCode', '期望 ' + EXPECTED_BAND_VERSION_CODE + '，实际 ' + String(rpkManifest.versionCode));
   }
   return { rpk, rpkManifest };
+}
+
+// ------------------------------------------- 1b. band UI v3 静态检查
+function readIfExists(path) {
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
+}
+
+function checkBandUiV3() {
+  process.stdout.write('\n## band UI v3\n');
+  const bandRoot = join(WORKSPACE, 'band-app');
+  const srcRoot = join(bandRoot, 'src');
+  const indexUx = readIfExists(join(srcRoot, 'pages', 'index', 'index.ux'));
+  const pickerUx = readIfExists(join(srcRoot, 'pages', 'picker', 'picker.ux'));
+  const settingsJs = readIfExists(join(srcRoot, 'common', 'scripts', 'settings.js'));
+  const manifestPath = join(srcRoot, 'manifest.json');
+
+  // 1) index.ux 无顶栏：不应出现 header/top-bar/status 行等标记
+  if (!indexUx) {
+    fail('UI v3 index.ux 存在', '缺少 src/pages/index/index.ux');
+  } else {
+    pass('UI v3 index.ux 存在', 'src/pages/index/index.ux');
+    const topBarMarkers = ['class="header"', "class='header'", 'class="top-bar"', "class='top-bar'", 'class="topbar"', 'class="status"', "class='status'", 'class="status-bar"', 'status-bar', 'app-title'];
+    const foundMarkers = topBarMarkers.filter(function (marker) { return indexUx.indexOf(marker) >= 0; });
+    if (foundMarkers.length === 0) {
+      pass('UI v3 无顶栏（index.ux 无 header/status 行）', '未发现顶栏标记');
+    } else {
+      fail('UI v3 无顶栏（index.ux 无 header/status 行）', '发现顶栏标记: ' + foundMarkers.join(', '));
+    }
+    if (indexUx.indexOf('class="rail"') >= 0 && /letter-button|openPicker/.test(indexUx)) {
+      pass('UI v3 右侧 rail（A-Z 按钮）', 'index.ux 含 rail + letter-button/openPicker');
+    } else {
+      fail('UI v3 右侧 rail（A-Z 按钮）', 'index.ux 缺少 rail/letter-button/openPicker');
+    }
+    if (/pages\/picker/.test(indexUx)) {
+      pass('UI v3 index 打开 picker 路由', 'index.ux 引用 pages/picker');
+    } else {
+      fail('UI v3 index 打开 picker 路由', 'index.ux 未引用 pages/picker');
+    }
+  }
+
+  // 2) 每页 3 个：ACCOUNTS_PER_PAGE = 3 且 index 使用分页
+  if (!settingsJs) {
+    fail('UI v3 ACCOUNTS_PER_PAGE 常量', '缺少 src/common/scripts/settings.js');
+  } else {
+    const match = settingsJs.match(/export\s+const\s+ACCOUNTS_PER_PAGE\s*=\s*(\d+)/);
+    if (match && Number(match[1]) === 3) {
+      pass('UI v3 ACCOUNTS_PER_PAGE = 3');
+    } else {
+      fail('UI v3 ACCOUNTS_PER_PAGE = 3', '实际 ' + (match ? match[1] : '未找到常量'));
+    }
+    if (/export\s+function\s+filterAccountsByLetter|filterAccountsByLetter\s*=/.test(settingsJs) &&
+        /export\s+function\s+normalizeLetterFilter|normalizeLetterFilter\s*=/.test(settingsJs)) {
+      pass('UI v3 字母筛选函数（filterAccountsByLetter/normalizeLetterFilter）');
+    } else {
+      fail('UI v3 字母筛选函数', 'settings.js 缺少 filterAccountsByLetter/normalizeLetterFilter');
+    }
+    if (settingsJs.indexOf('wristkey_letter_filter') >= 0) {
+      pass('UI v3 筛选持久化 key（wristkey_letter_filter）');
+    } else {
+      fail('UI v3 筛选持久化 key', 'settings.js 缺少 wristkey_letter_filter');
+    }
+    if (/export\s+function\s+letterBucket|letterBucket\s*=/.test(settingsJs) &&
+        /export\s+function\s+buildLetterCounts|buildLetterCounts\s*=/.test(settingsJs)) {
+      pass('UI v3 字母桶/计数函数（letterBucket/buildLetterCounts）');
+    } else {
+      fail('UI v3 字母桶/计数函数', 'settings.js 缺少 letterBucket/buildLetterCounts');
+    }
+  }
+  if (indexUx) {
+    if (indexUx.indexOf('ACCOUNTS_PER_PAGE') >= 0 && /paginate\(/.test(indexUx)) {
+      pass('UI v3 index 使用 ACCOUNTS_PER_PAGE 分页', 'paginate(currentAccounts, page, ACCOUNTS_PER_PAGE)');
+    } else {
+      fail('UI v3 index 使用 ACCOUNTS_PER_PAGE 分页', 'index.ux 未使用 ACCOUNTS_PER_PAGE/paginate');
+    }
+  }
+
+  // 3) picker 页与 manifest 路由注册
+  if (pickerUx) {
+    pass('UI v3 picker 页存在', 'src/pages/picker/picker.ux');
+    if (pickerUx.indexOf('首字母筛选') >= 0) {
+      pass('UI v3 picker 标题', '含“首字母筛选”');
+    } else {
+      fail('UI v3 picker 标题', 'picker.ux 缺少“首字母筛选”');
+    }
+    if (/LETTER_BUCKET_KEYS|LETTER_KEYS|"全部"|'全部'/.test(pickerUx) && pickerUx.indexOf('#') >= 0) {
+      pass('UI v3 picker 字母桶/全部/# 渲染', 'picker.ux 含字母桶与全部/#');
+    } else {
+      fail('UI v3 picker 字母桶/全部/# 渲染', 'picker.ux 缺少字母桶或全部/#');
+    }
+  } else {
+    fail('UI v3 picker 页存在', '缺少 src/pages/picker/picker.ux');
+  }
+  if (existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      const pages = (manifest.router && manifest.router.pages) || {};
+      if (pages['pages/picker']) {
+        pass('UI v3 manifest 注册 pages/picker');
+      } else {
+        fail('UI v3 manifest 注册 pages/picker', 'router.pages 缺少 pages/picker');
+      }
+    } catch (error) {
+      fail('UI v3 manifest 可解析', String(error.message));
+    }
+  }
+
+  // 3b) menu 页移除分类入口（UI v3：分类不再影响主列表）
+  const menuUx = readIfExists(join(srcRoot, 'pages', 'menu', 'menu.ux'));
+  if (menuUx) {
+    if (menuUx.indexOf('pages/category') < 0 && menuUx.indexOf('分类') < 0) {
+      pass('UI v3 menu 无分类入口');
+    } else {
+      fail('UI v3 menu 无分类入口', 'menu.ux 仍引用分类/pages/category');
+    }
+  } else {
+    fail('UI v3 menu 页存在', '缺少 src/pages/menu/menu.ux');
+  }
+
+  // 4) 字母桶/筛选/分页测试存在（node:test 用例）
+  const testsDir = join(bandRoot, 'tests');
+  if (!existsSync(testsDir)) {
+    fail('UI v3 字母桶/筛选测试存在', '缺少 band-app/tests');
+    return;
+  }
+  const testFiles = readdirSync(testsDir).filter(function (name) { return name.endsWith('.test.mjs'); });
+  const candidates = testFiles.filter(function (name) {
+    const source = readFileSync(join(testsDir, name), 'utf8');
+    // 只认字母桶/筛选测试；category 的 filter 测试不算
+    return /letter|bucket|picker/i.test(source);
+  });
+  if (candidates.length > 0) {
+    pass('UI v3 字母桶/筛选测试存在', candidates.join(', '));
+  } else {
+    fail('UI v3 字母桶/筛选测试存在', 'tests/ 下没有覆盖 letter/filter/bucket 的测试文件');
+  }
+  const allTestSource = testFiles.map(function (name) { return readFileSync(join(testsDir, name), 'utf8'); }).join('\n');
+  if (/ACCOUNTS_PER_PAGE|paginate/i.test(allTestSource)) {
+    pass('UI v3 分页测试存在', 'tests/ 覆盖 ACCOUNTS_PER_PAGE/paginate');
+  } else {
+    fail('UI v3 分页测试存在', 'tests/ 未覆盖 ACCOUNTS_PER_PAGE/paginate');
+  }
+  if (/letterBucket/i.test(allTestSource) && /buildLetterCounts/i.test(allTestSource)) {
+    pass('UI v3 字母桶计数测试存在', 'tests/ 覆盖 letterBucket/buildLetterCounts');
+  } else {
+    fail('UI v3 字母桶计数测试存在', 'tests/ 未覆盖 letterBucket/buildLetterCounts');
+  }
 }
 
 // ---------------------------------------------------------- 2. android-app
@@ -413,7 +559,7 @@ function checkAndroidApp() {
       if (versionName === EXPECTED_APK_VERSION) {
         pass('APK versionName', EXPECTED_APK_VERSION);
       } else {
-        fail('APK versionName', '期望 ' + EXPECTED_APK_VERSION + '（Steam 修复版），实际 ' + String(versionName));
+        fail('APK versionName', '期望 ' + EXPECTED_APK_VERSION + '（Bitwarden 导入版），实际 ' + String(versionName));
       }
       if (versionCode === EXPECTED_APK_VERSION_CODE) {
         pass('APK versionCode', String(EXPECTED_APK_VERSION_CODE));
@@ -529,6 +675,7 @@ async function main() {
       (flags.build ? ' / --build' : '') + (flags.withTests ? ' / --with-tests' : '') + '\n'
   );
   const band = checkBandApp();
+  checkBandUiV3();
   const android = checkAndroidApp();
   checkSigning(band, android);
 

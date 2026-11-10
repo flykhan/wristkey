@@ -15,14 +15,15 @@
 社区项目 [BandOTP](https://github.com/lin945/mi_band_mfa)（Apache-2.0）与
 [BandTOTP](https://github.com/leset0ng/BandTOTP-Android) 表明这套链路在小米手环/手表系列上可行；
 官方 FAQ 明确"手表和手机通信前会检查应用签名，rpk 与手机 App 必须用配套证书"。
-本项目在其思路基础上改造并做两件事：
+本项目在其思路基础上改造并做这些事：
 
 1. **导入 Stratum 备份**：支持 Strong（Argon2id + AES-256-GCM）、Legacy（PBKDF2-SHA1 + AES-256-CBC）、
    明文 JSON 备份、`otpauth://` 文本列表；
-2. **支持 TOTP 与 Steam Guard**：TOTP SHA1/256/512、6–10 位；Steam Guard 5 位字母数字（`otpType: "steam"`）；
-3. **把快照分片传输**：手环端做 staging + commit，避免消息大小/丢包问题，并返回 ack；
-4. **按 480×336 手环屏优化显示**：每页 2 个账号、大号 issuer/账号/验证码，长码自动缩小字号，
-   码与信息各占固定区域，不遮挡、不裁切。
+2. **导入 Bitwarden 未加密 JSON**：读取 `items[].login.totp`（otpauth URI 或纯 Base32），忽略文件夹/分类；
+3. **支持 TOTP 与 Steam Guard**：TOTP SHA1/256/512、6–10 位；Steam Guard 5 位字母数字（`otpType: "steam"`）；
+4. **把快照分片传输**：手环端做 staging + commit，避免消息大小/丢包问题，并返回 ack；
+5. **按 480×336 手环屏优化显示**：无顶栏、**每页 3 个账号**、大号 issuer/账号/验证码；
+   右侧 A-Z 按钮弹出字母/数字表，按首字母筛选（显示每个字母的账号数），长码自动缩小字号、不遮挡不裁切。
 
 ## 架构
 
@@ -39,6 +40,8 @@
 
 - 协议：[docs/protocol.md](docs/protocol.md)
 - Stratum 备份格式与字段映射：[docs/stratum-format.md](docs/stratum-format.md)
+- Bitwarden JSON 导入：[docs/bitwarden-format.md](docs/bitwarden-format.md)
+- UI v3 设计规格：[docs/design/ui-v3-spec.md](docs/design/ui-v3-spec.md)
 - 架构与安全：[docs/architecture.md](docs/architecture.md) / [docs/security.md](docs/security.md)
 - 构建与安装：[docs/build-install.md](docs/build-install.md)
 
@@ -70,19 +73,19 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 
 | 检查 | 结果 |
 | --- | --- |
-| 手环端 `npm test`（TOTP/Steam 向量、协议状态机、模型边界、ux 结构、分页/字号回归） | **70/70** |
-| 手机端 `./gradlew testDebugUnitTest`（Stratum 解密/映射、TOTP/Steam、协议、合并） | **72/72** |
-| e2e Node 验证（跨实现加解密、协议回放、非法用例、band 模块对拍、Steam 向量） | **145/145** |
-| e2e Python 独立验证（第三方实现解密 + RFC/Steam 向量） | **24/24** |
-| 构建 / 包名 / 签名检查 | **29/29 PASS** |
+| 手环端 `npm test`（TOTP/Steam 向量、协议、ux 结构、UI v3、分页/字号/字母筛选） | **78/78** |
+| 手机端 `./gradlew testDebugUnitTest`（Stratum/Bitwarden 导入、TOTP/Steam、协议、合并） | **78/78** |
+| e2e Node 验证（跨实现加解密、协议回放、Bitwarden 映射、band 模块对拍、Steam 向量） | **155/155** |
+| e2e Python 独立验证（第三方实现解密 + RFC/Steam/Bitwarden 向量） | **30/30** |
+| 构建 / 包名 / 版本 / 签名检查 | **46/46 PASS** |
 | CLI 工具测试（`tools/`） | **12/12** |
 | APK 与 .rpk 同证书 | ✅ `SHA-256 b7cfba…85c4`（= `signing/rpk-sign/certificate.pem`） |
 | 真机（安装、interconnect 握手、xms 投递、480×336 UI、Steam 显示） | **部分验证**：启动闪退已由真机日志定位修复；Steam 显示待复测 |
 
 产物：
 
-- 手环：`band-app/dist/dev.wristkey.app.release.1.0.3.rpk`（约 56 KB，versionCode 4，大字体 2 码/页）
-- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（约 25 MB，v1.1 / versionCode 2）
+- 手环：`band-app/dist/dev.wristkey.app.release.1.0.4.rpk`（68,764 B，versionCode 5，无顶栏 / 3 码每页 / A-Z 筛选）
+- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（26,263,469 B，v1.2 / versionCode 3，含 Bitwarden 导入）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
 ## 参考与许可
@@ -107,8 +110,13 @@ TOTP Secret 等同于账号凭证。请仅在自己信任的设备上使用；�
    （备份 `Type=4` 被跳过；URI 列表里 `otpauth://totp/Steam:...` 无标记时被当作 TOTP）。
    已按 `otpType="steam"` 实现 5 位字母数字码（固定 SHA1/30s/字母表），修复并发布
    **手环 v1.0.2（versionCode 3） + 手机 APK v1.1（versionCode 2）**；Steam 6 组向量两端均验证通过。
-3. **2026-11-10 手环字体过小 / 一页放不下**：真机反馈字体偏小、3 行拥挤。改为 **每页 2 个大卡片**，
-   issuer 26px、验证码 44px（8 位 38px / 10 位 32px）、账号 16px，验证码列固定 236px 宽并随长度缩字号，
-   header/status/footer 固定高度，主要信息不被遮挡或裁切；发布 **手环 v1.0.3（versionCode 4）**。
+3. **2026-11-10 手环字体过小 / 一页放不下**（v1.0.3）：一度改为每页 2 个大卡片、固定 236px 验证码列；
+   真机上名称被截成 `S..`/`YW...`，因此继续按用户草图重做。
+4. **2026-11-10 UI v3 + Bitwarden 导入**：按用户草图和确认实现 **无顶栏 / 每页 3 个 / 右侧 A-Z 按钮 +
+   字母数字筛选页（显示各字母账号数）/ 右滑菜单左滑退出**；手机端新增 **Bitwarden 未加密 JSON 导入**
+   （`login.totp` → otpauth URI 或纯 Base32，忽略文件夹/分类）。发布
+   **手环 v1.0.4（versionCode 5） + 手机 APK v1.2（versionCode 3）**。
+   设计稿见 [docs/design/ui-v3-spec.md](docs/design/ui-v3-spec.md)，Bitwarden 字段映射见
+   [docs/bitwarden-format.md](docs/bitwarden-format.md)。
 
-详见 [reports/e2e-report.md](reports/e2e-report.md) 第 10/11/12 节。
+详见 [reports/e2e-report.md](reports/e2e-report.md) 第 10–13 节。

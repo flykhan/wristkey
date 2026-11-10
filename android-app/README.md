@@ -18,6 +18,9 @@
   - 字段映射、跳过报告、合并（同 secret 覆盖）/全量替换见 docs/stratum-format.md。
   - **Steam Guard**：备份 `Type=4` 与带 `&steam` / `encoder=steam` / issuer 前缀 Steam 的 URI 导入为
     `otpType=steam`（5 位字母数字码，固定 30 秒 / SHA1）；重新以合并模式导入可纠正误导入成 TOTP 的账号。
+  - **Bitwarden**：支持 Vault **未加密** JSON 导出（顶层 `items`）；加密导出（`encrypted:true`）会明确提示
+    “Bitwarden 加密导出暂不支持，请导出未加密 JSON”。忽略文件夹/分类，`issuer=item.name`、
+    `accountName=login.username`，`login.totp` 支持 otpauth:// 与纯 Base32。
 - **账号管理**：分类分组、搜索、脱敏 secret、手动新增/编辑（含 otpauth 解析）、当前验证码核对。
 - **同步**：协议 v2 分片发送（begin → account×N → commit），逐条进度；
   `MessageApi.addListener` 接收 `mfa_sync_ack` 与 `mfa_sync_request`（手环请求全量重发）。

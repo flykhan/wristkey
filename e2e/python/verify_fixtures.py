@@ -12,7 +12,9 @@
   3. 用 Stratum 官方 extra/decrypt_backup.py（如可用）解密 e2e 夹具，做第三方工具验证；
   4. 明文夹具中的 3 个 RFC 6238 账号在 T=59/1111111109/1111111111/1234567890 的 TOTP 与 RFC 表一致；
      并独立实现 Steam Guard 5 位字母数字码，对 6 组公开向量验证；
-  5. 加密参数与 docs/stratum-format.md 的常量一致（头部/长度/迭代次数）。
+  5. 加密参数与 docs/stratum-format.md 的常量一致（头部/长度/迭代次数）；
+  6. Bitwarden 未加密 Vault JSON 独立解析（docs/bitwarden-format.md）：6 导入 / 4 跳过、Steam 识别、
+     加密导出负例拒绝。
 
 用法（建议 venv）：
     python3 -m venv .venv && .venv/bin/pip install argon2-cffi cryptography
@@ -27,6 +29,7 @@ import json
 import os
 import subprocess
 import sys
+from urllib.parse import parse_qs, unquote, urlparse
 
 E2E_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKSPACE = os.path.dirname(E2E_ROOT)
@@ -305,6 +308,95 @@ def main():
 
     check("夹具 Steam(Type=4) 条目：2 个，issuer 覆盖 Steam/Valve", check_steam_fixture_accounts)
 
+    print("\n## 4c. Bitwarden 未加密 Vault 导入（Python 独立实现，docs/bitwarden-format.md）")
+    bitwarden_path = os.path.join(FIXTURES, "bitwarden-export.json")
+    bitwarden_encrypted_path = os.path.join(FIXTURES, "bitwarden-encrypted-export.json")
+
+    def bitwarden_detect(value):
+        if not isinstance(value, dict):
+            return "unknown"
+        if value.get("encrypted") is True:
+            return "encrypted"
+        items = value.get("items")
+        if not isinstance(items, list):
+            return "unknown"
+        if not any(isinstance(item.get("login"), dict) for item in items if isinstance(item, dict)):
+            return "unknown"
+        return "vault"
+
+    def bitwarden_import(export):
+        imported = []
+        skipped = []
+        for item in export.get("items") or []:
+            name = (item.get("name") or "").strip()
+            login = item.get("login") or {}
+            username = (login.get("username") or "").strip()
+            if item.get("type") != 1:
+                skipped.append(("NOT_LOGIN_TYPE", name))
+                continue
+            totp = (login.get("totp") or "").strip()
+            if not totp:
+                skipped.append(("NO_TOTP", name))
+                continue
+            issuer = name or "Bitwarden"
+            if totp.lower().startswith("otpauth://"):
+                parsed = urlparse(totp)
+                params = parse_qs(parsed.query, keep_blank_values=True)
+                if parsed.netloc.lower() != "totp":
+                    skipped.append(("TYPE_NOT_TOTP", name))
+                    continue
+                secret_raw = (params.get("secret") or [""])[0]
+                try:
+                    base32_decode(secret_raw)
+                except Exception:
+                    skipped.append(("INVALID_BASE32", name))
+                    continue
+                label = unquote(parsed.path.lstrip("/"))
+                label_issuer, _, label_name = label.partition(":")
+                uri_issuer = (params.get("issuer") or [label_issuer])[0].strip()
+                account_name = username or (label_name or label_issuer).strip() or issuer
+                is_steam = (
+                    "steam" in params
+                    or (params.get("encoder") or [""])[0].lower() == "steam"
+                    or uri_issuer.lower().startswith("steam")
+                    or label.lower().startswith("steam")
+                )
+                if is_steam:
+                    imported.append({"issuer": issuer, "accountName": account_name, "digits": 5, "period": 30, "algorithm": "SHA1", "otpType": "steam"})
+                else:
+                    imported.append({
+                        "issuer": issuer,
+                        "accountName": account_name,
+                        "digits": int((params.get("digits") or ["6"])[0]),
+                        "period": int((params.get("period") or ["30"])[0]),
+                        "algorithm": (params.get("algorithm") or ["SHA1"])[0].upper(),
+                        "otpType": "totp",
+                    })
+            else:
+                try:
+                    base32_decode(totp)
+                except Exception:
+                    skipped.append(("INVALID_TOTP", name))
+                    continue
+                imported.append({"issuer": issuer, "accountName": username or issuer, "digits": 6, "period": 30, "algorithm": "SHA1", "otpType": "totp"})
+        return imported, skipped
+
+    if os.path.exists(bitwarden_path):
+        bitwarden_export = load_json(bitwarden_path)
+        bitwarden_encrypted = load_json(bitwarden_encrypted_path)
+        bitwarden_expected = load_json(os.path.join(FIXTURES, "bitwarden-expected-import.json"))
+        bw_imported, bw_skipped = bitwarden_import(bitwarden_export)
+
+        check("Bitwarden 内容嗅探：vault / encrypted / Stratum 不误判", lambda: _bitwarden_detect_cases(
+            bitwarden_detect, bitwarden_export, bitwarden_encrypted, plain))
+        check("Bitwarden 独立解析：6 导入 / 4 跳过", lambda: _assert_bitwarden_counts(bw_imported, bw_skipped))
+        check("Bitwarden Steam 条目：otpType=steam / digits=5 / period=30 / SHA1", lambda: _assert_bitwarden_steam(bw_imported))
+        check("Bitwarden 字段兜底：name 空 → Bitwarden，username 空 → otpauth label", lambda: _assert_bitwarden_fallbacks(bw_imported))
+        check("Bitwarden 加密导出必须拒绝", lambda: _assert_bitwarden_encrypted(bitwarden_detect(bitwarden_encrypted)))
+        check("bitwarden-expected-import.json 统计 6/4/10", lambda: _assert_bitwarden_stats(bitwarden_expected))
+    else:
+        print("  NOTE bitwarden-export.json 不存在，跳过")
+
     print("\n## 5. 加密参数与 docs/stratum-format.md 常量一致性")
     strong = read_bytes(os.path.join(FIXTURES, "strong.stratum"))
     legacy = read_bytes(os.path.join(FIXTURES, "legacy.stratum"))
@@ -389,6 +481,63 @@ def _manifest_params(manifest):
         if actual != expected:
             raise AssertionError("manifest 参数 " + str(actual) + " != " + str(expected))
     return "Argon2id p4 m64MiB t3 / PBKDF2-SHA1 64000"
+
+
+def _bitwarden_detect_cases(detect, vault, encrypted, stratum_plain):
+    if detect(vault) != "vault":
+        raise AssertionError("未加密 Vault 应识别为 vault")
+    if detect(encrypted) != "encrypted":
+        raise AssertionError("加密导出应识别为 encrypted")
+    if detect(stratum_plain) != "unknown":
+        raise AssertionError("Stratum 备份不应被识别为 Bitwarden")
+    if detect({"items": [{"id": "x", "type": 1}]}) != "unknown":
+        raise AssertionError("无 login 的导出不应识别")
+    return "vault/encrypted/unknown"
+
+
+def _assert_bitwarden_counts(imported, skipped):
+    if len(imported) != 6 or len(skipped) != 4:
+        raise AssertionError("Bitwarden 映射应为 6 导入 / 4 跳过，实际 " + str(len(imported)) + "/" + str(len(skipped)))
+    codes = sorted(code for code, _ in skipped)
+    expected_codes = sorted(["NO_TOTP", "NOT_LOGIN_TYPE", "INVALID_TOTP", "TYPE_NOT_TOTP"])
+    if codes != expected_codes:
+        raise AssertionError("跳过原因不符: " + str(codes))
+    return "6/4"
+
+
+def _assert_bitwarden_steam(imported):
+    steam = [item for item in imported if item["otpType"] == "steam"]
+    if len(steam) != 1:
+        raise AssertionError("应识别 1 个 Steam 条目，实际 " + str(len(steam)))
+    item = steam[0]
+    if item["digits"] != 5 or item["period"] != 30 or item["algorithm"] != "SHA1":
+        raise AssertionError("Steam 字段应固定 5/30/SHA1，实际 " + json.dumps(item))
+    return "1 个（" + item["issuer"] + "）"
+
+
+def _assert_bitwarden_fallbacks(imported):
+    bitwarden_issuer = [item for item in imported if item["issuer"] == "Bitwarden"]
+    if len(bitwarden_issuer) != 1:
+        raise AssertionError("name 为空的条目应兜底 issuer=Bitwarden")
+    if bitwarden_issuer[0]["accountName"] != "noname@test.invalid":
+        raise AssertionError("username 为空时应取 otpauth label 账号部分")
+    email = [item for item in imported if item["issuer"] == "邮件"]
+    if len(email) != 1 or email[0]["accountName"] != "邮箱用户":
+        raise AssertionError("Unicode name/label 映射不符")
+    return "Bitwarden/邮件"
+
+
+def _assert_bitwarden_encrypted(kind):
+    if kind != "encrypted":
+        raise AssertionError("加密导出应识别为 encrypted")
+    return "拒绝"
+
+
+def _assert_bitwarden_stats(expected):
+    stats = expected["stats"]
+    if stats.get("imported") != 6 or stats.get("skipped") != 4 or stats.get("total") != 10:
+        raise AssertionError("Bitwarden 期望统计不符: " + json.dumps(stats))
+    return "6/4/10"
 
 
 def _assert_expected_stats(expected):

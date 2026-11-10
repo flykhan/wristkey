@@ -5,11 +5,19 @@ import {
   ACCOUNTS_PER_PAGE,
   DARK_THEME,
   LIGHT_THEME,
+  LETTER_BUCKET_KEYS,
+  LETTER_FILTER_STORAGE_KEY,
+  LETTER_KEYS,
+  accountLetter,
+  buildLetterCounts,
   cyclePage,
   describeSync,
   detailCodeFontSize,
+  filterAccountsByLetter,
   formatClock,
+  letterBucket,
   listCodeFontSize,
+  normalizeLetterFilter,
   paginate,
   parseDarkMode,
   progressColor,
@@ -27,23 +35,23 @@ test("parseDarkMode accepts the stored forms", () => {
   assert.equal(themeFor(false), LIGHT_THEME)
 })
 
-test("paginate returns two accounts per page and clamps the page", () => {
+test("paginate returns three accounts per page and clamps the page", () => {
   const items = Array.from({ length: 7 }, (_, index) => ({ id: String(index) }))
-  assert.equal(ACCOUNTS_PER_PAGE, 2)
+  assert.equal(ACCOUNTS_PER_PAGE, 3)
 
   const first = paginate(items, 0)
-  assert.deepEqual(first.items.map(item => item.id), ["0", "1"])
-  assert.equal(first.pageCount, 4)
+  assert.deepEqual(first.items.map(item => item.id), ["0", "1", "2"])
+  assert.equal(first.pageCount, 3)
   assert.equal(first.total, 7)
 
   const second = paginate(items, 1)
-  assert.deepEqual(second.items.map(item => item.id), ["2", "3"])
+  assert.deepEqual(second.items.map(item => item.id), ["3", "4", "5"])
 
-  const fourth = paginate(items, 3)
-  assert.deepEqual(fourth.items.map(item => item.id), ["6"])
-  assert.equal(fourth.page, 3)
+  const third = paginate(items, 2)
+  assert.deepEqual(third.items.map(item => item.id), ["6"])
+  assert.equal(third.page, 2)
 
-  assert.equal(paginate(items, 99).page, 3)
+  assert.equal(paginate(items, 99).page, 2)
   assert.equal(paginate(items, -5).page, 0)
 
   const empty = paginate([], 0)
@@ -54,16 +62,91 @@ test("paginate returns two accounts per page and clamps the page", () => {
   assert.equal(paginate(null, 0).total, 0)
 })
 
-test("code font sizes shrink for longer codes (no clipping)", () => {
-  assert.equal(listCodeFontSize("3DP36"), 44) // Steam 5 chars
-  assert.equal(listCodeFontSize("123 456"), 44)
-  assert.equal(listCodeFontSize("123 45678"), 38)
-  assert.equal(listCodeFontSize("123 4567890"), 32)
-  assert.equal(listCodeFontSize(""), 44)
+test("list code font sizes are 42/40/34 (v3 spec)", () => {
+  assert.equal(listCodeFontSize("3DP36"), 42) // Steam 5 chars
+  assert.equal(listCodeFontSize("123 456"), 42) // 6 digits
+  assert.equal(listCodeFontSize("1234 5678"), 40) // 8 digits
+  assert.equal(listCodeFontSize("12345 67890"), 34) // 10 digits
+  assert.equal(listCodeFontSize(""), 42)
   assert.equal(detailCodeFontSize("3DP36"), 70)
   assert.equal(detailCodeFontSize("123 456"), 70)
   assert.equal(detailCodeFontSize("123 45678"), 58)
   assert.equal(detailCodeFontSize("123 4567890"), 46)
+})
+
+test("letterBucket: A-Z / 0-9 else # (case-insensitive, trimmed)", () => {
+  assert.equal(letterBucket("GitHub"), "G")
+  assert.equal(letterBucket("  steam"), "S")
+  assert.equal(letterBucket("7zip"), "7")
+  assert.equal(letterBucket("0account"), "0")
+  assert.equal(letterBucket("小米"), "#")
+  assert.equal(letterBucket("--"), "#")
+  assert.equal(letterBucket(""), "#")
+  assert.equal(letterBucket("   "), "#")
+  assert.equal(letterBucket(null), "#")
+  assert.equal(letterBucket(undefined), "#")
+  assert.equal(letterBucket(42), "#")
+})
+
+test("accountLetter prefers issuer, falls back to account name", () => {
+  assert.equal(accountLetter({ issuer: "GitHub", accountName: "me" }), "G")
+  assert.equal(accountLetter({ issuer: "  ", accountName: "alice" }), "A")
+  assert.equal(accountLetter({ issuer: "", accountName: "小米" }), "#")
+  assert.equal(accountLetter({ issuer: "", accountName: "" }), "#")
+  assert.equal(accountLetter({}), "#")
+  assert.equal(accountLetter(null), "#")
+})
+
+test("buildLetterCounts counts every bucket (0 when absent)", () => {
+  const counts = buildLetterCounts([
+    { issuer: "GitHub", accountName: "me" },
+    { issuer: "gitlab", accountName: "me" },
+    { issuer: "7zip", accountName: "" },
+    { issuer: "", accountName: "alice" },
+    { issuer: "小米", accountName: "me" },
+    { issuer: "", accountName: "" }
+  ])
+  assert.equal(LETTER_KEYS.length, 36)
+  assert.equal(LETTER_BUCKET_KEYS.length, 37)
+  assert.equal(counts["G"], 2)
+  assert.equal(counts["7"], 1)
+  assert.equal(counts["A"], 1)
+  assert.equal(counts["#"], 2)
+  assert.equal(counts["B"], 0)
+  assert.equal(Object.keys(counts).length, 37)
+  assert.deepEqual(buildLetterCounts(null)["A"], 0)
+})
+
+test("filterAccountsByLetter filters across all accounts (ignores category)", () => {
+  const accounts = [
+    { id: "a", issuer: "GitHub", accountName: "me", category: "开发" },
+    { id: "b", issuer: "Google", accountName: "me", category: "Web" },
+    { id: "c", issuer: "gitlab", accountName: "me", category: "开发" },
+    { id: "d", issuer: "", accountName: "7zip", category: "工具" },
+    { id: "e", issuer: "小米", accountName: "me", category: "默认分类" }
+  ]
+  assert.deepEqual(filterAccountsByLetter(accounts, "").map(a => a.id), ["a", "b", "c", "d", "e"])
+  assert.deepEqual(filterAccountsByLetter(accounts, "G").map(a => a.id), ["a", "b", "c"])
+  assert.deepEqual(filterAccountsByLetter(accounts, "g").map(a => a.id), ["a", "b", "c"])
+  assert.deepEqual(filterAccountsByLetter(accounts, "7").map(a => a.id), ["d"])
+  assert.deepEqual(filterAccountsByLetter(accounts, "#").map(a => a.id), ["e"])
+  assert.deepEqual(filterAccountsByLetter(accounts, "Z"), [])
+  assert.deepEqual(filterAccountsByLetter(null, "A"), [])
+  // The input array is not mutated.
+  assert.equal(accounts.length, 5)
+})
+
+test("normalizeLetterFilter keeps only a valid bucket or empty", () => {
+  assert.equal(LETTER_FILTER_STORAGE_KEY, "wristkey_letter_filter")
+  assert.equal(normalizeLetterFilter("s"), "S")
+  assert.equal(normalizeLetterFilter(" 7 "), "7")
+  assert.equal(normalizeLetterFilter("#"), "#")
+  assert.equal(normalizeLetterFilter(""), "")
+  assert.equal(normalizeLetterFilter("   "), "")
+  assert.equal(normalizeLetterFilter("all"), "")
+  assert.equal(normalizeLetterFilter("AB"), "")
+  assert.equal(normalizeLetterFilter(null), "")
+  assert.equal(normalizeLetterFilter(undefined), "")
 })
 
 test("cyclePage wraps in both directions", () => {

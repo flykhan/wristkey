@@ -1,0 +1,100 @@
+{
+  "encrypted": false,
+  "folders": [
+    { "id": "f1", "name": "工作" },
+    { "id": "f2", "name": "个人" }
+  ],
+  "items": [
+    {
+      "id": "i1",
+      "type": 1,
+      "name": "GitHub",
+      "folderId": "f1",
+      "login": {
+        "username": "dev@example.com",
+        "password": "not-a-real-password",
+        "totp": "otpauth://totp/GitHub:dev@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=GitHub&digits=6&period=30"
+      }
+    },
+    {
+      "id": "i2",
+      "type": 1,
+      "name": "Steam",
+      "folderId": "f2",
+      "login": {
+        "username": "alice",
+        "password": "not-a-real-password",
+        "totp": "otpauth://totp/Other:alice?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Other&encoder=steam"
+      }
+    },
+    {
+      "id": "i3",
+      "type": 1,
+      "name": "RawBase32",
+      "login": {
+        "username": "bob",
+        "totp": "JBSWY3DPEHPK3PXP"
+      }
+    },
+    {
+      "id": "i4",
+      "type": 1,
+      "name": "NoTotp",
+      "login": {
+        "username": "carol",
+        "password": "pw"
+      }
+    },
+    {
+      "id": "i5",
+      "type": 1,
+      "name": "BadSecret",
+      "login": {
+        "username": "dave",
+        "totp": "NOT-BASE32!"
+      }
+    },
+    {
+      "id": "i6",
+      "type": 1,
+      "name": "BadUri",
+      "login": {
+        "username": "erin",
+        "totp": "otpauth://hotp/Legacy:u1?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&counter=0"
+      }
+    },
+    {
+      "id": "i7",
+      "type": 2,
+      "name": "NoLogin",
+      "notes": "secure note without login"
+    },
+    {
+      "id": "i8",
+      "type": 1,
+      "name": "LabelOnly",
+      "login": {
+        "username": "",
+        "totp": "otpauth://totp/BitwardenLabel:labelacct?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA&issuer=BitwardenLabel&algorithm=SHA256&digits=8&period=60"
+      }
+    },
+    {
+      "id": "i9",
+      "type": 1,
+      "name": "   ",
+      "login": {
+        "username": "",
+        "totp": "MZXW6YTBOI"
+      }
+    },
+    {
+      "id": "i10",
+      "type": 1,
+      "name": "Duplicate",
+      "login": {
+        "username": "dup",
+        "totp": "gezd gnbv gy3t qojq gezd gnbv gy3t qojq"
+      }
+    }
+  ]
+}

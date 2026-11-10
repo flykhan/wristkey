@@ -1,24 +1,42 @@
 /**
  * WristKey band app - display settings and pure view helpers.
  *
- * Kept free of @system.* imports so tests can cover paging/formatting.
- * Storage access (reading/writing these keys) happens in the pages.
+ * Kept free of @system.* imports so tests can cover paging, letter filtering
+ * and code font sizing.
+ *
+ * UI v3 (docs/design/ui-v3-spec.md):
+ *   - 3 accounts per page, no top bar / status row
+ *   - right rail A-Z button opens pages/picker; filter persists in storage
+ *   - letter buckets: issuer first character, else account name; A-Z / 0-9,
+ *     anything else (CJK, symbols, empty) -> "#"
  */
 
 export const THEME_STORAGE_KEY = "wristkey_dark_mode"
 export const CATEGORY_STORAGE_KEY = "wristkey_category"
-// Two large cards per page: the 480x336 band screen is small, so prefer bigger
-// type and no clipped codes over showing three cramped rows.
-export const ACCOUNTS_PER_PAGE = 2
+export const LETTER_FILTER_STORAGE_KEY = "wristkey_letter_filter"
+export const ACCOUNTS_PER_PAGE = 3
 export const DEFAULT_DARK_MODE = true
+
+/** A-Z + 0-9 (26 + 10 = 36 keys) in picker display order. */
+export const LETTER_KEYS = []
+for (let index = 0; index < 26; index++) {
+  LETTER_KEYS.push(String.fromCharCode(65 + index))
+}
+for (let digit = 0; digit <= 9; digit++) {
+  LETTER_KEYS.push(String(digit))
+}
+/** All selectable buckets, including the catch-all "#". */
+export const LETTER_BUCKET_KEYS = LETTER_KEYS.concat(["#"])
 
 export const LIGHT_THEME = {
   pageBackground: "#F3F0E9",
   cardBackground: "#FFFFFF",
   cardBorder: "#E7E2D8",
+  itemBackground: "#F2F6F3",
   title: "#1E2A2E",
   body: "#45555C",
   secondary: "#8B9AA0",
+  disabledText: "#B9C4BF",
   accent: "#0F8C6C",
   codeColor: "#0B6E55",
   accentSoft: "#E5F2EC",
@@ -34,12 +52,14 @@ export const DARK_THEME = {
   pageBackground: "#000000",
   cardBackground: "#0B0F0E",
   cardBorder: "#1C2724",
+  itemBackground: "#111715",
   title: "#EDF5F1",
   body: "#C5D2CD",
   secondary: "#81938E",
+  disabledText: "#4C5A55",
   accent: "#6ED5B7",
   codeColor: "#7FE3C6",
-  accentSoft: "#13211C",
+  accentSoft: "#16221E",
   buttonBackground: "#1B2622",
   progressTrack: "#2A3633",
   progressSafe: "#6ED5B7",
@@ -49,12 +69,88 @@ export const DARK_THEME = {
 }
 
 /**
- * Pick a list-card code font size that fits the 480px-wide band screen without
- * clipping. 6-digit TOTP / 5-char Steam get the largest size, 10-digit TOTP
- * gets the smallest (still much larger than the old 30px).
+ * Per-letter bucket of a string: first character, uppercased; A-Z / 0-9 kept,
+ * everything else (CJK, symbols, empty) becomes "#".
+ */
+export function letterBucket(value) {
+  const text = typeof value === "string" ? value.trim() : ""
+  if (text.length === 0) {
+    return "#"
+  }
+  const first = text.charAt(0).toUpperCase()
+  if (first >= "A" && first <= "Z") {
+    return first
+  }
+  if (first >= "0" && first <= "9") {
+    return first
+  }
+  return "#"
+}
+
+/** Issuer's first character wins; empty issuer falls back to accountName. */
+export function accountLetter(account) {
+  if (!account) {
+    return "#"
+  }
+  const issuer = typeof account.issuer === "string" ? account.issuer.trim() : ""
+  if (issuer.length > 0) {
+    return letterBucket(issuer)
+  }
+  const accountName =
+    typeof account.accountName === "string" ? account.accountName.trim() : ""
+  if (accountName.length > 0) {
+    return letterBucket(accountName)
+  }
+  return "#"
+}
+
+/** Letter bucket -> account count, with every bucket present (0 when empty). */
+export function buildLetterCounts(accounts) {
+  const counts = {}
+  for (let index = 0; index < LETTER_BUCKET_KEYS.length; index++) {
+    counts[LETTER_BUCKET_KEYS[index]] = 0
+  }
+  const list = Array.isArray(accounts) ? accounts : []
+  for (let index = 0; index < list.length; index++) {
+    counts[accountLetter(list[index])] += 1
+  }
+  return counts
+}
+
+/** Normalise a stored filter: "" means all; otherwise one of A-Z/0-9/#. */
+export function normalizeLetterFilter(value) {
+  const text = typeof value === "string" ? value.trim().toUpperCase() : ""
+  if (text.length === 0) {
+    return ""
+  }
+  return LETTER_BUCKET_KEYS.indexOf(text) >= 0 ? text : ""
+}
+
+/**
+ * Filter accounts by letter bucket. Empty filter returns all accounts.
+ * Categories are intentionally ignored (v3 filters across the whole list).
+ */
+export function filterAccountsByLetter(accounts, letter) {
+  const list = Array.isArray(accounts) ? accounts : []
+  const wanted = normalizeLetterFilter(letter)
+  if (wanted === "") {
+    return list.slice(0)
+  }
+  const result = []
+  for (let index = 0; index < list.length; index++) {
+    if (accountLetter(list[index]) === wanted) {
+      result.push(list[index])
+    }
+  }
+  return result
+}
+
+/**
+ * List row code font size (px): 6 digits / 5-char Steam -> 42,
+ * 8 digits -> 40, 10 digits -> 34.
  */
 export function listCodeFontSize(groupedCode) {
-  return codeFontSizeFor(groupedCode, 44, 38, 32)
+  return codeFontSizeFor(groupedCode, 42, 40, 34)
 }
 
 /** Detail screen code size (single large code, no neighbour cards). */
@@ -118,7 +214,7 @@ export function paginate(items, page, pageSize) {
   }
 }
 
-/** Cycle the page index, wrapping at both ends (band: tap/swipe to loop). */
+/** Cycle the page index, wrapping at both ends (band: swipe to loop). */
 export function cyclePage(page, pageCount, direction) {
   const count = typeof pageCount === "number" && pageCount > 0 ? pageCount : 1
   const current = typeof page === "number" ? page : 0
@@ -149,7 +245,7 @@ export function formatClock(timestamp, now) {
 }
 
 /**
- * Human readable sync state for the index header.
+ * Human readable sync state (used by the menu page / diagnostics).
  * @returns {{text: string, detail: string, empty: boolean}}
  */
 export function describeSync(snapshot, connected, now) {

@@ -163,7 +163,7 @@ private fun ImportCard(state: AppUiState, actions: AppActions) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Stratum 导入", style = MaterialTheme.typography.titleMedium)
-            Text("支持 .stratum（Strong 加密 / Legacy 加密 / 明文 JSON）、明文 .json、otpauth:// URI 列表 .txt。按文件内容识别，不依赖扩展名。")
+            Text("支持 Stratum（Strong/Legacy 加密、明文 JSON、otpauth:// URI 列表）与 Bitwarden 未加密 Vault JSON 导出。按文件内容识别，不依赖扩展名。")
             Button(
                 onClick = actions.onImportRequest,
                 enabled = !importState.isBusy,
@@ -629,6 +629,8 @@ private val StratumFormat.label: String
         StratumFormat.PLAIN_JSON -> "明文 JSON 备份"
         StratumFormat.URI_LIST -> "otpauth:// URI 列表"
         StratumFormat.HTML -> "HTML 导出（不可导入）"
+        StratumFormat.BITWARDEN -> "Bitwarden 未加密 JSON 导出"
+        StratumFormat.BITWARDEN_ENCRYPTED -> "Bitwarden 加密导出（暂不支持）"
         StratumFormat.UNKNOWN -> "未知格式"
     }
 

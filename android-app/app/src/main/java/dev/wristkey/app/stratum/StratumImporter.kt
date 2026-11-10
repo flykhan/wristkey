@@ -2,6 +2,7 @@ package dev.wristkey.app.stratum
 
 import dev.wristkey.app.DEFAULT_CATEGORY
 import dev.wristkey.app.DEFAULT_DIGITS
+import dev.wristkey.app.bitwarden.BitwardenImporter
 import dev.wristkey.app.DEFAULT_PERIOD
 import dev.wristkey.app.OTP_TYPE_STEAM
 import dev.wristkey.app.OTP_TYPE_TOTP
@@ -22,7 +23,7 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
-/** Stratum 备份的实际文件形态；按内容嗅探，不依赖扩展名。 */
+/** 支持的备份/导出文件形态；按内容嗅探，不依赖扩展名。 */
 enum class StratumFormat {
     /** Strong：AUTHENTICATORPRO + Argon2id + AES-256-GCM。 */
     STRONG,
@@ -38,6 +39,12 @@ enum class StratumFormat {
 
     /** Stratum 的 HTML 导出（二维码 + 明文），只可人工查看，不能导回。 */
     HTML,
+
+    /** Bitwarden Vault 未加密 JSON 导出（顶层 items 数组）。 */
+    BITWARDEN,
+
+    /** Bitwarden 加密导出（encrypted=true）：暂不支持。 */
+    BITWARDEN_ENCRYPTED,
 
     UNKNOWN,
 }
@@ -140,8 +147,18 @@ object StratumImporter {
         }
         if (text.startsWith("{")) {
             val json = runCatching { JSONObject(text) }.getOrNull()
-            if (json != null && readField(json, "authenticators") != null) {
-                return StratumFormat.PLAIN_JSON
+            if (json != null) {
+                if (readField(json, "authenticators") != null) {
+                    return StratumFormat.PLAIN_JSON
+                }
+                // Bitwarden：未加密导出顶层 { items: [...] }；加密导出 { encrypted: true, data: ... }。
+                // 与 Aegis（entries）、Stratum（Authenticators）字段名互不冲突。
+                if (readField(json, "encrypted") == true) {
+                    return StratumFormat.BITWARDEN_ENCRYPTED
+                }
+                if (readField(json, "items") is JSONArray) {
+                    return StratumFormat.BITWARDEN
+                }
             }
         }
         return StratumFormat.UNKNOWN
@@ -174,6 +191,8 @@ object StratumImporter {
             StratumFormat.PLAIN_JSON -> parsePlainJson(decodeText(bytes), updatedAt)
             StratumFormat.URI_LIST -> parseUriList(decodeText(bytes), updatedAt)
             StratumFormat.HTML -> throw StratumImportException(HTML_MESSAGE)
+            StratumFormat.BITWARDEN -> BitwardenImporter.importJson(decodeText(bytes), updatedAt)
+            StratumFormat.BITWARDEN_ENCRYPTED -> throw StratumImportException(BitwardenImporter.ENCRYPTED_MESSAGE)
             StratumFormat.UNKNOWN -> throw StratumImportException(UNKNOWN_MESSAGE)
         }
     }

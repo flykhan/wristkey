@@ -1,0 +1,143 @@
+{
+  "encrypted": false,
+  "folders": [
+    {
+      "id": "f-dev",
+      "name": "开发"
+    },
+    {
+      "id": "f-social",
+      "name": "社交"
+    }
+  ],
+  "items": [
+    {
+      "id": "bw-github",
+      "folderId": "f-dev",
+      "type": 1,
+      "name": "GitHub",
+      "notes": null,
+      "favorite": false,
+      "login": {
+        "uris": [
+          {
+            "match": null,
+            "uri": "https://github.com"
+          }
+        ],
+        "username": "me@example.com",
+        "password": "fake-password-github",
+        "totp": "otpauth://totp/GitHub:me@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"
+      }
+    },
+    {
+      "id": "bw-aws",
+      "folderId": null,
+      "type": 1,
+      "name": "AWS",
+      "notes": null,
+      "login": {
+        "username": "root",
+        "password": "fake-password-aws",
+        "totp": "otpauth://totp/AWS:root?secret=QCCSBE5WSR6ZX6MWSZ5OT2VT5CGXX5YNL3ZX4E7VY6E7RYMYDVYQ&issuer=AWS&algorithm=SHA256&digits=8&period=60"
+      }
+    },
+    {
+      "id": "bw-steam",
+      "folderId": "f-social",
+      "type": 1,
+      "name": "Steam",
+      "notes": null,
+      "login": {
+        "username": "steamuser",
+        "password": "fake-password-steam",
+        "totp": "otpauth://totp/Steam:steamuser?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Steam&encoder=steam"
+      }
+    },
+    {
+      "id": "bw-raw",
+      "folderId": null,
+      "type": 1,
+      "name": "RawBase32",
+      "notes": null,
+      "login": {
+        "username": "raw@test.invalid",
+        "password": "fake-password-raw",
+        "totp": "MFRGGZDFMZTWQ2LK"
+      }
+    },
+    {
+      "id": "bw-noname",
+      "folderId": null,
+      "type": 1,
+      "name": "   ",
+      "notes": null,
+      "login": {
+        "username": "   ",
+        "password": "fake-password-noname",
+        "totp": "otpauth://totp/NoName:noname@test.invalid?secret=BS5MZ6N67HCY7ARWAOQ45IBHKM3XH4MS&issuer=NoName"
+      }
+    },
+    {
+      "id": "bw-email",
+      "folderId": "f-dev",
+      "type": 1,
+      "name": "邮件",
+      "notes": null,
+      "login": {
+        "username": "",
+        "password": "fake-password-email",
+        "totp": "otpauth://totp/邮件:邮箱用户?secret=3GHWXPUJG2R3FFFKEJO5JIDOI5DPAG7A&issuer=邮件&digits=8"
+      }
+    },
+    {
+      "id": "bw-nototp",
+      "folderId": null,
+      "type": 1,
+      "name": "PlainLogin",
+      "notes": null,
+      "login": {
+        "username": "plain",
+        "password": "fake-password-plain",
+        "totp": null
+      }
+    },
+    {
+      "id": "bw-note",
+      "folderId": null,
+      "type": 2,
+      "name": "SecureNote",
+      "notes": "fake note",
+      "secureNote": {
+        "type": 0
+      },
+      "login": {
+        "username": "",
+        "password": null,
+        "totp": "otpauth://totp/Note:note?secret=MFRGGZDFMZTWQ2LK&issuer=Note"
+      }
+    },
+    {
+      "id": "bw-badtotp",
+      "folderId": null,
+      "type": 1,
+      "name": "BadTotp",
+      "login": {
+        "username": "bad",
+        "password": "fake-password-bad",
+        "totp": "not-a-totp-or-base32!!"
+      }
+    },
+    {
+      "id": "bw-baduri",
+      "folderId": null,
+      "type": 1,
+      "name": "BadUri",
+      "login": {
+        "username": "bad",
+        "password": "fake-password-bad",
+        "totp": "otpauth://hotp/LegacyHOTP:hotp?secret=MFRGGZDFMZTWQ2LK&counter=0"
+      }
+    }
+  ]
+}

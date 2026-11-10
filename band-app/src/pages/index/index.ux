@@ -1,37 +1,15 @@
 <template>
   <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
     <div class="card" style="background-color: {{ theme.cardBackground }}">
-      <div class="header">
-        <div class="header-left">
-          <text class="title" style="color: {{ theme.title }}">腕证</text>
-          <div class="category-row" onclick="openCategory">
-            <text class="category" style="color: {{ theme.secondary }}">{{ categoryLabel }}</text>
-            <text class="category-arrow" style="color: {{ theme.secondary }}">›</text>
-          </div>
-        </div>
-        <div class="menu-button" onclick="openMenu" style="background-color: {{ theme.buttonBackground }}">
-          <text class="menu-button-text" style="color: {{ theme.accent }}">菜单</text>
-        </div>
-      </div>
-
-      <div class="status-row">
-        <text class="status-text" style="color: {{ theme.secondary }}">{{ syncText }}</text>
-        <div class="request-button" onclick="requestSync" style="background-color: {{ theme.buttonBackground }}">
-          <text class="request-text" style="color: {{ theme.accent }}">{{ requestLabel }}</text>
-        </div>
-      </div>
-
       <div class="list" if="{{ ready && pageAccounts.length > 0 }}">
-        <div class="otp-item" for="{{ pageAccounts }}" onclick="openDetail($item.id)" style="background-color: {{ theme.accentSoft }}">
-          <div class="otp-main">
-            <div class="otp-info">
-              <text class="otp-issuer" style="color: {{ theme.title }}">{{ $item.issuer }}</text>
-              <text class="otp-account" style="color: {{ theme.secondary }}">{{ $item.accountName }}</text>
-            </div>
-            <div class="otp-code-col">
-              <text class="otp-code" style="color: {{ theme.codeColor }}; font-size: {{ $item.codeFontSize }}px">{{ $item.groupedCode }}</text>
-              <text class="otp-remaining" style="color: {{ $item.progressColor }}">{{ $item.remaining }}s</text>
-            </div>
+        <div class="otp-item" for="{{ pageAccounts }}" onclick="openDetail($item.id)" style="background-color: {{ theme.itemBackground }}">
+          <div class="otp-head">
+            <text class="otp-issuer" style="color: {{ theme.title }}">{{ $item.issuer }}</text>
+            <text class="otp-account" style="color: {{ theme.secondary }}">{{ $item.accountName }}</text>
+          </div>
+          <div class="otp-body">
+            <text class="otp-code" style="color: {{ theme.codeColor }}; font-size: {{ $item.codeFontSize }}px">{{ $item.groupedCode }}</text>
+            <text class="otp-remaining" style="color: {{ theme.secondary }}">{{ $item.remaining }}s</text>
           </div>
           <div class="otp-progress" style="background-color: {{ theme.progressTrack }}">
             <div class="otp-progress-fill" style="width: {{ $item.progress }}%; background-color: {{ $item.progressColor }}"></div>
@@ -47,8 +25,12 @@
         </div>
       </div>
 
-      <div class="footer" if="{{ pageCount > 1 }}">
-        <text class="page-indicator" style="color: {{ theme.secondary }}" onclick="nextPage">{{ page + 1 }} / {{ pageCount }} · 点击翻页</text>
+      <div class="rail">
+        <div class="letter-button" onclick="openPicker" style="background-color: {{ letterButtonBackground }}; border-width: {{ letterButtonBorderWidth }}px; border-color: {{ theme.accent }}">
+          <text class="letter-text" style="color: {{ theme.accent }}">{{ filterLabel }}</text>
+        </div>
+        <text class="page-indicator" style="color: {{ theme.secondary }}" onclick="nextPage">{{ page + 1 }}/{{ pageCount }}</text>
+        <text class="page-hint" style="color: {{ theme.secondary }}">翻页</text>
       </div>
     </div>
   </div>
@@ -58,12 +40,7 @@
 import router from "@system.router"
 import storage from "@system.storage"
 import { buildTokenState } from "../../common/scripts/totp"
-import {
-  DEFAULT_CATEGORY,
-  collectCategories,
-  filterAccountsByCategory,
-  sortAccountsById
-} from "../../common/scripts/accountModel"
+import { sortAccountsById } from "../../common/scripts/accountModel"
 import {
   applyCommittedSnapshot,
   loadSnapshot as loadStoredSnapshot,
@@ -83,36 +60,32 @@ import {
 } from "../../common/scripts/syncProtocol"
 import {
   ACCOUNTS_PER_PAGE,
-  CATEGORY_STORAGE_KEY,
   DARK_THEME,
   DEFAULT_DARK_MODE,
+  LETTER_FILTER_STORAGE_KEY,
   THEME_STORAGE_KEY,
   cyclePage,
-  describeSync,
+  filterAccountsByLetter,
+  listCodeFontSize,
+  normalizeLetterFilter,
   paginate,
   parseDarkMode,
   progressColor,
-  themeFor,
-  listCodeFontSize
+  themeFor
 } from "../../common/scripts/settings"
 
 export default {
   private: {
     rawAccounts: [],
-    currentAccounts: [],
-    categories: [],
-    currentCategory: DEFAULT_CATEGORY,
-    categoryLabel: DEFAULT_CATEGORY,
-    savedCategory: DEFAULT_CATEGORY,
     page: 0,
     pageCount: 1,
     pageAccounts: [],
     ready: false,
-    isDark: DEFAULT_DARK_MODE,
     theme: DARK_THEME,
-    syncText: "尚未同步",
-    syncDetail: "手机未连接",
-    requestLabel: "请求同步",
+    letterFilter: "",
+    filterLabel: "A-Z",
+    letterButtonBackground: DARK_THEME.buttonBackground,
+    letterButtonBorderWidth: 0,
     emptyTitle: "还没有验证码",
     emptyCopy: "在手机 App 导入 Stratum 备份后同步",
     timer: null
@@ -120,18 +93,15 @@ export default {
 
   onInit() {
     this.syncState = createSyncState()
-    this.snapshot = { version: 2, updatedAt: 0, accounts: [] }
-    this.connected = false
-    this.requestPending = false
-    this.requestTimer = null
     this.loadTheme()
+    this.loadLetterFilter()
     this.loadSnapshot()
     this.setupChannel()
   },
 
   onShow() {
     this.loadTheme()
-    this.loadCategory()
+    this.loadLetterFilter()
     this.loadSnapshot()
     this.startTicker()
   },
@@ -142,7 +112,6 @@ export default {
 
   onDestroy() {
     this.stopTicker()
-    this.clearRequestTimer()
     disconnect()
   },
 
@@ -162,72 +131,51 @@ export default {
   },
 
   applyTheme(isDark) {
-    this.isDark = isDark
     this.theme = themeFor(isDark)
-    this.refreshCodes()
+    this.refreshFilterState()
+    this.refreshList()
   },
 
-  loadCategory() {
+  loadLetterFilter() {
     storage.get({
-      key: CATEGORY_STORAGE_KEY,
-      default: DEFAULT_CATEGORY,
+      key: LETTER_FILTER_STORAGE_KEY,
+      default: "",
       success: value => {
-        this.savedCategory = value || DEFAULT_CATEGORY
-        this.resetCategory()
-        this.refreshCodes()
+        this.letterFilter = normalizeLetterFilter(value)
+        this.refreshFilterState()
+        this.refreshList()
       },
       fail: () => {
-        this.savedCategory = DEFAULT_CATEGORY
-        this.resetCategory()
-        this.refreshCodes()
+        this.letterFilter = ""
+        this.refreshFilterState()
+        this.refreshList()
       }
     })
   },
 
   loadSnapshot() {
     loadStoredSnapshot(snapshot => {
-      this.snapshot = snapshot
-      this.rawAccounts = snapshot.accounts.slice(0)
+      this.rawAccounts = sortAccountsById(snapshot.accounts)
       this.ready = true
-      this.resetCategory()
-      this.refreshSyncInfo()
-      this.refreshCodes()
+      this.refreshList()
     })
   },
 
-  resetCategory() {
-    this.categories = collectCategories(this.rawAccounts)
-    if (this.categories.length === 0) {
-      this.currentCategory = DEFAULT_CATEGORY
-      this.currentAccounts = []
-    } else {
-      let selected = null
-      for (let index = 0; index < this.categories.length; index++) {
-        if (this.categories[index].name === this.savedCategory) {
-          selected = this.categories[index].name
-        }
-      }
-      this.currentCategory = selected || this.categories[0].name
-      this.currentAccounts = sortAccountsById(
-        filterAccountsByCategory(this.rawAccounts, this.currentCategory)
-      )
-    }
-    this.categoryLabel = this.currentCategory
-    this.emptyTitle = "还没有验证码"
-    this.emptyCopy = "在手机 App 导入 Stratum 备份后同步"
-    if (this.rawAccounts.length > 0 && this.currentAccounts.length === 0) {
-      this.emptyCopy = "该分类下暂无账号"
-    }
-    if (this.page >= Math.max(1, Math.ceil(this.currentAccounts.length / ACCOUNTS_PER_PAGE))) {
-      this.page = 0
-    }
+  refreshFilterState() {
+    this.filterLabel = this.letterFilter || "A-Z"
+    this.letterButtonBackground = this.letterFilter
+      ? this.theme.accentSoft
+      : this.theme.buttonBackground
+    this.letterButtonBorderWidth = this.letterFilter ? 2 : 0
   },
 
-  refreshCodes() {
-    const now = Date.now()
-    const pageData = paginate(this.currentAccounts, this.page, ACCOUNTS_PER_PAGE)
+  refreshList() {
+    const filtered = filterAccountsByLetter(this.rawAccounts, this.letterFilter)
+    const pageData = paginate(filtered, this.page, ACCOUNTS_PER_PAGE)
     this.page = pageData.page
     this.pageCount = pageData.pageCount
+
+    const now = Date.now()
     const tokens = []
     for (let index = 0; index < pageData.items.length; index++) {
       const account = pageData.items[index]
@@ -244,35 +192,24 @@ export default {
       })
     }
     this.pageAccounts = tokens
-  },
 
-  refreshSyncInfo() {
-    const info = describeSync(this.snapshot, this.connected, Date.now())
-    this.syncText = info.text + " · " + info.detail
+    if (this.rawAccounts.length === 0) {
+      this.emptyTitle = "还没有验证码"
+      this.emptyCopy = "在手机 App 导入 Stratum 备份后同步"
+    } else if (filtered.length === 0) {
+      this.emptyTitle = "该首字母下暂无账号"
+      this.emptyCopy = "点击右侧 " + this.filterLabel + " 切换筛选"
+    }
   },
 
   /* ---------------------------------------------------------------- sync */
 
   setupChannel() {
-    const channel = connect({
+    connect({
       onMessage: message => {
         this.handleChannelMessage(message)
-      },
-      onOpen: () => {
-        this.connected = true
-        this.refreshSyncInfo()
-      },
-      onClose: () => {
-        this.connected = false
-        this.refreshSyncInfo()
-      },
-      onError: () => {
-        this.connected = false
-        this.refreshSyncInfo()
       }
     })
-    this.connected = !!channel
-    this.refreshSyncInfo()
   },
 
   handleChannelMessage(message) {
@@ -282,12 +219,9 @@ export default {
         if (!result.ok) {
           return
         }
-        this.snapshot = legacy
-        this.rawAccounts = legacy.accounts.slice(0)
+        this.rawAccounts = sortAccountsById(legacy.accounts)
         this.page = 0
-        this.resetCategory()
-        this.refreshSyncInfo()
-        this.refreshCodes()
+        this.refreshList()
       })
       return
     }
@@ -299,12 +233,9 @@ export default {
     }
     applyCommittedSnapshot(result.committed, saveResult => {
       if (saveResult.ok) {
-        this.snapshot = result.committed
-        this.rawAccounts = result.committed.accounts.slice(0)
+        this.rawAccounts = sortAccountsById(result.committed.accounts)
         this.page = 0
-        this.resetCategory()
-        this.refreshSyncInfo()
-        this.refreshCodes()
+        this.refreshList()
         sendAck(result.ack)
         return
       }
@@ -323,40 +254,7 @@ export default {
   },
 
   requestSync() {
-    if (this.requestPending) {
-      return
-    }
-    this.requestPending = true
-    this.requestLabel = "请求中…"
-    const handed = requestPhoneSync(result => {
-      this.requestPending = false
-      if (result.ok) {
-        this.requestLabel = "已请求"
-      } else {
-        this.requestLabel = "未连接"
-      }
-      this.scheduleRequestReset()
-    })
-    if (!handed) {
-      this.requestPending = false
-      this.requestLabel = "未连接"
-      this.scheduleRequestReset()
-    }
-  },
-
-  scheduleRequestReset() {
-    this.clearRequestTimer()
-    this.requestTimer = setTimeout(() => {
-      this.requestTimer = null
-      this.requestLabel = "请求同步"
-    }, 3000)
-  },
-
-  clearRequestTimer() {
-    if (this.requestTimer) {
-      clearTimeout(this.requestTimer)
-      this.requestTimer = null
-    }
+    requestPhoneSync(function () {})
   },
 
   /* ---------------------------------------------------------------- ticker */
@@ -366,7 +264,7 @@ export default {
       return
     }
     this.timer = setInterval(() => {
-      this.refreshCodes()
+      this.refreshList()
     }, 1000)
   },
 
@@ -387,8 +285,8 @@ export default {
     })
   },
 
-  openCategory() {
-    router.push({ uri: "/pages/category" })
+  openPicker() {
+    router.push({ uri: "/pages/picker" })
   },
 
   openMenu() {
@@ -400,7 +298,7 @@ export default {
       return
     }
     this.page = cyclePage(this.page, this.pageCount, 1)
-    this.refreshCodes()
+    this.refreshList()
   },
 
   previousPage() {
@@ -408,7 +306,7 @@ export default {
       return
     }
     this.page = cyclePage(this.page, this.pageCount, -1)
-    this.refreshCodes()
+    this.refreshList()
   },
 
   handleSwipe(event) {
@@ -419,7 +317,9 @@ export default {
       this.nextPage()
     } else if (event.direction === "down") {
       this.previousPage()
-    } else if (event.direction === "left" || event.direction === "right") {
+    } else if (event.direction === "right") {
+      this.openMenu()
+    } else if (event.direction === "left") {
       this.$app.exit()
     }
   }
@@ -427,11 +327,10 @@ export default {
 </script>
 
 <style>
-/* 480 x 336 layout: 2 large cards per page, larger type, no clipped codes. */
 .page {
   width: 100%;
   height: 100%;
-  padding: 6px;
+  padding: 8px;
   flex-direction: column;
   background-color: #000000;
 }
@@ -439,219 +338,155 @@ export default {
 .card {
   width: 100%;
   height: 100%;
-  padding: 8px 12px 6px;
-  flex-direction: column;
+  padding: 8px;
+  flex-direction: row;
   border-radius: 22px;
   background-color: #0b0f0e;
 }
 
-.header {
-  width: 100%;
-  height: 56px;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.header-left {
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.title {
-  font-size: 28px;
-  font-weight: bold;
-  lines: 1;
-  text-overflow: ellipsis;
-}
-
-.category-row {
-  margin-top: 2px;
-  flex-direction: row;
-  align-items: center;
-}
-
-.category {
-  font-size: 15px;
-  lines: 1;
-  text-overflow: ellipsis;
-}
-
-.category-arrow {
-  margin-left: 4px;
-  font-size: 16px;
-}
-
-.menu-button {
-  width: 60px;
-  height: 30px;
-  margin-left: 8px;
-  border-radius: 12px;
-  align-items: center;
-  justify-content: center;
-}
-
-.menu-button-text {
-  font-size: 16px;
-  font-weight: bold;
-}
-
-.status-row {
-  width: 100%;
-  height: 24px;
-  margin-top: 2px;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.status-text {
-  flex: 1;
-  font-size: 14px;
-  lines: 1;
-  text-overflow: ellipsis;
-}
-
-.request-button {
-  width: 88px;
-  height: 24px;
-  margin-left: 8px;
-  border-radius: 10px;
-  align-items: center;
-  justify-content: center;
-}
-
-.request-text {
-  font-size: 14px;
-}
-
 .list {
   flex: 1;
-  width: 100%;
+  height: 100%;
   flex-direction: column;
-  justify-content: center;
 }
 
 .otp-item {
   flex: 1;
   width: 100%;
-  margin-top: 6px;
-  padding: 6px 12px;
-  border-radius: 16px;
+  margin-bottom: 6px;
+  padding: 4px 10px 6px;
+  border-radius: 14px;
   flex-direction: column;
-  justify-content: center;
-}
-
-.otp-main {
-  width: 100%;
-  flex-direction: row;
-  align-items: center;
   justify-content: space-between;
 }
 
-.otp-info {
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
+.otp-head {
+  width: 100%;
+  flex-direction: row;
+  align-items: flex-end;
 }
 
 .otp-issuer {
-  font-size: 26px;
+  max-width: 68%;
+  font-size: 21px;
   font-weight: bold;
   lines: 1;
   text-overflow: ellipsis;
 }
 
 .otp-account {
-  margin-top: 2px;
-  font-size: 16px;
+  flex: 1;
+  margin-left: 6px;
+  font-size: 13px;
   lines: 1;
   text-overflow: ellipsis;
 }
 
-/* Fixed width keeps the code inside the card and leaves the issuer readable. */
-.otp-code-col {
-  width: 236px;
-  flex-direction: column;
+.otp-body {
+  width: 100%;
+  flex-direction: row;
   align-items: flex-end;
-  justify-content: center;
+  justify-content: space-between;
 }
 
 .otp-code {
   font-weight: bold;
-  text-align: right;
+  text-align: left;
   lines: 1;
   text-overflow: clip;
 }
 
 .otp-remaining {
-  margin-top: 2px;
-  font-size: 15px;
+  margin-left: 8px;
+  font-size: 14px;
   text-align: right;
+  lines: 1;
 }
 
 .otp-progress {
   width: 100%;
-  height: 4px;
-  margin-top: 6px;
+  height: 3px;
+  margin-top: 3px;
   border-radius: 2px;
 }
 
 .otp-progress-fill {
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
   transition-property: width;
   transition-duration: 1000ms;
   transition-timing-function: linear;
 }
 
+.rail {
+  width: 56px;
+  height: 100%;
+  margin-left: 6px;
+  flex-direction: column;
+  align-items: center;
+}
+
+.letter-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  align-items: center;
+  justify-content: center;
+}
+
+.letter-text {
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  lines: 1;
+}
+
+.page-indicator {
+  margin-top: 8px;
+  font-size: 13px;
+  text-align: center;
+  lines: 1;
+}
+
+.page-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  text-align: center;
+  lines: 1;
+}
+
 .empty {
   flex: 1;
-  width: 100%;
+  height: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
 
 .empty-title {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: bold;
   text-align: center;
 }
 
 .empty-copy {
-  margin-top: 8px;
-  font-size: 16px;
+  margin-top: 6px;
+  font-size: 14px;
   text-align: center;
   lines: 2;
 }
 
 .empty-button {
-  width: 200px;
-  height: 40px;
-  margin-top: 16px;
-  border-radius: 14px;
+  width: 180px;
+  height: 32px;
+  margin-top: 14px;
+  border-radius: 12px;
   align-items: center;
   justify-content: center;
 }
 
 .empty-button-text {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: bold;
 }
-
-.footer {
-  width: 100%;
-  height: 20px;
-  margin-top: 2px;
-  align-items: center;
-  justify-content: center;
-}
-
-.page-indicator {
-  font-size: 14px;
-  text-align: center;
-}
 </style>
-

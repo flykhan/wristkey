@@ -23,6 +23,7 @@ e2e/
 │   ├── totp.mjs                 独立 TOTP/HOTP 实现（node:crypto）+ RFC 向量表
 │   ├── stratum.mjs              Stratum 格式参考实现（嗅探/加解密/映射/URI）
 │   ├── protocol.mjs             协议 v2 参考实现（手环接收状态机 + 手机端状态机）
+│   ├── bitwarden.mjs            Bitwarden 未加密 Vault JSON 参考解析/映射
 │   └── runner.mjs               PASS/FAIL 运行器与断言
 ├── fixtures/
 │   ├── generate.mjs             确定性夹具生成器（固定 salt/iv/时间戳）
@@ -31,10 +32,13 @@ e2e/
 │   ├── strong.stratum           Strong 加密夹具（密码 test-password）
 │   ├── legacy.stratum           Legacy 加密夹具（密码 test-password）
 │   ├── uri-list.txt             otpauth:// 列表（8 导入 + 2 跳过，含 3 种 Steam 形式）
+│   ├── bitwarden-export.json    Bitwarden 未加密 Vault 夹具（10 item → 6 导入 + 4 跳过）
+│   ├── bitwarden-encrypted-export.json  加密导出负例（识别并拒绝）
+│   ├── bitwarden-expected-import.json   参考映射结果（供 Android 单测对拍）
 │   ├── manifest.json            文件哈希、加密参数、覆盖矩阵
 │   └── protocol/
-│       ├── valid-session.json   合法同步消息序列（1 begin + 11 account + 1 commit）
-│       └── invalid-cases.json   19 个非法/边界用例与期望
+│       ├── valid-session.json   合法同步消息序列（1 begin + 13 account + 1 commit）
+│       └── invalid-cases.json   25 个非法/边界用例与期望
 ├── python/
 │   ├── verify_fixtures.py       Python 独立解密 + RFC 向量验证
 │   └── requirements.txt
@@ -103,6 +107,20 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 > 3 个 RFC6238 账号的 secret 就是 RFC 6238 Appendix B 的公开种子（Base32 编码），
 > 因此可以直接用 RFC 表验证手环端/手机端 TOTP 实现。
 
+## Bitwarden 未加密 Vault 夹具（docs/bitwarden-format.md）
+
+- bitwarden-export.json：10 个 item → **6 导入 + 4 跳过**（确定性、密码字段为 fake-* 占位）；
+  - 导入：otpauth TOTP（SHA1/6/30）、SHA256/8/60、Steam（encoder=steam → otpType=steam/5/30）、
+    纯 Base32 secret（SHA1/6/30）、name 空 → issuer 兜底为 Bitwarden、username 空 → 取 otpauth label；
+    文件夹/folderId 一律忽略（分类=默认分类）；
+  - 跳过：无 login.totp（NO_TOTP）、非登录 type=2（NOT_LOGIN_TYPE）、非法 totp（INVALID_TOTP）、
+    HOTP URI（TYPE_NOT_TOTP）；跳过报告只含 name/原因（不含 secret）。
+- bitwarden-encrypted-export.json：encrypted=true 负例，参考实现识别为 encrypted 并拒绝，
+  提示“Bitwarden 加密导出暂不支持，请导出未加密 JSON”。
+- bitwarden-expected-import.json：参考映射结果；Android 单测若复制同一夹具，e2e verify 会自动
+  读 android-app/app/src/test/resources/... 的夹具对拍（相同内容时要求映射完全一致）。
+- 独立实现：e2e/lib/bitwarden.mjs（Node）+ python/verify_fixtures.py 4c 节（Python）双实现互证。
+
 ## 加密夹具参数（严格对齐 docs/stratum-format.md）
 
 | 形态 | 布局 | 密钥派生 | 加密 |
@@ -125,7 +143,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
   Steam 非法字段丢弃、新 begin 丢弃旧 staging、空同步清空、120s staging 超时。
   每个用例给出 expect.results（逐条状态）、finalSnapshot（不变/账号数）、lastAck 等断言。
 
-## verify.mjs 覆盖（A–I）
+## verify.mjs 覆盖（A–J）
 
 | 节 | 内容 |
 | --- | --- |
@@ -138,6 +156,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 | G | 字段边界：最大字段消息 < 1KB（含 Steam）、13 类非法 account + 4 类非法 Steam account 丢弃、未知字段忽略、小写算法/otpType 容忍 |
 | H | 回放 invalid-cases.json 的 25 个用例（含 Steam / duplicate_index / 非法 begin / 失败 ack 原因码） |
 | I | **跨端 TOTP/Steam**：band-app 纯模块 vs 独立实现（RFC 向量、HOTP、3×5×5×5 矩阵、夹具 TOTP 账号、**Steam 6 向量 + Steam 账号跨端对拍**） |
+| J | **Bitwarden 未加密 Vault**：内容嗅探（vault/encrypted/非 Bitwarden）、otpauth TOTP / Steam encoder / 纯 Base32 三类、name/username 兜底、文件夹忽略、加密导出拒绝、映射账号经协议同步、Android 单测夹具对拍（若已复制） |
 
 ## 交叉验证证据（双向、非自证）
 
@@ -158,10 +177,15 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - band-app/dist/*.rpk 存在，manifest.package == dev.wristkey.app、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
 - Android APK 存在，包名 dev.wristkey.app、应用名 腕证；
-- 版本号：rpk 1.0.2 / versionCode 3，APK 1.1 / versionCode 2（Steam 修复版）；
+- 版本号：rpk 1.0.4 / versionCode 5（UI v3），APK 1.2 / versionCode 3（Bitwarden 导入）；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
 - 三者指纹一致，并可选择调用团队统一的 scripts/check-signing.sh；
+- **band UI v3 静态检查**（docs/design/ui-v3-spec.md）：
+  index.ux 无 header/status 顶栏、右侧 rail A-Z 按钮、打开 pages/picker；
+  settings.js 的 ACCOUNTS_PER_PAGE == 3、字母筛选函数与 wristkey_letter_filter 持久化 key；
+  pages/picker/picker.ux 存在（标题“首字母筛选”、字母桶/全部/#）且 manifest 注册路由；
+  band-app/tests 覆盖字母桶/筛选与分页（ACCOUNTS_PER_PAGE/paginate）；
 - 结果写入 ../reports/e2e-build-result.json，退出码 0 = 无 FAIL（SKIP 可接受）。
 
 ## 协议/格式的确定性约定（与 docs/protocol.md 对齐）
@@ -183,5 +207,6 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 ## 安全与许可
 
 - e2e 代码为本项目独立实现；research/ 下参考项目只读，官方解密工具仅用于离线校验；
-- 夹具 secret 均为公开测试值，禁止替换为真实凭证；
-- plain-backup.json 是测试备份，不要导入真实账号环境。
+- 夹具 secret 均为公开测试值，禁止替换为真实凭证；bitwarden-export.json 中的密码字段
+  全部为 fake-* 占位值，仅供格式验证；
+- plain-backup.json / bitwarden-export.json 是测试备份，不要导入真实账号环境。

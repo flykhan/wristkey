@@ -57,3 +57,49 @@ test("manifest declares quick app runtime requirements", () => {
   }
   assert.ok(Number(manifest.versionCode) >= 2, "修复版应提升 versionCode 便于覆盖安装")
 })
+
+// UI v3 (docs/design/ui-v3-spec.md): one screen = 3 accounts + letter rail,
+// no top bar / status row; the right rail button opens pages/picker.
+test("index is the v3 layout: no top bar, 3 rows, right letter rail", () => {
+  const source = read("src/pages/index/index.ux")
+  assert.doesNotMatch(source, /class="header"/, "v3 index 不应有顶栏")
+  assert.doesNotMatch(source, /status-row|syncText|categoryLabel/, "v3 index 不应有状态行/分类")
+  assert.match(source, /class="rail"/)
+  assert.match(source, /class="letter-button"/)
+  assert.match(source, /onclick="openPicker"/)
+  assert.match(source, /for="{{ pageAccounts }}"/)
+  assert.match(source, /class="page-indicator"/)
+  assert.match(source, /onclick="nextPage"/)
+  assert.match(source, /onswipe="handleSwipe"/)
+  // Swipes: up/down paging, right menu, left exit.
+  assert.match(source, /event.direction === "up"/)
+  assert.match(source, /event.direction === "down"/)
+  assert.match(source, /event.direction === "right"/)
+  assert.match(source, /event.direction === "left"/)
+  assert.ok(source.includes("this.$app.exit"), "左滑应退出应用")
+})
+
+test("menu no longer exposes category selection", () => {
+  const source = read("src/pages/menu/menu.ux")
+  assert.doesNotMatch(source, /openCategory|分类/)
+  assert.match(source, /请求手机同步/)
+  assert.match(source, /toggleTheme/)
+  assert.match(source, /exitApp/)
+})
+
+test("picker page is registered and renders the 7-column grid", () => {
+  const manifest = JSON.parse(read("src/manifest.json"))
+  assert.equal(manifest.versionName, "1.0.4")
+  assert.equal(manifest.versionCode, 5)
+  assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
+  assert.equal(manifest.router.pages["pages/picker"].component, "picker")
+
+  const source = read("src/pages/picker/picker.ux")
+  assert.match(source, /按首字母筛选/)
+  assert.match(source, /LETTER_FILTER_STORAGE_KEY/)
+  assert.match(source, /router.back()/)
+  // Six explicit row loops keep the A-Z / 0-9 / 全部 / # grid at 7 columns.
+  for (let row = 0; row < 6; row++) {
+    assert.match(source, new RegExp('for="\{\{ row' + row + ' \}\}"'), "缺少 row" + row)
+  }
+})

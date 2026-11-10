@@ -31,6 +31,7 @@ import {
   encryptStrong,
   mapBackupToAccounts
 } from '../lib/stratum.mjs';
+import { mapBitwardenToAccounts } from '../lib/bitwarden.mjs';
 import { RFC6238_SEEDS } from '../lib/totp.mjs';
 import { buildSyncSession } from '../lib/protocol.mjs';
 
@@ -176,6 +177,102 @@ function buildBackup() {
   };
 }
 
+function buildBitwardenExport() {
+  return {
+    encrypted: false,
+    folders: [
+      { id: 'f-dev', name: '开发' },
+      { id: 'f-social', name: '社交' }
+    ],
+    items: [
+      // ---- 可导入：otpauth TOTP ----
+      {
+        id: 'bw-github', folderId: 'f-dev', type: 1, name: 'GitHub', notes: null, favorite: false,
+        login: {
+          uris: [{ match: null, uri: 'https://github.com' }],
+          username: 'me@example.com',
+          password: 'fake-password-github',
+          totp: 'otpauth://totp/GitHub:me@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub'
+        }
+      },
+      // ---- 可导入：SHA256 / 8 位 / 60s ----
+      {
+        id: 'bw-aws', folderId: null, type: 1, name: 'AWS', notes: null,
+        login: {
+          username: 'root',
+          password: 'fake-password-aws',
+          totp: 'otpauth://totp/AWS:root?secret=' + makeSecret('bw-aws', 32) + '&issuer=AWS&algorithm=SHA256&digits=8&period=60'
+        }
+      },
+      // ---- 可导入：Steam（encoder=steam）----
+      {
+        id: 'bw-steam', folderId: 'f-social', type: 1, name: 'Steam', notes: null,
+        login: {
+          username: 'steamuser',
+          password: 'fake-password-steam',
+          totp: 'otpauth://totp/Steam:steamuser?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Steam&encoder=steam'
+        }
+      },
+      // ---- 可导入：纯 Base32 secret（SHA1/6/30）----
+      {
+        id: 'bw-raw', folderId: null, type: 1, name: 'RawBase32', notes: null,
+        login: { username: 'raw@test.invalid', password: 'fake-password-raw', totp: 'MFRGGZDFMZTWQ2LK' }
+      },
+      // ---- 可导入：name 为空 → issuer=Bitwarden；username 为空 → 取 otpauth label ----
+      {
+        id: 'bw-noname', folderId: null, type: 1, name: '   ', notes: null,
+        login: {
+          username: '   ',
+          password: 'fake-password-noname',
+          totp: 'otpauth://totp/NoName:noname@test.invalid?secret=' + makeSecret('bw-noname', 20) + '&issuer=NoName'
+        }
+      },
+      // ---- 可导入：Unicode name + username 为空取 label ----
+      {
+        id: 'bw-email', folderId: 'f-dev', type: 1, name: '邮件', notes: null,
+        login: {
+          username: '',
+          password: 'fake-password-email',
+          totp: 'otpauth://totp/邮件:邮箱用户?secret=' + makeSecret('bw-email', 20) + '&issuer=邮件&digits=8'
+        }
+      },
+      // ---- 跳过：普通密码条目（无 totp）----
+      {
+        id: 'bw-nototp', folderId: null, type: 1, name: 'PlainLogin', notes: null,
+        login: { username: 'plain', password: 'fake-password-plain', totp: null }
+      },
+      // ---- 跳过：非登录条目（type=2），即使带 totp 也不导入 ----
+      {
+        id: 'bw-note', folderId: null, type: 2, name: 'SecureNote', notes: 'fake note', secureNote: { type: 0 },
+        login: { username: '', password: null, totp: 'otpauth://totp/Note:note?secret=MFRGGZDFMZTWQ2LK&issuer=Note' }
+      },
+      // ---- 跳过：既不是 otpauth URI 也不是合法 Base32 ----
+      {
+        id: 'bw-badtotp', folderId: null, type: 1, name: 'BadTotp',
+        login: { username: 'bad', password: 'fake-password-bad', totp: 'not-a-totp-or-base32!!' }
+      },
+      // ---- 跳过：HOTP otpauth（不支持）----
+      {
+        id: 'bw-baduri', folderId: null, type: 1, name: 'BadUri',
+        login: { username: 'bad', password: 'fake-password-bad', totp: 'otpauth://hotp/LegacyHOTP:hotp?secret=MFRGGZDFMZTWQ2LK&counter=0' }
+      }
+    ]
+  };
+}
+
+function buildBitwardenEncryptedExport() {
+  // 加密导出负例：仅用于验证“识别并拒绝”，不含任何可解密内容。
+  return {
+    encrypted: true,
+    passwordProtected: true,
+    salt: 'wristkey-fixture-salt-base64==',
+    kdfType: 0,
+    kdfIterations: 600000,
+    encKeyValidation_DO_NOT_EDIT: 'wristkey-fixture-enc-key-validation',
+    data: '2.wristkey-fixture-encrypted-vault-data'
+  };
+}
+
 function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
@@ -255,8 +352,34 @@ async function main() {
     messages: session.messages
   });
 
-  // 5) manifest
-  const files = ['plain-backup.json', 'expected-import.json', 'strong.stratum', 'legacy.stratum', 'uri-list.txt', 'protocol/valid-session.json'];
+  // 5) Bitwarden 未加密 Vault 夹具（含加密导出负例）
+  const bitwardenExport = buildBitwardenExport();
+  writeJson(join(HERE, 'bitwarden-export.json'), bitwardenExport);
+  writeJson(join(HERE, 'bitwarden-encrypted-export.json'), buildBitwardenEncryptedExport());
+  const bitwardenMapped = mapBitwardenToAccounts(bitwardenExport, { updatedAt: FIXTURE_UPDATED_AT });
+  if (bitwardenMapped.stats.total !== 10 || bitwardenMapped.stats.imported !== 6 || bitwardenMapped.stats.skipped !== 4) {
+    throw new Error('Bitwarden 夹具条目数不符合预期：' + JSON.stringify(bitwardenMapped.stats));
+  }
+  writeJson(join(HERE, 'bitwarden-expected-import.json'), {
+    source: 'bitwarden-export.json',
+    note: '参考映射结果（e2e/lib/bitwarden.mjs mapBitwardenToAccounts，依据 docs/bitwarden-format.md）',
+    stats: bitwardenMapped.stats,
+    accounts: bitwardenMapped.accounts,
+    skipped: bitwardenMapped.skipped
+  });
+
+  // 6) manifest
+  const files = [
+    'plain-backup.json',
+    'expected-import.json',
+    'strong.stratum',
+    'legacy.stratum',
+    'uri-list.txt',
+    'protocol/valid-session.json',
+    'bitwarden-export.json',
+    'bitwarden-encrypted-export.json',
+    'bitwarden-expected-import.json'
+  ];
   const manifestFiles = files.map(function (name) {
     const buffer = readFileSync(join(HERE, name));
     return { name, bytes: buffer.length, sha256: sha256(buffer) };
@@ -271,7 +394,7 @@ async function main() {
   };
   writeJson(join(HERE, 'manifest.json'), {
     generator: 'e2e/fixtures/generate.mjs',
-    formatSpec: 'docs/stratum-format.md + research/stratum/doc/BACKUP_FORMAT.md',
+    formatSpec: 'docs/stratum-format.md + docs/bitwarden-format.md + research/stratum/doc/BACKUP_FORMAT.md',
     deterministic: true,
     password: FIXTURE_PASSWORD,
     updatedAt: FIXTURE_UPDATED_AT,
@@ -294,6 +417,12 @@ async function main() {
       }
     },
     expected: mapped.stats,
+    bitwarden: {
+      source: 'bitwarden-export.json',
+      encryptedNegative: 'bitwarden-encrypted-export.json',
+      expected: bitwardenMapped.stats,
+      skippedCodes: bitwardenMapped.skipped.map(function (item) { return item.code; })
+    },
     coverage,
     files: manifestFiles
   });
@@ -302,6 +431,7 @@ async function main() {
   console.log('  明文 ' + plainBuffer.length + ' bytes，映射 ' + mapped.stats.imported + ' 导入 / ' + mapped.stats.skipped + ' 跳过');
   console.log('  strong ' + strong.length + ' bytes，legacy ' + legacy.length + ' bytes，uri ' + uriLines.length + ' 行');
   console.log('  协议消息 ' + session.messages.length + ' 条（syncId=' + session.syncId + '）');
+  console.log('  Bitwarden 条目 ' + bitwardenMapped.stats.total + ' 条，映射 ' + bitwardenMapped.stats.imported + ' 导入 / ' + bitwardenMapped.stats.skipped + ' 跳过（含加密导出负例）');
 }
 
 main().catch(function (error) {

@@ -15,7 +15,7 @@ band-app/LICENSE 与下述署名是本项目对 Apache-2.0 第 4 条（保留版
 
 本项目以 BandOTP 快应用工程为起点（页面组织、交互思路与整体视觉结构），随后为 WristKey 重写：
 
-- src/manifest.json：包名 dev.wristkey.app、应用名「腕证」、版本 1.0.2、feature 保持
+- src/manifest.json：包名 dev.wristkey.app、应用名「腕证」、版本 1.0.4、feature 保持
   router/storage/interconnect、config.designWidth = "device-width"；
 - src/common/logo.png：替换为本项目生成的图标（不再使用上游图片资源）；
 - src/common/scripts/totp.js：重写为与运行时无关的纯 JS 实现，Base32 归一化/解码、
@@ -28,7 +28,8 @@ band-app/LICENSE 与下述署名是本项目对 Apache-2.0 第 4 条（保留版
 - src/common/scripts/mfaConfig.js：重写为 v2 快照存储（单 key 原子写、加载容错、
   BandOTP v1 mfa_config_snapshot 只读迁移）；
 - src/common/scripts/interconnect.js：新增，封装 @system.interconnect 连接与 ack/request 发送；
-- src/pages/*：重写列表/详情/菜单/分类/版权页，适配 480×336，加入分类分页、同步状态、
+- src/pages/*：重写列表/首字母筛选/详情/菜单/分类/版权页，适配 480×336（UI v3：无顶栏、
+  每页 3 个、右侧 A-Z 筛选按钮），加入同步状态、
   空状态与"请求手机同步"；
 - 新增 tests/（Node 单元测试）、sign/（开发签名 PEM）、scripts/（签名导出与 rpk 校验）；
 - 删除上游的预览图片、i18n 占位与部分开发配置。

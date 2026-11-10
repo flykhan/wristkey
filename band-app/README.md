@@ -6,7 +6,9 @@
 - 校验后**原子写入**本机快应用 storage（key: mfa_snapshot_v2），commit 成功后回复 ack；
 - 本地计算 TOTP（SHA1 / SHA256 / SHA512，6–10 位，周期 5–300 s）与 Steam Guard
   （5 位字母数字，固定 30 s / SHA1），断连也可查看；
-- 分类浏览、分页（每页 3 个）、详情、同步状态/空状态、"请求手机同步"。
+- UI v3（docs/design/ui-v3-spec.md）：无顶栏，一页 3 个账号；右侧 A-Z 圆钮打开首字母
+  筛选页（A-Z / 0-9 / # / 全部，带每桶账号数）；上/下滑翻页、右滑菜单、左滑退出。
+- 详情页、空状态与"请求手机同步"；筛选在全部账号内进行（忽略分类），并持久化到 storage。
 
 包名 **dev.wristkey.app**，应用名「腕证」。**必须与手机 APK 同包名、同签名证书**，否则
 system.interconnect 拒绝建立通道。
@@ -25,8 +27,8 @@ band-app/
       syncProtocol.js             # 协议 v2 状态机：begin/account/commit -> snapshot + ack（纯函数）
       mfaConfig.js                # @system.storage 持久化（单 key 原子写、legacy 迁移）
       interconnect.js             # @system.interconnect 连接/收发（ack best effort）
-      settings.js                 # 主题/分页/时间格式化（纯函数）
-    pages/                        # index / detail / menu / category / copyright
+      settings.js                 # 主题/分页/首字母筛选/字号/时间格式化（纯函数）
+    pages/                        # index / picker / detail / menu / category / copyright
   tests/                          # Node 单元测试，不依赖快应用运行时
   sign/                           # 开发签名 PEM（与 APK 同证书，见 sign/README.md）
   scripts/

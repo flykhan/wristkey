@@ -1,6 +1,6 @@
 {
   "generator": "e2e/fixtures/generate.mjs",
-  "formatSpec": "docs/stratum-format.md + research/stratum/doc/BACKUP_FORMAT.md",
+  "formatSpec": "docs/stratum-format.md + docs/bitwarden-format.md + research/stratum/doc/BACKUP_FORMAT.md",
   "deterministic": true,
   "password": "test-password",
   "updatedAt": 1760000000000,
@@ -36,6 +36,21 @@
     "total": 23,
     "imported": 13,
     "skipped": 10
+  },
+  "bitwarden": {
+    "source": "bitwarden-export.json",
+    "encryptedNegative": "bitwarden-encrypted-export.json",
+    "expected": {
+      "total": 10,
+      "imported": 6,
+      "skipped": 4
+    },
+    "skippedCodes": [
+      "NO_TOTP",
+      "NOT_LOGIN_TYPE",
+      "INVALID_TOTP",
+      "TYPE_NOT_TOTP"
+    ]
   },
   "coverage": {
     "algorithms": [
@@ -108,6 +123,21 @@
       "name": "protocol/valid-session.json",
       "bytes": 7179,
       "sha256": "6a2cf11f3ad9528b294cb4d9b81d558aa70bca806e640aec515a346707422ec1"
+    },
+    {
+      "name": "bitwarden-export.json",
+      "bytes": 3386,
+      "sha256": "9fb083c28636361d5adf9eb01ba4a38590c45b92e568fbc9072df460650659dd"
+    },
+    {
+      "name": "bitwarden-encrypted-export.json",
+      "bytes": 266,
+      "sha256": "9fc2c8da5355a55f382878308ac748ca8ee8b0ad6fad54406835c220aeaa29f2"
+    },
+    {
+      "name": "bitwarden-expected-import.json",
+      "bytes": 2871,
+      "sha256": "b091607b0f270b6e1e7d245bf535b2e8308c12a5e5d93dca54cf77a186cda802"
     }
   ]
 }

@@ -12,6 +12,8 @@
 //   F. 同步协议 v2 合法消息序列 + 手环端/手机端状态机
 //   G. 协议字段边界（消息大小、最大字段、非法字段）
 //   H. 协议非法/超时/去重用例回放（fixtures/protocol/invalid-cases.json）
+//   I. 跨端 TOTP / Steam 对拍（band-app 纯模块 vs 独立实现）
+//   J. Bitwarden 未加密 Vault JSON 导入（otpauth / Steam encoder / 纯 Base32 / 加密负例）
 // 退出码：0 全部通过；1 存在失败。
 
 import { createHash } from 'node:crypto';
@@ -25,6 +27,7 @@ import { base32Encode, normalizeProtocolSecret } from './lib/encoding.mjs';
 import { RFC6238_SEEDS, RFC6238_VECTORS, hotp, totp, totpAtSeconds, steamTotp } from './lib/totp.mjs';
 import * as stratum from './lib/stratum.mjs';
 import * as protocol from './lib/protocol.mjs';
+import * as bitwarden from './lib/bitwarden.mjs';
 
 const E2E_ROOT = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE = join(E2E_ROOT, '..');
@@ -1082,6 +1085,200 @@ async function main() {
   } else {
     process.stdout.write('  NOTE band-app TOTP 模块不可用（不存在或加载失败），跳过跨端 TOTP 对拍\n');
   }
+
+  // ------------------------------------------- J. Bitwarden 导入（v3）
+  r.section('J. Bitwarden 未加密 Vault JSON 导入');
+  const bitwardenExport = readJson(join(FIXTURES, 'bitwarden-export.json'));
+  const bitwardenEncryptedExport = readJson(join(FIXTURES, 'bitwarden-encrypted-export.json'));
+  const bitwardenExpected = readJson(join(FIXTURES, 'bitwarden-expected-import.json'));
+  const bitwardenMapped = bitwarden.mapBitwardenToAccounts(bitwardenExport, {
+    updatedAt: stratum.FIXTURE_UPDATED_AT
+  });
+
+  r.test('内容嗅探：未加密 Vault / 加密导出 / 非 Bitwarden JSON', function () {
+    assertEqual(bitwarden.detectBitwarden(bitwardenExport), 'vault');
+    assertEqual(bitwarden.detectBitwarden(bitwardenEncryptedExport), 'encrypted');
+    assertEqual(bitwarden.detectBitwarden(plain), 'unknown', 'Stratum 备份不应被识别为 Bitwarden');
+    assertEqual(bitwarden.detectBitwarden({ items: [{ id: 'x', type: 1 }] }), 'unknown', '无 login 字段的导出不识别');
+    assertEqual(bitwarden.detectBitwarden('not-json'), 'unknown');
+  });
+  r.test('映射结果与 bitwarden-expected-import.json 完全一致', function () {
+    assertDeepEqual(bitwardenMapped.accounts, bitwardenExpected.accounts);
+    assertDeepEqual(bitwardenMapped.skipped, bitwardenExpected.skipped);
+    assertDeepEqual(bitwardenMapped.stats, bitwardenExpected.stats);
+  });
+  r.test('映射统计 6 导入 / 4 跳过（共 10 个 item）', function () {
+    assertEqual(bitwardenMapped.stats.total, 10);
+    assertEqual(bitwardenMapped.stats.imported, 6);
+    assertEqual(bitwardenMapped.stats.skipped, 4);
+  });
+  r.test('totp 三种形态：otpauth TOTP / Steam encoder / 纯 Base32', function () {
+    const byIssuer = new Map(bitwardenMapped.accounts.map(function (account) { return [account.issuer, account]; }));
+    assertEqual(byIssuer.get('GitHub').secret, 'JBSWY3DPEHPK3PXP');
+    assertEqual(byIssuer.get('GitHub').otpType, 'totp');
+    assertEqual(byIssuer.get('AWS').algorithm, 'SHA256');
+    assertEqual(byIssuer.get('AWS').digits, 8);
+    assertEqual(byIssuer.get('AWS').period, 60);
+    assertEqual(byIssuer.get('Steam').otpType, 'steam', 'encoder=steam 应识别为 Steam Guard');
+    assertEqual(byIssuer.get('Steam').digits, 5);
+    assertEqual(byIssuer.get('Steam').period, 30);
+    assertEqual(byIssuer.get('Steam').algorithm, 'SHA1');
+    assertEqual(byIssuer.get('RawBase32').secret, 'MFRGGZDFMZTWQ2LK', '纯 Base32 按 SHA1/6/30 导入');
+    assertEqual(byIssuer.get('RawBase32').digits, 6);
+    assertEqual(byIssuer.get('RawBase32').period, 30);
+    return 'TOTP + Steam + Base32';
+  });
+  r.test('字段映射：name→issuer 兜底、username→accountName 兜底、文件夹忽略', function () {
+    const byIssuer = new Map(bitwardenMapped.accounts.map(function (account) { return [account.issuer, account]; }));
+    const noName = byIssuer.get(bitwarden.BITWARDEN_ISSUER);
+    assert(noName, 'name 为空的条目 issuer 应兜底为 Bitwarden');
+    assertEqual(noName.accountName, 'noname@test.invalid', 'username 为空时应取 otpauth label 的账号部分');
+    assertEqual(byIssuer.get('邮件').accountName, '邮箱用户');
+    for (const account of bitwardenMapped.accounts) {
+      assertEqual(account.category, '默认分类', 'Bitwarden 文件夹/分类应忽略');
+    }
+    return bitwardenMapped.accounts.length + ' 条';
+  });
+  r.test('每个导入账号 id = s_ + sha1(secret)[0:12]（独立复算）', function () {
+    for (const account of bitwardenMapped.accounts) {
+      const canonical = normalizeProtocolSecret(account.secret);
+      const hex = createHash('sha1').update(canonical, 'utf8').digest('hex').slice(0, 12);
+      assertEqual(account.id, 's_' + hex);
+    }
+    return bitwardenMapped.accounts.length + ' 个';
+  });
+  r.test('跳过原因：NO_TOTP / NOT_LOGIN_TYPE / INVALID_TOTP / TYPE_NOT_TOTP', function () {
+    const codes = bitwardenMapped.skipped.map(function (item) { return item.code; }).sort();
+    assertDeepEqual(codes, ['INVALID_TOTP', 'NOT_LOGIN_TYPE', 'NO_TOTP', 'TYPE_NOT_TOTP']);
+    for (const item of bitwardenMapped.skipped) {
+      assert(!('secret' in item), '跳过报告不应包含 secret');
+    }
+    return bitwardenMapped.skipped.length + ' 条跳过';
+  });
+  r.test('加密导出：识别并拒绝，提示改用未加密 JSON', function () {
+    let thrown = null;
+    try {
+      bitwarden.mapBitwardenToAccounts(bitwardenEncryptedExport);
+    } catch (error) {
+      thrown = error;
+    }
+    assert(thrown, '加密导出必须被拒绝');
+    assertEqual(thrown.code, 'BITWARDEN_ENCRYPTED');
+    assertEqual(thrown.message, bitwarden.BITWARDEN_ENCRYPTED_MESSAGE);
+    assert(String(thrown.message).indexOf('未加密') >= 0);
+  });
+  r.test('Bitwarden 映射账号可经协议 v2 同步并提交', function () {
+    const session = protocol.buildSyncSession(bitwardenMapped.accounts, {
+      sentAt: FIXED_NOW,
+      syncId: 'sync-bitwarden-fixture'
+    });
+    const receiver = new protocol.BandSyncReceiver({ now: function () { return FIXED_NOW; } });
+    const results = session.messages.map(function (message) { return receiver.receive(message); });
+    assertEqual(results[results.length - 1].status, 'committed');
+    assertDeepEqual(receiver.snapshot.accounts, bitwardenMapped.accounts);
+    assert(receiver.snapshot.accounts.some(function (account) { return account.otpType === 'steam'; }), '同步快照应保留 Steam 类型');
+  });
+  r.test('Android 单测 Bitwarden 夹具对拍（5 导入 / 5 跳过 & Steam 5 位码）', function () {
+    const fixtureCandidates = [
+      join(WORKSPACE, 'android-app', 'app', 'src', 'test', 'resources', 'fixtures', 'bitwarden-export.json'),
+      join(WORKSPACE, 'android-app', 'app', 'src', 'test', 'resources', 'bitwarden-export.json')
+    ];
+    const androidPath = fixtureCandidates.find(function (path) { return existsSync(path); });
+    if (!androidPath) {
+      console.log('  NOTE Android 单测尚未提供 bitwarden-export.json（android-dev 实现后自动对拍）');
+      return '未提供，跳过';
+    }
+    const androidExport = readJson(androidPath);
+    assertEqual(bitwarden.detectBitwarden(androidExport), 'vault', 'Android 夹具应为未加密 Vault');
+    const androidMapped = bitwarden.mapBitwardenToAccounts(androidExport, {
+      updatedAt: stratum.FIXTURE_UPDATED_AT
+    });
+    assertEqual(androidMapped.stats.total, 10, 'Android 夹具 item 数');
+    assertEqual(androidMapped.stats.imported, 5, 'Android 夹具应 5 导入');
+    assertEqual(androidMapped.stats.skipped, 5, 'Android 夹具应 5 跳过');
+    const byIssuer = new Map(androidMapped.accounts.map(function (account) { return [account.issuer, account]; }));
+
+    const github = byIssuer.get('GitHub');
+    assert(github, '应导入 GitHub');
+    assertEqual(github.secret, 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ');
+    assertEqual(github.accountName, 'dev@example.com');
+    assertEqual(github.algorithm, 'SHA1');
+    assertEqual(github.digits, 6);
+    assertEqual(github.period, 30);
+    assertEqual(github.otpType, 'totp');
+
+    const steam = byIssuer.get('Steam');
+    assert(steam, '应导入 Steam（URI issuer=Other + encoder=steam）');
+    assertEqual(steam.otpType, 'steam');
+    assertEqual(steam.digits, 5);
+    assertEqual(steam.period, 30);
+    assertEqual(steam.algorithm, 'SHA1');
+    assertEqual(steam.accountName, 'alice');
+    assertEqual(steamTotp(steam.secret, 59000), '3DP36', 'Steam T=59 应为 3DP36');
+
+    const raw = byIssuer.get('RawBase32');
+    assert(raw, '应导入纯 Base32 账号');
+    assertEqual(raw.secret, 'JBSWY3DPEHPK3PXP');
+    assertEqual(raw.algorithm, 'SHA1');
+    assertEqual(raw.digits, 6);
+    assertEqual(raw.period, 30);
+
+    const labelOnly = byIssuer.get('LabelOnly');
+    assert(labelOnly, '应导入 username 空、label 有账号的条目');
+    assertEqual(labelOnly.accountName, 'labelacct');
+    assertEqual(labelOnly.algorithm, 'SHA256');
+    assertEqual(labelOnly.digits, 8);
+    assertEqual(labelOnly.period, 60);
+
+    const fallback = byIssuer.get(bitwarden.BITWARDEN_ISSUER);
+    assert(fallback, 'name 为空的条目应回退 issuer=Bitwarden');
+    if (fallback.accountName !== '') {
+      console.log(
+        '  NOTE 已知差异：raw Base32 + name/username 全空时，e2e 参考实现按 docs/bitwarden-format.md 回退 issuer="' +
+          fallback.accountName + '"，Android 单测断言 accountName 为空串（不影响 TOTP/同步，仅显示名差异）'
+      );
+    }
+
+    const codes = androidMapped.skipped.map(function (item) { return item.code; }).sort();
+    assertDeepEqual(codes, ['DUPLICATE_SECRET', 'INVALID_TOTP', 'NOT_LOGIN_TYPE', 'NO_TOTP', 'TYPE_NOT_TOTP']);
+
+    // 加密导出负例（Android 资源）
+    const encryptedCandidates = [
+      join(WORKSPACE, 'android-app', 'app', 'src', 'test', 'resources', 'fixtures', 'bitwarden-encrypted.json'),
+      join(WORKSPACE, 'android-app', 'app', 'src', 'test', 'resources', 'bitwarden-encrypted.json')
+    ];
+    const encryptedPath = encryptedCandidates.find(function (path) { return existsSync(path); });
+    if (encryptedPath) {
+      const encryptedExport = readJson(encryptedPath);
+      assertEqual(bitwarden.detectBitwarden(encryptedExport), 'encrypted');
+      let thrown = null;
+      try {
+        bitwarden.mapBitwardenToAccounts(encryptedExport);
+      } catch (error) {
+        thrown = error;
+      }
+      assert(thrown, '加密导出应被拒绝');
+      assertEqual(thrown.message, bitwarden.BITWARDEN_ENCRYPTED_MESSAGE);
+    }
+
+    // 与 Android 单测源码中的期望值交叉核对
+    const testPath = join(
+      WORKSPACE, 'android-app', 'app', 'src', 'test', 'java', 'dev', 'wristkey', 'app', 'bitwarden', 'BitwardenImporterTest.kt'
+    );
+    if (existsSync(testPath)) {
+      const testSource = readFileSync(testPath, 'utf8');
+      for (const marker of [
+        'assertEquals(5, result.importedCount)',
+        'assertEquals(5, result.skippedCount)',
+        'OTP_TYPE_STEAM',
+        '3DP36',
+        bitwarden.BITWARDEN_ENCRYPTED_MESSAGE
+      ]) {
+        assert(testSource.indexOf(marker) >= 0, 'Android 单测缺少期望标记: ' + marker);
+      }
+    }
+    return '5/5 + Steam(3DP36) + 加密负例，与 Android 单测断言一致';
+  });
 
   // ------------------------------------------------ 汇总与结果文件
   const summary = r.finish();

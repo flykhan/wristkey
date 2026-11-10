@@ -1,0 +1,113 @@
+{
+  "source": "bitwarden-export.json",
+  "note": "参考映射结果（e2e/lib/bitwarden.mjs mapBitwardenToAccounts，依据 docs/bitwarden-format.md）",
+  "stats": {
+    "total": 10,
+    "imported": 6,
+    "skipped": 4
+  },
+  "accounts": [
+    {
+      "id": "s_b57fa0798cf1",
+      "issuer": "GitHub",
+      "accountName": "me@example.com",
+      "category": "默认分类",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_9bdc43733ff7",
+      "issuer": "AWS",
+      "accountName": "root",
+      "category": "默认分类",
+      "secret": "QCCSBE5WSR6ZX6MWSZ5OT2VT5CGXX5YNL3ZX4E7VY6E7RYMYDVYQ",
+      "algorithm": "SHA256",
+      "digits": 8,
+      "period": 60,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_c4a98c23bb77",
+      "issuer": "Steam",
+      "accountName": "steamuser",
+      "category": "默认分类",
+      "secret": "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "otpType": "steam",
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_c12da9409db8",
+      "issuer": "RawBase32",
+      "accountName": "raw@test.invalid",
+      "category": "默认分类",
+      "secret": "MFRGGZDFMZTWQ2LK",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_6a2c2c578f60",
+      "issuer": "Bitwarden",
+      "accountName": "noname@test.invalid",
+      "category": "默认分类",
+      "secret": "BS5MZ6N67HCY7ARWAOQ45IBHKM3XH4MS",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_da40a0ee1028",
+      "issuer": "邮件",
+      "accountName": "邮箱用户",
+      "category": "默认分类",
+      "secret": "3GHWXPUJG2R3FFFKEJO5JIDOI5DPAG7A",
+      "algorithm": "SHA1",
+      "digits": 8,
+      "period": 30,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
+    }
+  ],
+  "skipped": [
+    {
+      "itemIndex": 6,
+      "name": "PlainLogin",
+      "username": "plain",
+      "code": "NO_TOTP",
+      "reason": "login.totp 为空或缺失（普通密码条目）"
+    },
+    {
+      "itemIndex": 7,
+      "name": "SecureNote",
+      "username": "",
+      "code": "NOT_LOGIN_TYPE",
+      "reason": "item.type=2 不是登录条目（1）"
+    },
+    {
+      "itemIndex": 8,
+      "name": "BadTotp",
+      "username": "bad",
+      "code": "INVALID_TOTP",
+      "reason": "login.totp 既不是 otpauth:// URI 也不是合法 Base32"
+    },
+    {
+      "itemIndex": 9,
+      "name": "BadUri",
+      "username": "bad",
+      "code": "TYPE_NOT_TOTP",
+      "reason": "otpauth 类型 hotp 不是 totp"
+    }
+  ]
+}
