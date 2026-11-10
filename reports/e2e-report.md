@@ -1,196 +1,201 @@
-# WristKey 端到端测试报告（v1 — 夹具与验证框架）
+# WristKey 端到端验收报告（终版）
 
 - 任务：task-4（e2e 测试夹具与验证框架）
-- 执行：qa，2026-11-10 15:30 (Asia/Shanghai)
-- 状态：**夹具与验证框架完成并通过**；构建产物/签名验证**待 band-app 与 android-app 构建完成后补跑**
-  （见“待完成”一节，复现命令已给出）
-- 结论摘要：Node 端 121/121 断言通过，Python 独立验证 17/17 通过；
-  跨实现双向交叉验证全部一致；当前 check-build 静态检查 3 项 FAIL 均来自
-  band-app/dist 下**参考实现遗留的旧 .rpk**（非本项目产物），需清理后重新构建。
+- 执行：qa，2026-11-10 15:37 (Asia/Shanghai)
+- 结论：**PASS** —— 两端构建产物齐全、包名/应用名一致、APK 与 .rpk 使用同一签名证书；
+  Node 端 121/121、Python 端 17/17、构建/签名检查 25 PASS / 0 FAIL / 0 SKIP；
+  band-app 单测 48/48、android-app JVM 单测 58/58（9 个测试类）。
+- 未覆盖：真机（小米手环 10 Pro）上的安装、interconnect 握手、xms 投递与 480×336 UI 实机表现，
+  本环境无真机，见第 6 节。
 
 ## 1. 环境
 
 | 项 | 值 |
 | --- | --- |
-| OS | Linux（x86_64） |
+| OS | Linux x86_64 |
 | Node | v22.22.2 |
 | npm | 10.9.7 |
-| Python | 3.14.8（e2e/.venv，argon2-cffi 25.1.0 + cryptography 50.0.2） |
+| Python | 3.14.8（e2e/.venv：argon2-cffi 25.1.0 + cryptography 50.0.2） |
 | JDK | /home/lsl/.jdks/jdk-21.0.13+9 |
-| Android SDK | ~/Android/Sdk/build-tools 34.0.0 / 36.1.0 / 37.0.0 |
-| 真机 | **无**（小米手环 10 Pro 真机链路未验证，见风险） |
+| Android SDK | ~/Android/Sdk（platforms android-34/36.1；build-tools 34.0.0/36.1.0/37.0.0） |
+| 时间 | 2026-11-10 15:37 CST |
+| 真机 | **无** |
 
-依赖：e2e/package.json（私有，type=module，devDependency hash-wasm ^4.13.0）；
-Python 依赖见 e2e/python/requirements.txt。
+## 2. 产物清单与校验值
 
-## 2. 产物清单
+| 产物 | 路径 | 大小 | SHA-256 | 关键属性 |
+| --- | --- | --- | --- | --- |
+| band .rpk | band-app/dist/dev.wristkey.app.release.1.0.0.rpk | 54,726 B | e7acdfbcab6c29db0daa5f76a66dd25a520cf44ff0570df7a6abe8ade5374c10 | package=dev.wristkey.app，name=腕证，versionName=1.0.0，deviceTypeList=[watch]，features=router/storage/interconnect，designWidth=device-width |
+| android release APK | android-app/app/build/outputs/apk/release/app-release.apk | 26,263,473 B | ff1a9eb94907d4573ca3b0b38fcc0c5a5d8a45b3f024858c31fe685d06eac300 | package=dev.wristkey.app，label=腕证，versionName=1.0，minSdk 28，targetSdk 36 |
+| 签名证书 PEM | signing/rpk-sign/certificate.pem | — | SHA-256 指纹 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4 | CN=WristKey Dev, OU=WristKey, O=WristKey, C=CN |
+| 测试夹具 | e2e/fixtures/（6 个文件） | 见附录 | 见附录 | 确定性生成，密码 test-password |
 
-| 路径 | 说明 |
-| --- | --- |
-| e2e/fixtures/plain-backup.json | 明文 Stratum 备份：11 导入 + 11 跳过，覆盖算法/digits/period/分类/排序/边界 |
-| e2e/fixtures/expected-import.json | 参考映射结果（协议 account + 跳过报告 + 统计） |
-| e2e/fixtures/strong.stratum | Strong 加密（Argon2id p4 m65536 t3 + AES-256-GCM），密码 test-password |
-| e2e/fixtures/legacy.stratum | Legacy 加密（PBKDF2-SHA1 64000 + AES-256-CBC/PKCS7），密码 test-password |
-| e2e/fixtures/uri-list.txt | otpauth:// 列表（5 导入 + 2 跳过） |
-| e2e/fixtures/protocol/valid-session.json | 合法同步序列（1 begin + 11 account + 1 commit，最大消息 400B） |
-| e2e/fixtures/protocol/invalid-cases.json | 19 个非法/边界用例与逐条期望 |
-| e2e/fixtures/manifest.json | 文件 SHA-256、加密参数、salt/iv、覆盖矩阵 |
-| e2e/fixtures/generate.mjs | 确定性生成器（固定 salt/iv/时间戳，可复现） |
-| e2e/verify.mjs | 主验证入口（A–I 九节，退出码 0/1） |
-| e2e/check-build.mjs | 构建产物 + 包名 + 签名一致性检查 |
-| e2e/python/verify_fixtures.py | Python 独立解密 + RFC 向量验证（第三方语言实现） |
-| e2e/verify-result.json | 最近一次 Node 验证的逐项结果 |
-| reports/e2e-build-result.json | 最近一次构建检查的逐项结果 |
+> APK 证书 SHA-256 = signing/rpk-sign/certificate.pem = b7cfba…85c4；
+> .rpk 内嵌同一证书 DER（命中 offset 51180）；三者一致。dist 中旧参考 rpk 已被 band-dev 清理，
+> 当前 dist 仅含本项目的 release rpk。
 
-## 3. 已执行命令与结果
+## 3. 验收执行结果
 
-### 3.1 夹具生成
+### 3.1 band-app 构建与单测
 
 ~~~
-cd e2e && npm install && npm run fixtures
-夹具已生成：.../e2e/fixtures
-  明文 8559 bytes，映射 11 导入 / 11 跳过
-  strong 8619 bytes，legacy 8612 bytes，uri 7 行
-  协议消息 13 条（syncId=sync-1760000000000-e2e）
+npm --prefix band-app test
+# tests 48 / pass 48 / fail 0
+
+npm --prefix band-app run release     # 由 check-build --build 执行，退出码 0
+# 产出 band-app/dist/dev.wristkey.app.release.1.0.0.rpk (54,726 B)
 ~~~
 
-重复执行生成器的产物 SHA-256 不变（确定性，manifest 自校验通过）。
-
-### 3.2 Node 端验证 e2e/verify.mjs
+### 3.2 android-app 构建与单测
 
 ~~~
-cd e2e && npm run verify
+cd android-app && ./gradlew testDebugUnitTest assembleDebug
+# BUILD SUCCESSFUL；JVM 单测 58 passed / 0 failed / 9 个测试类
+# release APK 已由 android-dev 产出（本次未重新 assembleRelease，仅核验现有产物）
+~~~
+
+### 3.3 构建/包名/签名检查（node e2e/check-build.mjs --build --with-tests）
+
+~~~
+构建检查: 25 PASS / 0 FAIL / 0 SKIP
+~~~
+
+25 项全 PASS，覆盖：
+- band-app manifest（package/name/deviceTypeList/features/designWidth）；
+- band-app npm test 48 用例、npm run release 构建成功、dist/*.rpk 存在；
+- rpk manifest.package=dev.wristkey.app、manifest.name=腕证；
+- android gradle testDebugUnitTest assembleDebug 成功、58 用例 / 9 测试类；
+- release APK 存在、package=dev.wristkey.app、应用名=腕证；
+- 签名 PEM / APK 证书 / RPK 内嵌 DER 三方一致；
+- scripts/check-signing.sh PASS；APK 与 RPK 包名一致。
+
+结果明细：reports/e2e-build-result.json。
+
+### 3.4 签名一致性（bash scripts/check-signing.sh，显式 release 产物）
+
+~~~
+APK: android-app/app/build/outputs/apk/release/app-release.apk
+RPK: band-app/dist/dev.wristkey.app.release.1.0.0.rpk
+RPK package: dev.wristkey.app | name: 腕证
+APK 证书 SHA-256: b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4
+APK 证书 DN: CN=WristKey Dev, OU=WristKey, O=WristKey, C=CN
+签名 PEM SHA-256: b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4
+RPK 内嵌证书 DER: 是 (offset 51180)
+PASS: 包名 dev.wristkey.app，APK 与 RPK 使用同一证书（SHA-256 b7cfba…85c4）
+~~~
+
+注：scripts/check-signing.sh 不带参数时默认取 dist 下字典序第一个 .rpk；若未来 dist 同时存在
+debug/release 两个 rpk，建议显式传入 release rpk 路径（本次已显式传入）。
+
+### 3.5 e2e Node 验证（cd e2e && npm run verify）
+
+~~~
 WristKey e2e verify: 121 passed, 0 failed, 121 total
 ~~~
 
-| 节 | 断言数 | 结果 |
+| 节 | 断言数 | 内容 |
 | --- | --- | --- |
-| A. RFC 6238 / RFC 4226 向量（独立 node:crypto 实现） | 21 | 全过 |
-| B. 夹具覆盖矩阵与明文映射（id 独立复算、排序、分类 Id、哈希） | 12 | 全过 |
-| C. Strong / Legacy 加解密一致性（错误密码/头部/截断、再加密逐字节一致） | 8 | 全过 |
-| D. 跨实现交叉验证（Python 夹具 + tools/src/stratum.mjs 双向） | 9 | 全过 |
-| E. otpauth:// URI 列表 | 2 | 全过 |
-| F. 协议 v2 合法会话与双端状态机 | 9 | 全过 |
-| G. 协议字段边界（最大字段 538B < 1KB；13 类非法 account 丢弃） | 18 | 全过 |
-| H. 协议非法/边界用例回放（invalid-cases.json 19 例） | 19 | 全过 |
-| I. 跨端 TOTP：band-app 纯模块 vs 独立实现 | 23 | 全过 |
+| A. RFC 6238 / RFC 4226 向量 | 21 | 3 算法 × 6 时间点 + HOTP 10 向量 + digits 长度 |
+| B. 夹具覆盖矩阵与明文映射 | 12 | 哈希可复现、11/11 映射、id 独立复算、分类 Id、排序、跳过报告无 secret |
+| C. Strong/Legacy 加解密 | 8 | 解密 == 明文；错误密码/头部/截断；同 salt/iv 再加密逐字节一致 |
+| D. 跨实现交叉验证 | 9 | Python 夹具解密、固定 salt/iv 再加密逐字节一致、映射 3/5、URI、与 tools/src/stratum.mjs 双向 |
+| E. URI 列表 | 2 | 5 导入 / 2 跳过，字段与明文映射一致 |
+| F. 协议 v2 合法会话与双端状态机 | 9 | 信封/大小/索引/同步号、手环端回放提交、ack、request |
+| G. 协议字段边界 | 18 | 最大字段消息 538B < 1KB；13 类非法 account 丢弃；未知字段忽略 |
+| H. 非法/边界用例回放 | 19 | invalid-cases.json 全过（超时/去重/空同步/新 begin 等） |
+| I. 跨端 TOTP 对拍 | 23 | band-app totp.js vs 独立实现：RFC 向量 + 375 组矩阵 + 22 次夹具账号 |
 
-I 节明细：RFC 6238 18 组向量、RFC 4226 10 组 HOTP、3 算法 × 5 digits × 5 period × 5 时间
-= 375 组矩阵对拍、夹具 11 个账号 × 2 时间点 = 22 次对拍。
-
-### 3.3 Python 独立验证（第三方语言实现）
+### 3.6 e2e Python 独立验证
 
 ~~~
 cd e2e && .venv/bin/python python/verify_fixtures.py
 Python verify: 17 passed, 0 failed, 17 total
 ~~~
 
-关键项：
-- e2e strong.stratum / legacy.stratum 用 Python 独立解密，JSON 与明文语义一致；
-- **Stratum 官方 extra/decrypt_backup.py（GPL-3.0，仅离线校验）可解密 e2e 两个加密夹具**；
-- tools/fixtures 的 strong/legacy 同样可解密；
-- 明文备份中的 3 个 RFC6238 账号在 T=59/1111111109/1111111111/1234567890 复算结果与 RFC 表一致；
-- 头部/长度/参数常量与 docs/stratum-format.md 一致。
+含：e2e 加密夹具 Python 独立解密、tools/fixtures 解密、**Stratum 官方 decrypt_backup.py
+（GPL-3.0，仅离线校验）可解密 e2e 两个加密夹具**、RFC 6238 夹具账号复算、加密参数常量校验。
 
-### 3.4 手环端单测（只读运行，band-app 仍在开发中）
+## 4. 跨实现交叉验证证据（双向、非自证）
 
-~~~
-cd band-app && npm test
-# tests 47 / pass 47 / fail 0
-~~~
-
-### 3.5 构建产物静态检查（当前状态，非终态）
-
-~~~
-node e2e/check-build.mjs
-构建检查: 5 PASS / 3 FAIL / 4 SKIP
-~~~
-
-3 项 FAIL（**均为参考实现遗留物，不是 WristKey 产物问题**）：
-
-- band-app/dist/asia.bilibili.mfa.debug.1.2.1.rpk 的 manifest.package = asia.bilibili.mfa（期望 dev.wristkey.app）；
-- 同一文件的 manifest.name = 腕码（期望 腕证）；
-- 该旧 .rpk 未内嵌 signing/rpk-sign/certificate.pem 证书。
-
-SKIP：band-app/src/manifest.json 尚未生成（band-dev 进行中）、Android APK 未产出。
-
->> 风险：band-app/dist 下若同时存在旧 rpk 与新 rpk，scripts/check-signing.sh 默认取
->> ls band-app/dist/*.rpk | head -1（字典序），会优先命中 asia.bilibili.mfa... 旧文件。
->> 建议 band-dev 构建前清空 band-app/dist，或脚本改为按 mtime 取最新。
-
-当前签名材料指纹（signing/rpk-sign/certificate.pem）：
-SHA-256 = b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4
-
-## 4. 交叉验证证据（双向、非自证）
-
-| # | 方向 | 证据 |
+| # | 方向 | 结果 |
 | --- | --- | --- |
-| 1 | e2e 密文 → Python 独立解密 | e2e/python/verify_fixtures.py 全部通过 |
-| 2 | e2e 密文 → Stratum 官方工具 | decrypt_backup.py 解密 strong/legacy 均成功，JSON 一致 |
-| 3 | tools/fixtures（Python）→ e2e Node 解密 | Node 解密成功，JSON 语义一致 |
-| 4 | e2e 密文 → tools/src/stratum.mjs | 另一套 Node 实现解密成功 |
-| 5 | 固定 salt/iv 再加密 | 用 tools 夹具固定 salt/iv 重加密其明文，与 Python 产物**逐字节一致** |
-| 6 | 映射对拍 | e2e 与 tools/src/stratum.mjs 对同一备份按 id 集合完全一致（e2e 11/11、tools 3/5） |
-| 7 | TOTP 跨端 | band-app totp.js 与 e2e 独立实现：RFC 向量 + 375 组矩阵 + 22 次夹具账号一致 |
+| 1 | e2e 密文 → Python 独立解密 | PASS |
+| 2 | e2e 密文 → Stratum 官方工具解密 | PASS |
+| 3 | tools/fixtures（Python 生成）→ e2e Node 解密 | PASS |
+| 4 | e2e 密文 → tools/src/stratum.mjs 解密 | PASS |
+| 5 | 固定 salt/iv 再加密 → 与 Python 产物逐字节一致 | PASS |
+| 6 | 映射对拍（e2e vs tools）按 id 集合一致 | PASS（e2e 11/11、tools 3/5） |
+| 7 | TOTP 跨端（band-app vs 独立实现） | PASS（RFC 向量、375 矩阵、夹具账号） |
 
 ## 5. 夹具覆盖矩阵
 
-明文备份 22 条 Authenticator = 11 条导入 + 11 条跳过：
+e2e/fixtures/plain-backup.json 共 22 条 Authenticator = 11 导入 + 11 跳过：
 
 | 维度 | 覆盖 |
 | --- | --- |
 | 算法 | SHA1 / SHA256 / SHA512 |
 | digits | 6 / 8 / 10 |
 | period | 15 / 30 / 60 |
-| 分类 | 开发 / 个人 / 云服务 / 社交 / 默认分类；GitHub 多分类取 Ranking 最小者（社交） |
-| 边界 | secret 带 = 填充（归一化）、Unicode issuer/username、issuer 空、username 空 |
+| 分类 | 开发 / 个人 / 云服务 / 社交 / 默认分类；多分类取 Binding Ranking 最小者 |
+| 边界 | secret 带 = 填充、Unicode issuer/username、issuer 空、username 空 |
 | 跳过 | HOTP(Type=1)、Steam(Type=4)、Mobile-OTP(Type=3)、非法 Base32、空 secret、period 4/301、digits 5/11、issuer+username 全空、Algorithm=7 |
 
-跳过的 11 条在 expected-import.json 中带 code 与原因（不含 secret）。
+加密夹具：Strong = AUTHENTICATORPRO + salt16 + iv12 + AES-256-GCM(Argon2id p4 m65536 t3 out32) + tag16；
+Legacy = AuthenticatorPro + salt20 + iv16 + AES-256-CBC/PKCS7(PBKDF2-SHA1 64000 dk32)；密码 test-password。
 
-## 6. 待完成（阻塞于其他任务）
+协议夹具：valid-session.json（1 begin + 11 account + 1 commit，最大消息 400B < 1KB）；
+invalid-cases.json（19 例：版本/未知 type/非法 JSON 忽略、非法字段丢弃、commit 条数/syncId 不匹配、
+无 staging、重复 id 去重、缺省 id 兜底、缺省字段归一化、新 begin 丢弃旧 staging、空同步、120s 超时）。
 
-| # | 事项 | 前置 | 复现命令 | 通过标准 |
-| --- | --- | --- | --- | --- |
-| 1 | band-app .rpk 构建与包名 | band-dev 产出 src/manifest.json 并构建 | cd band-app && npm run release | dist/*.rpk manifest.package=dev.wristkey.app、name=腕证 |
-| 2 | Android 单元测试与 APK | android-dev 完成 gradle 工程 | cd android-app && ./gradlew testDebugUnitTest assembleDebug | 测试通过；产出 app/build/outputs/apk/debug/app-debug.apk |
-| 3 | APK 包名/应用名 | #2 | aapt2 dump badging <apk> | package=dev.wristkey.app、label=腕证 |
-| 4 | 签名三方一致 | #1+#2 | bash scripts/check-signing.sh <apk> <rpk> | APK 指纹 == signing/rpk-sign/certificate.pem == rpk 内嵌 DER |
-| 5 | 汇总终版报告 | #1–#4 | node e2e/check-build.mjs --build --with-tests | 0 FAIL |
+## 6. 未验证项与残余风险
 
-复现完整流程：
+1. **真机链路未验证（中）**：无小米手环 10 Pro 真机，system.interconnect 的包名+签名握手、
+   .rpk 通过 AstroBox/表盘自定义工具安装、xms 实际消息大小/投递/重连、手环端 480×336 UI 与
+   离线计算均只在代码/单测/夹具层验证。
+2. **ack 为 best effort（低）**：xms SDK 是否提供消息接收回调未在真机确认；手环 ack 目前只影响
+   UI 提示，不影响离线可用性。
+3. **APK 版本号**：APK versionName=1.0，rpk versionName=1.0.0，不影响校验，发布前可统一。
+4. **band-app 导入 totp.js 的 Node 警告（低）**：band-app/package.json 未声明 type=module，
+   e2e verify 导入时出现 MODULE_TYPELESS_PACKAGE_JSON 警告，不影响正确性；建议后续补上。
+5. **夹具 secret 均为公开测试值**：不得替换为真实凭证（e2e/README 已注明）。
+
+## 7. 协议/格式参考选择（docs 未明确规定处）
+
+1. account.id = s_ + sha1(归一化 secret)[0:12]；归一化 = 大写、去空白、去 -、去 =（与 tools 一致）；
+2. 快照排序：分类间按 Category.Ranking、类内按 AuthenticatorCategories.Ranking、无分类排最后；
+   跨端对拍建议按 id 集合而非数组顺序；
+3. 非法 begin（缺 syncId/accountCount）忽略并保留旧 staging；
+4. account 单字段非法 → 丢弃整条并计错误，不中断同步；
+5. URI 列表无分类 → 默认分类；
+6. algorithm 小写容忍并归一化为大写。
+
+## 8. 复现命令
 
 ~~~bash
-# 夹具 + Node/Python 验证（已通过，可随时复跑）
-cd e2e && npm install && npm run fixtures && npm run verify
+# A. 夹具与 Node/Python 验证
+cd e2e && npm install
+npm run fixtures
+npm run verify
 python3 -m venv .venv && .venv/bin/pip install -r python/requirements.txt
 .venv/bin/python python/verify_fixtures.py
 
-# 构建 + 产物/签名检查（待两端可构建后）
-cd ../band-app && npm test && npm run release
-cd ../android-app && ./gradlew testDebugUnitTest assembleDebug
-cd .. && node e2e/check-build.mjs --build --with-tests
-bash scripts/check-signing.sh android-app/app/build/outputs/apk/debug/app-debug.apk band-app/dist/<新>.rpk
+# B. 两端构建 + 单测 + 包名/签名全量验收
+cd ..
+npm --prefix band-app test
+npm --prefix band-app run release
+cd android-app && ./gradlew testDebugUnitTest assembleDebug && cd ..
+node e2e/check-build.mjs --build --with-tests
+
+# C. 签名一致性（显式 release 产物，需 java 在 PATH）
+JAVA_HOME=$(ls -d ~/.jdks/jdk-* | sort -V | tail -1)
+PATH="$JAVA_HOME/bin:$PATH" bash scripts/check-signing.sh \
+  android-app/app/build/outputs/apk/release/app-release.apk \
+  band-app/dist/dev.wristkey.app.release.1.0.0.rpk
 ~~~
 
-## 7. 风险与建议
+## 9. 附录
 
-1. **旧 .rpk 污染 dist（高）**：band-app/dist/asia.bilibili.mfa.debug.1.2.1.rpk 是参考实现遗留，
-   会干扰包名断言与 scripts/check-signing.sh 的默认选取。建议构建前清空 dist。
-2. **无真机**：system.interconnect 的包名+签名握手、xms 实际消息大小/投递、手环 UI 480×336 适配
-   均无法在 CI 验证；当前只能以单元测试 + 协议夹具 + 签名材料一致性覆盖。
-3. **band-app 仍在重写**：本次跨端 TOTP 对拍基于当前 totp.js（47 单测通过）跑通；
-   完成后需重跑 e2e/verify.mjs 的 I 节。
-4. **android-app 映射行为需与夹具对拍**：e2e 只验证夹具与参考实现；建议 android 单测复用
-   e2e/fixtures 或 tools/fixtures 的同一套备份，断言 11 导入/11 跳过与字段映射。
-5. **文档歧义**（已在 e2e/README.md 记录并同步 Lead）：
-   - account.id 的 secret 归一化形式（建议明确去 = 填充后取 SHA-1）；
-   - 快照输出顺序未定义（建议跨端按 id 集合对拍）；
-   - 非法 begin 的处理未规定（参考实现为忽略并保留 staging）。
-6. **ack 为 best effort**：协议已定义 mfa_sync_ack，但 xms SDK 是否提供接收回调解锁前，
-   手环 ack 仅作 UI 提示，端到端“已确认”状态无法自动验证。
-
-## 8. 附录：夹具文件哈希（来自 fixtures/manifest.json）
+### 9.1 夹具文件哈希（fixtures/manifest.json）
 
 | 文件 | 字节 | SHA-256 |
 | --- | --- | --- |
@@ -201,6 +206,13 @@ bash scripts/check-signing.sh android-app/app/build/outputs/apk/debug/app-debug.
 | uri-list.txt | 770 | 331aa191a0bb001815d4d20a867347e1877dbd59b254bac8f04734a7b54c00f5 |
 | protocol/valid-session.json | 5879 | 9cdc6768cc5048692295bd9bb309ce680625d939a4560b601bded012d8e09f5b |
 
-加密参数：Strong = Argon2id(p=4, m=65536 KiB, t=3, out=32) + AES-256-GCM(tag16)；
-Legacy = PBKDF2-HMAC-SHA1(64000, out=32) + AES-256-CBC/PKCS#7；密码 test-password。
-salt/iv 固定值见 manifest.json（确定性夹具）。
+### 9.2 本次验收日志
+
+完整命令输出保存于 /tmp/final-acceptance.log（含 band/android 单测、check-build 25 项、
+e2e verify、Python verify、check-signing 输出）。关键退出码均为 0。
+
+### 9.3 相关文档
+
+- e2e/README.md：夹具/框架用法、覆盖矩阵、歧义记录；
+- e2e/verify-result.json：Node 121 项逐条结果；
+- reports/e2e-build-result.json：构建检查 25 项逐条结果。

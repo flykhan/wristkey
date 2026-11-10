@@ -63,6 +63,24 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 手环端安装（真机）：用 AstroBox / 表盘自定义工具把 `.rpk` 装到小米手环 10 Pro；手机端安装同名同签名的 APK。
 **两端包名 + 签名证书必须一致**，否则 `system.interconnect` 无法建立连接。
 
+## 验证状态（2026-11-10，无真机）
+
+| 检查 | 结果 |
+| --- | --- |
+| 手环端 `npm test`（TOTP RFC 6238/4226、协议状态机、模型边界） | **48/48** |
+| 手机端 `./gradlew testDebugUnitTest`（Stratum 解密/映射、TOTP、协议） | **58/58** |
+| e2e Node 验证（跨实现加解密、协议回放、非法用例、band 模块对拍） | **121/121** |
+| e2e Python 独立验证（第三方实现解密 + RFC 向量） | **17/17** |
+| 构建 / 包名 / 签名检查 | **25/25 PASS** |
+| APK 与 .rpk 同证书 | ✅ `SHA-256 b7cfba…85c4`（= `signing/rpk-sign/certificate.pem`） |
+| 真机（安装、interconnect 握手、xms 投递、480×336 UI） | **未验证**，按 [docs/build-install.md](docs/build-install.md) 验收 |
+
+产物：
+
+- 手环：`band-app/dist/dev.wristkey.app.release.1.0.0.rpk`（约 53 KB）
+- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（约 25 MB）
+- 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
+
 ## 参考与许可
 
 - 手环快应用与 Android App 派生自 [BandOTP](https://github.com/lin945/mi_band_mfa)（Apache-2.0）：
