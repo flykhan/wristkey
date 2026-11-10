@@ -1,0 +1,387 @@
+{
+  "Authenticators": [
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "RFC6238",
+      "Username": "sha1@test.invalid",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 8,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 0,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "RFC6238",
+      "Username": "sha256@test.invalid",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+      "Pin": null,
+      "Algorithm": 1,
+      "Digits": 8,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 1,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "RFC6238",
+      "Username": "sha512@test.invalid",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+      "Pin": null,
+      "Algorithm": 2,
+      "Digits": 8,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 2,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "GitHub",
+      "Username": "me@example.com",
+      "Secret": "JBSWY3DPEHPK3PXP",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 3,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "AWS",
+      "Username": null,
+      "Secret": "5JUFAI77AJK5F6MLUO3DSJUOF34FUL7A",
+      "Pin": null,
+      "Algorithm": 1,
+      "Digits": 6,
+      "Period": 60,
+      "Counter": 0,
+      "Ranking": 4,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "企业VPN",
+      "Username": "admin",
+      "Secret": "3VEAS64Y6EOI6J4LVYCFHGUB37JBRNLAQTCLWI2JZTRSC4Y5XAVL33TPCF3U4EQROKPFVPEZPNXTHQ7YOOSDH36KJWVEYKXZ",
+      "Pin": null,
+      "Algorithm": 2,
+      "Digits": 10,
+      "Period": 60,
+      "Counter": 0,
+      "Ranking": 5,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "Cloudflare",
+      "Username": "user@example.com",
+      "Secret": "MFRGGZDFMZTWQ2LK",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 15,
+      "Counter": 0,
+      "Ranking": 6,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "Padded",
+      "Username": "padding@example.com",
+      "Secret": "OBQWI43FMNZGK5A=",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 7,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "邮件",
+      "Username": "邮箱用户",
+      "Secret": "Q42OTENK4TNSGR2YKPBALYM7WYRUTSM4",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 8,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 8,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "",
+      "Username": "no-issuer@example.com",
+      "Secret": "I53OJ55WUWVSNFYL32GL4LJD2K542DCD",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 9,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "NoUsername",
+      "Username": null,
+      "Secret": "OYFVLVUXN3W27CRVG4VWSHVEUGZT7VCZ",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 10,
+      "CopyCount": 0
+    },
+    {
+      "Type": 1,
+      "Icon": null,
+      "Issuer": "LegacyHOTP",
+      "Username": "hotp-user",
+      "Secret": "LQYUYCPJPZJTUYEOBTVMG7RFYSUNEMNU",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 7,
+      "Ranking": 11,
+      "CopyCount": 0
+    },
+    {
+      "Type": 4,
+      "Icon": null,
+      "Issuer": "Steam",
+      "Username": "steamuser",
+      "Secret": "OJ7I2APOUGXV5ZPCEFAUK2GBICSKW2H4",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 5,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 12,
+      "CopyCount": 0
+    },
+    {
+      "Type": 3,
+      "Icon": null,
+      "Issuer": "MobileOTP",
+      "Username": "mobile",
+      "Secret": "HCQMRDZSI3SGPGMQHKUGLQFPBHTVCG2L",
+      "Pin": "1234",
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 13,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadBase32",
+      "Username": "bad",
+      "Secret": "INVALID1BASE32!!",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 14,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "EmptySecret",
+      "Username": "empty",
+      "Secret": "",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 15,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadPeriodLow",
+      "Username": "period",
+      "Secret": "34DFWU7NH4DTV2Z2MQTC7CQ2FXK4DKTJ",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 4,
+      "Counter": 0,
+      "Ranking": 16,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadPeriodHigh",
+      "Username": "period",
+      "Secret": "GEQPTTRCRFM2LUWSQAS2WOBTPSL47MW3",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 301,
+      "Counter": 0,
+      "Ranking": 17,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadDigitsLow",
+      "Username": "digits",
+      "Secret": "3G3UF7RWN2OOBSBO3ODEQUQD6UJBTSJX",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 5,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 18,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadDigitsHigh",
+      "Username": "digits",
+      "Secret": "7NVEF5LOKPPD5SOYUHP3YTBHLXAZ4FGD",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 11,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 19,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": null,
+      "Username": null,
+      "Secret": "46BROEZ2CLDQIYTQV5KU25WP52PGLKGH",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 20,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadAlgorithm",
+      "Username": "algo",
+      "Secret": "UGO4PQYJWEE3666BFKBILSYC44BOK5HF",
+      "Pin": null,
+      "Algorithm": 7,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 21,
+      "CopyCount": 0
+    }
+  ],
+  "Categories": [
+    {
+      "Id": "eb3774e3",
+      "Name": "开发",
+      "Ranking": 0
+    },
+    {
+      "Id": "2d7c0c32",
+      "Name": "个人",
+      "Ranking": 1
+    },
+    {
+      "Id": "515dde86",
+      "Name": "云服务",
+      "Ranking": 2
+    },
+    {
+      "Id": "ac12e825",
+      "Name": "社交",
+      "Ranking": 3
+    }
+  ],
+  "AuthenticatorCategories": [
+    {
+      "CategoryId": "eb3774e3",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Ranking": 0
+    },
+    {
+      "CategoryId": "eb3774e3",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+      "Ranking": 1
+    },
+    {
+      "CategoryId": "eb3774e3",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+      "Ranking": 2
+    },
+    {
+      "CategoryId": "ac12e825",
+      "AuthenticatorSecret": "JBSWY3DPEHPK3PXP",
+      "Ranking": 2
+    },
+    {
+      "CategoryId": "515dde86",
+      "AuthenticatorSecret": "JBSWY3DPEHPK3PXP",
+      "Ranking": 7
+    },
+    {
+      "CategoryId": "515dde86",
+      "AuthenticatorSecret": "5JUFAI77AJK5F6MLUO3DSJUOF34FUL7A",
+      "Ranking": 1
+    },
+    {
+      "CategoryId": "515dde86",
+      "AuthenticatorSecret": "3VEAS64Y6EOI6J4LVYCFHGUB37JBRNLAQTCLWI2JZTRSC4Y5XAVL33TPCF3U4EQROKPFVPEZPNXTHQ7YOOSDH36KJWVEYKXZ",
+      "Ranking": 0
+    },
+    {
+      "CategoryId": "2d7c0c32",
+      "AuthenticatorSecret": "OBQWI43FMNZGK5A=",
+      "Ranking": 0
+    },
+    {
+      "CategoryId": "2d7c0c32",
+      "AuthenticatorSecret": "Q42OTENK4TNSGR2YKPBALYM7WYRUTSM4",
+      "Ranking": 2
+    },
+    {
+      "CategoryId": "2d7c0c32",
+      "AuthenticatorSecret": "OYFVLVUXN3W27CRVG4VWSHVEUGZT7VCZ",
+      "Ranking": 3
+    }
+  ],
+  "CustomIcons": []
+}

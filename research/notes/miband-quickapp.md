@@ -10,7 +10,7 @@
 | 屏幕分辨率 | **480 × 336**（1.74" AMOLED，60Hz，官方规格） | [已验证] 官方 |
 | 框架设计基准 | `config.designWidth` 默认 480；可设 `"device-width"`（BandOTP 做法）或具体数值 | [已验证] manifest 实例 |
 | deviceTypeList | 只支持 `"watch"`（手环也用 watch，不能写 band） | [已验证] 官方文档 + 实例 |
-| minPlatformVersion | **1000** 足够（BandOTP 声称支持 9/9 Pro/10/10 Pro；BandTOTP 资源覆盖 xmb10p） | [已验证-二手] |
+| minPlatformVersion | **1000** 足够（BandOTP 用 1000；BandTOTP 用 1000 且 AstroBox 资源明确覆盖 `xmb10p`=10 Pro） | [已验证-源码/资源清单] |
 | rpk 体积 | ≤ 1 MB（未分包）；分包总计 ≤ 4 MB、单包 ≤ 1 MB | [已验证-官方通用规范 / Vela 未验证] |
 | 手环 10 Pro 快应用数量上限 | 无 20 个上限（与 Watch S5 相同） | [已验证-二手] |
 | 安装是否需要 Authkey | 第三方工具（AstroBox/表盘自定义工具）需要；官方 Debug 通道不需要 | [已验证-二手] |
@@ -79,13 +79,15 @@
 - `package`：全小写字母/数字/点；**与手机 App 的 applicationId 完全相同**（interconnect 要求）。本项目两端 = `dev.wristkey.app`。
 - `name`：应用名，≤ 6 个汉字（"腕证" 满足）；与图标 `icon`（建议 192×192）一起展示。
 - `deviceTypeList`：**只支持 `["watch"]`**；手环也归类为 watch，不能写 band/pill。**[已验证-官方文档 + 实例]**
-- `minPlatformVersion`：`1000` 是当前可用基线。官方文档另有 `minAPILevel`（API 版本）用于能力分级；interconnect 无高版本要求。**[已验证-实例]**
+- `minPlatformVersion`：`1000` 是当前可用基线（BandOTP 与 BandTOTP 均为 1000；BandTOTP 的 AstroBox 资源含 `xmb10p` 下载项，证明该基线可覆盖 10 Pro）。官方文档另有 `minAPILevel`（API 版本）用于能力分级；interconnect 无高版本要求。**[已验证-实例/资源清单]**
+  > 注：BandOTP 仓库 README 只写"小米手表/手环"，未逐机型列 10 Pro；"9/9 Pro/10/10 Pro 可用"来自本项目 README 的表述，属二手结论，需真机确认。
 - `features`：用到哪个 `@system.*` 就声明哪个（interconnect/storage/router 必须）。
 - `designWidth`：
   - 默认 **480**（官方 FAQ："框架默认的屏幕分辨率是 480*480，Vela 三方应用会自动适配"）。
-  - BandOTP 用 `"device-width"`（1:1 实际像素），并明确支持 10 Pro。
+  - BandOTP 用 `"device-width"`（1:1 实际像素）；其 README 未逐机型声明 10 Pro，"10 Pro 可用"为本项目 README 说法，需真机确认。
   - BandTOTP 用 `192` 因为面向胶囊屏手环 9/10（192 宽基准）。
   - **10 Pro 建议 `480` 或 `"device-width"`**；按 480×336 设计稿写绝对 px 即可。
+  - 本机实测：参考项目原样构建产出的 rpk 中 `manifest.json` 保留 `"designWidth": "device-width"`，说明 aiot-toolkit 2.0.5 接受该写法并可正常出包。**[已验证-构建产物]**
 - `router.entry`/`pages`：页面目录名、key、ux 文件名保持一致；页面必须在 `router.pages` 注册。
 - `versionCode` 每次发版 +1；`package` 不可与原生应用重名（但本项目刻意与手机 App 同名以满足 interconnect）。
 - 不允许使用自定义组件时忘记 `--enable-custom-component`；手环上不建议用自定义组件。

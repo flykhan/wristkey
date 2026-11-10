@@ -1,0 +1,3 @@
+# Python 独立验证依赖（仅测试用途）
+argon2-cffi>=23.1
+cryptography>=42.0

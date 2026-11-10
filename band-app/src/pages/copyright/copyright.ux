@@ -1,0 +1,119 @@
+<template>
+  <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
+    <div class="card" style="background-color: {{ theme.cardBackground }}">
+      <text class="title" style="color: {{ theme.title }}">腕证 · WristKey</text>
+      <text class="version" style="color: {{ theme.accent }}">版本 1.0.0</text>
+
+      <text class="line" style="color: {{ theme.body }}">手环端离线 TOTP · 同步协议 v2</text>
+      <text class="line" style="color: {{ theme.body }}">TOTP 依据 RFC 4226 / RFC 6238 独立实现</text>
+
+      <text class="small" style="color: {{ theme.secondary }}">思路参考 BandOTP（lin945/mi_band_mfa），</text>
+      <text class="small" style="color: {{ theme.secondary }}">遵循 Apache License 2.0，详见 LICENSE 与 NOTICE.md。</text>
+      <text class="small" style="color: {{ theme.secondary }}">Stratum 备份格式参考 strumauth/app（GPL-3.0），未复制其代码。</text>
+      <text class="small" style="color: {{ theme.secondary }}">所有密钥仅保存在本机手环，不上传网络。</text>
+    </div>
+    <text class="hint" style="color: {{ theme.secondary }}">右滑返回</text>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import storage from "@system.storage"
+import {
+  DARK_THEME,
+  DEFAULT_DARK_MODE,
+  THEME_STORAGE_KEY,
+  parseDarkMode,
+  themeFor
+} from "../../common/scripts/settings"
+
+export default {
+  private: {
+    theme: DARK_THEME
+  },
+
+  onInit() {
+    this.loadTheme()
+  },
+
+  onShow() {
+    this.loadTheme()
+  },
+
+  loadTheme() {
+    storage.get({
+      key: THEME_STORAGE_KEY,
+      default: DEFAULT_DARK_MODE ? "true" : "false",
+      success: value => {
+        this.theme = themeFor(parseDarkMode(value))
+      },
+      fail: () => {
+        this.theme = themeFor(DEFAULT_DARK_MODE)
+      }
+    })
+  },
+
+  handleSwipe(event) {
+    if (!event || !event.direction) {
+      return
+    }
+    if (event.direction === "right") {
+      router.back()
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  padding: 12px 20px 6px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #000000;
+}
+
+.card {
+  width: 100%;
+  padding: 16px 20px;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 22px;
+  background-color: #0b0f0e;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.version {
+  margin-top: 2px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.line {
+  margin-top: 8px;
+  font-size: 14px;
+  text-align: center;
+  lines: 1;
+}
+
+.small {
+  margin-top: 5px;
+  font-size: 11px;
+  text-align: center;
+  lines: 2;
+}
+
+.hint {
+  height: 18px;
+  margin-top: 6px;
+  font-size: 12px;
+  text-align: center;
+}
+</style>

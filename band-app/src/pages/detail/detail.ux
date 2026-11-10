@@ -1,0 +1,313 @@
+<template>
+  <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
+    <div class="card" style="background-color: {{ theme.cardBackground }}">
+      <div class="header">
+        <div class="header-left">
+          <text class="issuer" style="color: {{ theme.title }}">{{ token.issuer }}</text>
+          <text class="account" style="color: {{ theme.secondary }}">{{ token.accountName }}</text>
+        </div>
+        <div class="back-button" onclick="goBack" style="background-color: {{ theme.buttonBackground }}">
+          <text class="back-text" style="color: {{ theme.accent }}">返回</text>
+        </div>
+      </div>
+
+      <div class="hero">
+        <text class="code" style="color: {{ theme.codeColor }}">{{ token.groupedCode }}</text>
+        <div class="progress-track" style="background-color: {{ theme.progressTrack }}">
+          <div class="progress-fill" style="width: {{ token.progress }}%; background-color: {{ progressColor }}"></div>
+        </div>
+        <text class="countdown" style="color: {{ theme.body }}">{{ countdownText }}</text>
+      </div>
+
+      <div class="rows">
+        <div class="row" for="{{ rows }}">
+          <text class="label" style="color: {{ theme.secondary }}">{{ $item.label }}</text>
+          <text class="value" style="color: {{ theme.body }}">{{ $item.value }}</text>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import storage from "@system.storage"
+import { buildTokenState } from "../../common/scripts/totp"
+import {
+  DEFAULT_CATEGORY,
+  maskSecret,
+  findAccountById
+} from "../../common/scripts/accountModel"
+import { loadSnapshot } from "../../common/scripts/mfaConfig"
+import {
+  DARK_THEME,
+  DEFAULT_DARK_MODE,
+  THEME_STORAGE_KEY,
+  parseDarkMode,
+  progressColor,
+  themeFor
+} from "../../common/scripts/settings"
+
+export default {
+  protected: {
+    id: ""
+  },
+
+  private: {
+    account: null,
+    token: {
+      id: "",
+      issuer: "未找到",
+      accountName: "",
+      groupedCode: "-- --",
+      code: "--",
+      remaining: 0,
+      progress: 0,
+      status: "不可用",
+      algorithm: "SHA1",
+      digits: 6,
+      period: 30
+    },
+    rows: [],
+    countdownText: "",
+    progressColor: DARK_THEME.progressSafe,
+    theme: DARK_THEME,
+    timer: null
+  },
+
+  onInit() {
+    this.loadTheme()
+    this.loadAccount()
+  },
+
+  onShow() {
+    this.loadTheme()
+    this.loadAccount()
+    this.startTicker()
+  },
+
+  onHide() {
+    this.stopTicker()
+  },
+
+  onDestroy() {
+    this.stopTicker()
+  },
+
+  loadTheme() {
+    storage.get({
+      key: THEME_STORAGE_KEY,
+      default: DEFAULT_DARK_MODE ? "true" : "false",
+      success: value => {
+        this.applyTheme(parseDarkMode(value))
+      },
+      fail: () => {
+        this.applyTheme(DEFAULT_DARK_MODE)
+      }
+    })
+  },
+
+  applyTheme(isDark) {
+    this.theme = themeFor(isDark)
+    this.refreshToken()
+  },
+
+  loadAccount() {
+    loadSnapshot(snapshot => {
+      this.account = findAccountById(snapshot.accounts, this.id)
+      this.refreshToken()
+    })
+  },
+
+  refreshToken() {
+    if (!this.account) {
+      this.token = {
+        id: "",
+        issuer: "未找到账号",
+        accountName: "可能已被新的同步替换",
+        groupedCode: "-- --",
+        code: "--",
+        remaining: 0,
+        progress: 0,
+        status: "不可用",
+        algorithm: "—",
+        digits: 0,
+        period: 0
+      }
+      this.rows = []
+      this.countdownText = "返回列表查看最新账号"
+      this.progressColor = this.theme.progressDanger
+      return
+    }
+
+    const token = buildTokenState(this.account, Date.now())
+    this.token = token
+    this.progressColor = progressColor(token.remaining, this.theme)
+    this.countdownText = "剩余 " + token.remaining + "s · " + token.status
+    this.rows = [
+      { label: "分类", value: this.account.category || DEFAULT_CATEGORY },
+      { label: "算法", value: token.algorithm + " · " + token.digits + " 位" },
+      { label: "周期", value: token.period + " 秒" },
+      { label: "密钥", value: maskSecret(this.account.secret) },
+      { label: "状态", value: "本地离线计算" }
+    ]
+  },
+
+  startTicker() {
+    if (this.timer) {
+      return
+    }
+    this.timer = setInterval(() => {
+      this.refreshToken()
+    }, 1000)
+  },
+
+  stopTicker() {
+    if (!this.timer) {
+      return
+    }
+    clearInterval(this.timer)
+    this.timer = null
+  },
+
+  goBack() {
+    router.back()
+  },
+
+  handleSwipe(event) {
+    if (!event || !event.direction) {
+      return
+    }
+    if (event.direction === "right" || event.direction === "left") {
+      router.back()
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  flex-direction: column;
+  background-color: #000000;
+}
+
+.card {
+  width: 100%;
+  height: 100%;
+  padding: 10px 16px 8px;
+  flex-direction: column;
+  border-radius: 22px;
+  background-color: #0b0f0e;
+}
+
+.header {
+  width: 100%;
+  height: 42px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-left {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.issuer {
+  font-size: 21px;
+  font-weight: bold;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.account {
+  margin-top: 1px;
+  font-size: 13px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.back-button {
+  width: 56px;
+  height: 30px;
+  margin-left: 8px;
+  border-radius: 11px;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-text {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.hero {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 2px;
+}
+
+.code {
+  width: 100%;
+  font-size: 56px;
+  font-weight: bold;
+  text-align: center;
+  lines: 1;
+  text-overflow: clip;
+}
+
+.progress-track {
+  width: 70%;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 2px;
+}
+
+.progress-fill {
+  height: 3px;
+  border-radius: 2px;
+  transition-property: width, background-color;
+  transition-duration: 1000ms;
+  transition-timing-function: linear;
+}
+
+.countdown {
+  margin-top: 4px;
+  font-size: 15px;
+  text-align: center;
+}
+
+.rows {
+  flex: 1;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 4px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.row {
+  width: 100%;
+  height: 26px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.label {
+  font-size: 14px;
+}
+
+.value {
+  width: 64%;
+  font-size: 14px;
+  text-align: right;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+</style>

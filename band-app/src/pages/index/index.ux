@@ -1,0 +1,652 @@
+<template>
+  <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
+    <div class="card" style="background-color: {{ theme.cardBackground }}">
+      <div class="header">
+        <div class="header-left">
+          <text class="title" style="color: {{ theme.title }}">腕证</text>
+          <div class="category-row" onclick="openCategory">
+            <text class="category" style="color: {{ theme.secondary }}">{{ categoryLabel }}</text>
+            <text class="category-arrow" style="color: {{ theme.secondary }}">›</text>
+          </div>
+        </div>
+        <div class="menu-button" onclick="openMenu" style="background-color: {{ theme.buttonBackground }}">
+          <text class="menu-button-text" style="color: {{ theme.accent }}">菜单</text>
+        </div>
+      </div>
+
+      <div class="status-row">
+        <text class="status-text" style="color: {{ theme.secondary }}">{{ syncText }}</text>
+        <div class="request-button" onclick="requestSync" style="background-color: {{ theme.buttonBackground }}">
+          <text class="request-text" style="color: {{ theme.accent }}">{{ requestLabel }}</text>
+        </div>
+      </div>
+
+      <div class="list" if="{{ ready && pageAccounts.length > 0 }}">
+        <div class="otp-item" for="{{ pageAccounts }}" onclick="openDetail($item.id)" style="background-color: {{ theme.accentSoft }}">
+          <div class="otp-main">
+            <div class="otp-info">
+              <text class="otp-issuer" style="color: {{ theme.title }}">{{ $item.issuer }}</text>
+              <text class="otp-account" style="color: {{ theme.secondary }}">{{ $item.accountName }}</text>
+            </div>
+            <div class="otp-code-col">
+              <text class="otp-code" style="color: {{ theme.codeColor }}">{{ $item.groupedCode }}</text>
+              <text class="otp-remaining" style="color: {{ $item.progressColor }}">{{ $item.remaining }}s</text>
+            </div>
+          </div>
+          <div class="otp-progress" style="background-color: {{ theme.progressTrack }}">
+            <div class="otp-progress-fill" style="width: {{ $item.progress }}%; background-color: {{ $item.progressColor }}"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty" if="{{ ready && pageAccounts.length === 0 }}">
+        <text class="empty-title" style="color: {{ theme.title }}">{{ emptyTitle }}</text>
+        <text class="empty-copy" style="color: {{ theme.secondary }}">{{ emptyCopy }}</text>
+        <div class="empty-button" onclick="requestSync" style="background-color: {{ theme.buttonBackground }}">
+          <text class="empty-button-text" style="color: {{ theme.accent }}">请求手机同步</text>
+        </div>
+      </div>
+
+      <div class="footer" if="{{ pageCount > 1 }}">
+        <text class="page-indicator" style="color: {{ theme.secondary }}" onclick="nextPage">{{ page + 1 }} / {{ pageCount }} · 点击翻页</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import storage from "@system.storage"
+import { buildTokenState } from "../../common/scripts/totp"
+import {
+  DEFAULT_CATEGORY,
+  collectCategories,
+  filterAccountsByCategory,
+  sortAccountsById
+} from "../../common/scripts/accountModel"
+import {
+  applyCommittedSnapshot,
+  loadSnapshot as loadStoredSnapshot,
+  saveSnapshot
+} from "../../common/scripts/mfaConfig"
+import {
+  connect,
+  disconnect,
+  requestSync as requestPhoneSync,
+  sendAck
+} from "../../common/scripts/interconnect"
+import {
+  buildAck,
+  createSyncState,
+  handleMessage,
+  parseLegacySnapshot
+} from "../../common/scripts/syncProtocol"
+import {
+  ACCOUNTS_PER_PAGE,
+  CATEGORY_STORAGE_KEY,
+  DARK_THEME,
+  DEFAULT_DARK_MODE,
+  THEME_STORAGE_KEY,
+  cyclePage,
+  describeSync,
+  paginate,
+  parseDarkMode,
+  progressColor,
+  themeFor
+} from "../../common/scripts/settings"
+
+export default {
+  private: {
+    rawAccounts: [],
+    currentAccounts: [],
+    categories: [],
+    currentCategory: DEFAULT_CATEGORY,
+    categoryLabel: DEFAULT_CATEGORY,
+    savedCategory: DEFAULT_CATEGORY,
+    page: 0,
+    pageCount: 1,
+    pageAccounts: [],
+    ready: false,
+    isDark: DEFAULT_DARK_MODE,
+    theme: DARK_THEME,
+    syncText: "尚未同步",
+    syncDetail: "手机未连接",
+    requestLabel: "请求同步",
+    emptyTitle: "还没有验证码",
+    emptyCopy: "在手机 App 导入 Stratum 备份后同步",
+    timer: null
+  },
+
+  onInit() {
+    this.syncState = createSyncState()
+    this.snapshot = { version: 2, updatedAt: 0, accounts: [] }
+    this.connected = false
+    this.requestPending = false
+    this.requestTimer = null
+    this.loadTheme()
+    this.loadSnapshot()
+    this.setupChannel()
+  },
+
+  onShow() {
+    this.loadTheme()
+    this.loadCategory()
+    this.loadSnapshot()
+    this.startTicker()
+  },
+
+  onHide() {
+    this.stopTicker()
+  },
+
+  onDestroy() {
+    this.stopTicker()
+    this.clearRequestTimer()
+    disconnect()
+  },
+
+  /* ---------------------------------------------------------------- data */
+
+  loadTheme() {
+    storage.get({
+      key: THEME_STORAGE_KEY,
+      default: DEFAULT_DARK_MODE ? "true" : "false",
+      success: value => {
+        this.applyTheme(parseDarkMode(value))
+      },
+      fail: () => {
+        this.applyTheme(DEFAULT_DARK_MODE)
+      }
+    })
+  },
+
+  applyTheme(isDark) {
+    this.isDark = isDark
+    this.theme = themeFor(isDark)
+    this.refreshCodes()
+  },
+
+  loadCategory() {
+    storage.get({
+      key: CATEGORY_STORAGE_KEY,
+      default: DEFAULT_CATEGORY,
+      success: value => {
+        this.savedCategory = value || DEFAULT_CATEGORY
+        this.resetCategory()
+        this.refreshCodes()
+      },
+      fail: () => {
+        this.savedCategory = DEFAULT_CATEGORY
+        this.resetCategory()
+        this.refreshCodes()
+      }
+    })
+  },
+
+  loadSnapshot() {
+    loadStoredSnapshot(snapshot => {
+      this.snapshot = snapshot
+      this.rawAccounts = snapshot.accounts.slice(0)
+      this.ready = true
+      this.resetCategory()
+      this.refreshSyncInfo()
+      this.refreshCodes()
+    })
+  },
+
+  resetCategory() {
+    this.categories = collectCategories(this.rawAccounts)
+    if (this.categories.length === 0) {
+      this.currentCategory = DEFAULT_CATEGORY
+      this.currentAccounts = []
+    } else {
+      let selected = null
+      for (let index = 0; index < this.categories.length; index++) {
+        if (this.categories[index].name === this.savedCategory) {
+          selected = this.categories[index].name
+        }
+      }
+      this.currentCategory = selected || this.categories[0].name
+      this.currentAccounts = sortAccountsById(
+        filterAccountsByCategory(this.rawAccounts, this.currentCategory)
+      )
+    }
+    this.categoryLabel = this.currentCategory
+    this.emptyTitle = "还没有验证码"
+    this.emptyCopy = "在手机 App 导入 Stratum 备份后同步"
+    if (this.rawAccounts.length > 0 && this.currentAccounts.length === 0) {
+      this.emptyCopy = "该分类下暂无账号"
+    }
+    if (this.page >= Math.max(1, Math.ceil(this.currentAccounts.length / ACCOUNTS_PER_PAGE))) {
+      this.page = 0
+    }
+  },
+
+  refreshCodes() {
+    const now = Date.now()
+    const pageData = paginate(this.currentAccounts, this.page, ACCOUNTS_PER_PAGE)
+    this.page = pageData.page
+    this.pageCount = pageData.pageCount
+    const tokens = []
+    for (let index = 0; index < pageData.items.length; index++) {
+      const account = pageData.items[index]
+      const token = buildTokenState(account, now)
+      tokens.push({
+        id: token.id,
+        issuer: token.issuer || "未命名",
+        accountName: token.accountName,
+        groupedCode: token.groupedCode,
+        remaining: token.remaining,
+        progress: token.progress,
+        progressColor: progressColor(token.remaining, this.theme)
+      })
+    }
+    this.pageAccounts = tokens
+  },
+
+  refreshSyncInfo() {
+    const info = describeSync(this.snapshot, this.connected, Date.now())
+    this.syncText = info.text + " · " + info.detail
+  },
+
+  /* ---------------------------------------------------------------- sync */
+
+  setupChannel() {
+    const channel = connect({
+      onMessage: message => {
+        this.handleChannelMessage(message)
+      },
+      onOpen: () => {
+        this.connected = true
+        this.refreshSyncInfo()
+      },
+      onClose: () => {
+        this.connected = false
+        this.refreshSyncInfo()
+      },
+      onError: () => {
+        this.connected = false
+        this.refreshSyncInfo()
+      }
+    })
+    this.connected = !!channel
+    this.refreshSyncInfo()
+  },
+
+  handleChannelMessage(message) {
+    const legacy = parseLegacySnapshot(message)
+    if (legacy) {
+      saveSnapshot(legacy, result => {
+        if (!result.ok) {
+          return
+        }
+        this.snapshot = legacy
+        this.rawAccounts = legacy.accounts.slice(0)
+        this.page = 0
+        this.resetCategory()
+        this.refreshSyncInfo()
+        this.refreshCodes()
+      })
+      return
+    }
+
+    const result = handleMessage(this.syncState, message, Date.now())
+    this.syncState = result.state
+    if (!result.committed) {
+      return
+    }
+    applyCommittedSnapshot(result.committed, saveResult => {
+      if (saveResult.ok) {
+        this.snapshot = result.committed
+        this.rawAccounts = result.committed.accounts.slice(0)
+        this.page = 0
+        this.resetCategory()
+        this.refreshSyncInfo()
+        this.refreshCodes()
+        sendAck(result.ack)
+        return
+      }
+      // Persisting failed: old snapshot is untouched, tell the phone the truth.
+      sendAck(
+        buildAck({
+          syncId: result.ack.syncId,
+          ok: false,
+          received: result.ack.received,
+          committed: 0,
+          error: "storage_write_failed",
+          sentAt: Date.now()
+        })
+      )
+    })
+  },
+
+  requestSync() {
+    if (this.requestPending) {
+      return
+    }
+    this.requestPending = true
+    this.requestLabel = "请求中…"
+    const handed = requestPhoneSync(result => {
+      this.requestPending = false
+      if (result.ok) {
+        this.requestLabel = "已请求"
+      } else {
+        this.requestLabel = "未连接"
+      }
+      this.scheduleRequestReset()
+    })
+    if (!handed) {
+      this.requestPending = false
+      this.requestLabel = "未连接"
+      this.scheduleRequestReset()
+    }
+  },
+
+  scheduleRequestReset() {
+    this.clearRequestTimer()
+    this.requestTimer = setTimeout(() => {
+      this.requestTimer = null
+      this.requestLabel = "请求同步"
+    }, 3000)
+  },
+
+  clearRequestTimer() {
+    if (this.requestTimer) {
+      clearTimeout(this.requestTimer)
+      this.requestTimer = null
+    }
+  },
+
+  /* ---------------------------------------------------------------- ticker */
+
+  startTicker() {
+    if (this.timer) {
+      return
+    }
+    this.timer = setInterval(() => {
+      this.refreshCodes()
+    }, 1000)
+  },
+
+  stopTicker() {
+    if (!this.timer) {
+      return
+    }
+    clearInterval(this.timer)
+    this.timer = null
+  },
+
+  /* ---------------------------------------------------------------- ui */
+
+  openDetail(id) {
+    router.push({
+      uri: "/pages/detail",
+      params: { id: id }
+    })
+  },
+
+  openCategory() {
+    router.push({ uri: "/pages/category" })
+  },
+
+  openMenu() {
+    router.push({ uri: "/pages/menu" })
+  },
+
+  nextPage() {
+    if (this.pageCount <= 1) {
+      return
+    }
+    this.page = cyclePage(this.page, this.pageCount, 1)
+    this.refreshCodes()
+  },
+
+  previousPage() {
+    if (this.pageCount <= 1) {
+      return
+    }
+    this.page = cyclePage(this.page, this.pageCount, -1)
+    this.refreshCodes()
+  },
+
+  handleSwipe(event) {
+    if (!event || !event.direction) {
+      return
+    }
+    if (event.direction === "up") {
+      this.nextPage()
+    } else if (event.direction === "down") {
+      this.previousPage()
+    } else if (event.direction === "left" || event.direction === "right") {
+      this.$app.exit()
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  flex-direction: column;
+  background-color: #000000;
+}
+
+.card {
+  width: 100%;
+  height: 100%;
+  padding: 8px 12px 6px;
+  flex-direction: column;
+  border-radius: 22px;
+  background-color: #0b0f0e;
+}
+
+.header {
+  width: 100%;
+  height: 44px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-left {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: bold;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.category-row {
+  margin-top: 1px;
+  flex-direction: row;
+  align-items: center;
+}
+
+.category {
+  font-size: 14px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.category-arrow {
+  margin-left: 4px;
+  font-size: 15px;
+}
+
+.menu-button {
+  width: 56px;
+  height: 32px;
+  margin-left: 8px;
+  border-radius: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-button-text {
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.status-row {
+  width: 100%;
+  height: 26px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status-text {
+  flex: 1;
+  font-size: 12px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.request-button {
+  width: 78px;
+  height: 24px;
+  margin-left: 8px;
+  border-radius: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.request-text {
+  font-size: 13px;
+}
+
+.list {
+  flex: 1;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.otp-item {
+  flex: 1;
+  width: 100%;
+  margin-top: 4px;
+  padding: 5px 10px 4px;
+  border-radius: 14px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.otp-main {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.otp-info {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.otp-issuer {
+  font-size: 19px;
+  font-weight: bold;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.otp-account {
+  margin-top: 1px;
+  font-size: 13px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.otp-code-col {
+  width: 200px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.otp-code {
+  font-size: 30px;
+  font-weight: bold;
+  text-align: right;
+  lines: 1;
+  text-overflow: clip;
+}
+
+.otp-remaining {
+  width: 34px;
+  margin-left: 6px;
+  font-size: 13px;
+  text-align: right;
+}
+
+.otp-progress {
+  width: 100%;
+  height: 2px;
+  margin-top: 4px;
+  border-radius: 1px;
+}
+
+.otp-progress-fill {
+  height: 2px;
+  border-radius: 1px;
+  transition-property: width;
+  transition-duration: 1000ms;
+  transition-timing-function: linear;
+}
+
+.empty {
+  flex: 1;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-title {
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.empty-copy {
+  margin-top: 6px;
+  font-size: 14px;
+  text-align: center;
+  lines: 2;
+}
+
+.empty-button {
+  width: 180px;
+  height: 32px;
+  margin-top: 14px;
+  border-radius: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-button-text {
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.footer {
+  width: 100%;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-indicator {
+  font-size: 12px;
+  text-align: center;
+}
+</style>

@@ -1,0 +1,211 @@
+{
+  "source": "plain-backup.json",
+  "note": "参考映射结果（e2e/lib/stratum.mjs mapBackupToAccounts）。排序规则见 e2e/README.md；文档未强制排序，跨端对拍请按 account.id 集合比较。",
+  "stats": {
+    "total": 22,
+    "imported": 11,
+    "skipped": 11
+  },
+  "accounts": [
+    {
+      "id": "s_9bb1d7340577",
+      "issuer": "RFC6238",
+      "accountName": "sha1@test.invalid",
+      "category": "开发",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "algorithm": "SHA1",
+      "digits": 8,
+      "period": 30,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_c31b0534e1e4",
+      "issuer": "RFC6238",
+      "accountName": "sha256@test.invalid",
+      "category": "开发",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+      "algorithm": "SHA256",
+      "digits": 8,
+      "period": 30,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_537c9a35b939",
+      "issuer": "RFC6238",
+      "accountName": "sha512@test.invalid",
+      "category": "开发",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+      "algorithm": "SHA512",
+      "digits": 8,
+      "period": 30,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_499b2b95c278",
+      "issuer": "Padded",
+      "accountName": "padding@example.com",
+      "category": "个人",
+      "secret": "OBQWI43FMNZGK5A",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_53eb9c453ea5",
+      "issuer": "邮件",
+      "accountName": "邮箱用户",
+      "category": "个人",
+      "secret": "Q42OTENK4TNSGR2YKPBALYM7WYRUTSM4",
+      "algorithm": "SHA1",
+      "digits": 8,
+      "period": 30,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_c1de02d94ffa",
+      "issuer": "NoUsername",
+      "accountName": "",
+      "category": "个人",
+      "secret": "OYFVLVUXN3W27CRVG4VWSHVEUGZT7VCZ",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_6733bd3d4d84",
+      "issuer": "企业VPN",
+      "accountName": "admin",
+      "category": "云服务",
+      "secret": "3VEAS64Y6EOI6J4LVYCFHGUB37JBRNLAQTCLWI2JZTRSC4Y5XAVL33TPCF3U4EQROKPFVPEZPNXTHQ7YOOSDH36KJWVEYKXZ",
+      "algorithm": "SHA512",
+      "digits": 10,
+      "period": 60,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_6bcdee253ca0",
+      "issuer": "AWS",
+      "accountName": "",
+      "category": "云服务",
+      "secret": "5JUFAI77AJK5F6MLUO3DSJUOF34FUL7A",
+      "algorithm": "SHA256",
+      "digits": 6,
+      "period": 60,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_b57fa0798cf1",
+      "issuer": "GitHub",
+      "accountName": "me@example.com",
+      "category": "社交",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_c12da9409db8",
+      "issuer": "Cloudflare",
+      "accountName": "user@example.com",
+      "category": "默认分类",
+      "secret": "MFRGGZDFMZTWQ2LK",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 15,
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_9f2e8d94b4a2",
+      "issuer": "",
+      "accountName": "no-issuer@example.com",
+      "category": "默认分类",
+      "secret": "I53OJ55WUWVSNFYL32GL4LJD2K542DCD",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "updatedAt": 1760000000000
+    }
+  ],
+  "skipped": [
+    {
+      "stratumIndex": 11,
+      "issuer": "LegacyHOTP",
+      "username": "hotp-user",
+      "code": "TYPE_NOT_TOTP",
+      "reason": "Type=1 不是 TOTP（2）"
+    },
+    {
+      "stratumIndex": 12,
+      "issuer": "Steam",
+      "username": "steamuser",
+      "code": "TYPE_NOT_TOTP",
+      "reason": "Type=4 不是 TOTP（2）"
+    },
+    {
+      "stratumIndex": 13,
+      "issuer": "MobileOTP",
+      "username": "mobile",
+      "code": "TYPE_NOT_TOTP",
+      "reason": "Type=3 不是 TOTP（2）"
+    },
+    {
+      "stratumIndex": 14,
+      "issuer": "BadBase32",
+      "username": "bad",
+      "code": "INVALID_BASE32",
+      "reason": "非法 Base32（要求 A-Z2-7，允许 = 填充）"
+    },
+    {
+      "stratumIndex": 15,
+      "issuer": "EmptySecret",
+      "username": "empty",
+      "code": "EMPTY_SECRET",
+      "reason": "secret 为空"
+    },
+    {
+      "stratumIndex": 16,
+      "issuer": "BadPeriodLow",
+      "username": "period",
+      "code": "PERIOD_OUT_OF_RANGE",
+      "reason": "Period=4 不在 5-300"
+    },
+    {
+      "stratumIndex": 17,
+      "issuer": "BadPeriodHigh",
+      "username": "period",
+      "code": "PERIOD_OUT_OF_RANGE",
+      "reason": "Period=301 不在 5-300"
+    },
+    {
+      "stratumIndex": 18,
+      "issuer": "BadDigitsLow",
+      "username": "digits",
+      "code": "DIGITS_OUT_OF_RANGE",
+      "reason": "Digits=5 不在 6-10"
+    },
+    {
+      "stratumIndex": 19,
+      "issuer": "BadDigitsHigh",
+      "username": "digits",
+      "code": "DIGITS_OUT_OF_RANGE",
+      "reason": "Digits=11 不在 6-10"
+    },
+    {
+      "stratumIndex": 20,
+      "issuer": "",
+      "username": "",
+      "code": "EMPTY_ISSUER_AND_USERNAME",
+      "reason": "issuer 与 username 同时为空"
+    },
+    {
+      "stratumIndex": 21,
+      "issuer": "BadAlgorithm",
+      "username": "algo",
+      "code": "INVALID_ALGORITHM",
+      "reason": "Algorithm=7 不是 0/1/2"
+    }
+  ]
+}

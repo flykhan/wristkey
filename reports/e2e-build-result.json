@@ -1,0 +1,171 @@
+{
+  "generatedAt": "2026-11-10T07:37:41.522Z",
+  "node": "v22.22.2",
+  "platform": "linux x64",
+  "flags": {
+    "build": true,
+    "withTests": true
+  },
+  "artifacts": {
+    "rpk": "band-app/dist/dev.wristkey.app.release.1.0.0.rpk",
+    "apk": "android-app/app/build/outputs/apk/release/app-release.apk"
+  },
+  "summary": {
+    "passed": 25,
+    "failed": 0,
+    "skipped": 0,
+    "total": 25
+  },
+  "checks": [
+    {
+      "name": "band-app 存在",
+      "status": "PASS",
+      "detail": "band-app/package.json",
+      "command": ""
+    },
+    {
+      "name": "band-app manifest.package",
+      "status": "PASS",
+      "detail": "dev.wristkey.app",
+      "command": ""
+    },
+    {
+      "name": "band-app manifest.name",
+      "status": "PASS",
+      "detail": "腕证",
+      "command": ""
+    },
+    {
+      "name": "band-app deviceTypeList 含 watch",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "band-app feature system.router",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "band-app feature system.storage",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "band-app feature system.interconnect",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "band-app config.designWidth",
+      "status": "PASS",
+      "detail": "device-width",
+      "command": ""
+    },
+    {
+      "name": "band-app npm test",
+      "status": "PASS",
+      "detail": "退出码 0，48 个用例通过",
+      "command": "npm test"
+    },
+    {
+      "name": "band-app npm run release",
+      "status": "PASS",
+      "detail": "退出码 0",
+      "command": "cd band-app && npm run release"
+    },
+    {
+      "name": "band-app dist/*.rpk 存在",
+      "status": "PASS",
+      "detail": "band-app/dist/dev.wristkey.app.release.1.0.0.rpk (54726B)",
+      "command": ""
+    },
+    {
+      "name": "rpk manifest.package",
+      "status": "PASS",
+      "detail": "dev.wristkey.app",
+      "command": ""
+    },
+    {
+      "name": "rpk manifest.name",
+      "status": "PASS",
+      "detail": "腕证",
+      "command": ""
+    },
+    {
+      "name": "android-app 存在",
+      "status": "PASS",
+      "detail": "android-app/gradlew",
+      "command": ""
+    },
+    {
+      "name": "JDK 可用",
+      "status": "PASS",
+      "detail": "/home/lsl/.jdks/jdk-21.0.13+9",
+      "command": ""
+    },
+    {
+      "name": "android gradle testDebugUnitTest assembleDebug",
+      "status": "PASS",
+      "detail": "退出码 0，58 个用例通过（9 个测试类）",
+      "command": "cd android-app && JAVA_HOME=/home/lsl/.jdks/jdk-21.0.13+9 ./gradlew testDebugUnitTest assembleDebug"
+    },
+    {
+      "name": "android APK 存在",
+      "status": "PASS",
+      "detail": "android-app/app/build/outputs/apk/release/app-release.apk (26263473B)",
+      "command": ""
+    },
+    {
+      "name": "APK package",
+      "status": "PASS",
+      "detail": "dev.wristkey.app",
+      "command": ""
+    },
+    {
+      "name": "APK 应用名",
+      "status": "PASS",
+      "detail": "腕证",
+      "command": ""
+    },
+    {
+      "name": "签名 PEM SHA-256",
+      "status": "PASS",
+      "detail": "b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4",
+      "command": ""
+    },
+    {
+      "name": "APK 证书 SHA-256",
+      "status": "PASS",
+      "detail": "b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4",
+      "command": ""
+    },
+    {
+      "name": "APK 证书 == 签名 PEM",
+      "status": "PASS",
+      "detail": "三方一致",
+      "command": ""
+    },
+    {
+      "name": "RPK 内嵌证书 DER",
+      "status": "PASS",
+      "detail": "命中 offset 51180",
+      "command": ""
+    },
+    {
+      "name": "scripts/check-signing.sh",
+      "status": "PASS",
+      "detail": "PASS: 包名 dev.wristkey.app，APK 与 RPK 使用同一证书（SHA-256 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4）",
+      "command": "bash scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.apk band-app/dist/dev.wristkey.app.release.1.0.0.rpk"
+    },
+    {
+      "name": "APK 与 RPK 包名一致",
+      "status": "PASS",
+      "detail": "dev.wristkey.app",
+      "command": ""
+    }
+  ]
+}

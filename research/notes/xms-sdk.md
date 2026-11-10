@@ -10,7 +10,7 @@
 - 能力齐全：设备发现（NodeApi）、权限（AuthApi，`DEVICE_MANAGER`/`NOTIFY`）、发消息（`MessageApi.sendMessage(nodeId, byte[])`）、**收消息（`MessageApi.addListener(nodeId, OnMessageReceivedListener)`）**、启动手环快应用、数据通道（query/subscribe）。**[已验证]**
 - **可以收手环 ack**：`addListener` 提供 `onMessageReceived(String nodeId, byte[] data)` 回调，参考实现只是没用它（只发不收）。协议 v2 的 ack 有 SDK 层面的可行性。**[已验证 API；真机未验证]**
 - 消息大小：SDK 内**没有**显式大小检查；底层走 Binder/AIDL（`I(String,[B,IMessageCallback)V`），Binder 事务上限约 1MB 属于硬上限，但实际穿戴服务/手环通道上限更小且未知。**协议按每包 <1 KB 设计是安全做法**；不要单条发全量快照。**[已验证-无 SDK 检查；具体上限未验证]**
-- 对 10 Pro 兼容性：AAR 与设备型号无关（手机侧服务），BandOTP/BandTOTP 均用 1.4 且声称支持手环 9/10/10 Pro；签名不一致时会返回 `RESULT_SIGNATURE_VERIFY_FAILED`。**[已验证-二手]**
+- 对 10 Pro 兼容性：AAR 与设备型号无关（手机侧服务）。BandOTP Android 与 BandTOTP Android 均使用同一 AAR 1.4；BandTOTP 的 AstroBox 资源明确含 `xmb10p`（10 Pro）下载项。签名不一致时会返回 `RESULT_SIGNATURE_VERIFY_FAILED`。**[已验证-源码/资源清单]**
 
 ## 1. AAR 基本信息（命令可复核）
 
@@ -172,7 +172,7 @@ messageApi.addListener(node.id, object : OnMessageReceivedListener {
 ## 5. 对手环 10 Pro 的兼容性判断
 
 - 该 SDK 是**手机侧**服务 API，与手环型号解耦；实际通信由"小米运动健康 + 穿戴服务 + BLE"完成。**[已验证-架构]**
-- BandOTP Android（同一 AAR 1.4）与 BandOTP 手环端在小米手环 9/9 Pro/10/10 Pro 上可用；BandTOTP Android 同 AAR 亦支持 10 Pro 资源（AstroBox `xmb10p` 条目）。**[已验证-二手]**
+- 本项目 README 声称 BandOTP 这套链路已在 9/9 Pro/10/10 Pro 可用（参考仓库 README 未逐机型声明，属二手）；BandTOTP Android 使用同 AAR 1.4，且其 AstroBox 资源清单明确有 `xmb10p`（10 Pro）下载项。**[已验证-源码/资源清单；真机未验证]**
 - 结论：**10 Pro 兼容性风险低**；风险集中在"两端证书/包名一致"和"10 Pro 上快应用本身能否运行"，不在 SDK。**[推断]**
 
 ## 6. 待真机验证

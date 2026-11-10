@@ -1,0 +1,973 @@
+{
+  "description": "手环端接收状态机的非法/边界输入与期望（依据 docs/protocol.md）。verify.mjs 逐条回放并断言。",
+  "baseClock": 1760000000000,
+  "initialSnapshot": {
+    "version": 2,
+    "updatedAt": 1700000000000,
+    "accounts": [
+      {
+        "id": "s_init000000000",
+        "issuer": "Init",
+        "accountName": "init@test.invalid",
+        "category": "默认分类",
+        "secret": "JBSWY3DPEHPK3PXP",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 30
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "envelope-version-1-ignored",
+      "description": "version != 2 的消息必须忽略（向前兼容），不清理 staging、不改快照",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 1,
+          "sentAt": 1760000000000,
+          "syncId": "s-v1",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "ignored"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": null
+      }
+    },
+    {
+      "name": "unknown-type-ignored",
+      "description": "未知 type 必须忽略",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_unknown",
+          "version": 2,
+          "sentAt": 1760000000000
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "ignored"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": null
+      }
+    },
+    {
+      "name": "malformed-json-ignored",
+      "description": "非 JSON 字符串必须忽略",
+      "initialSnapshot": "default",
+      "messages": [
+        "not-a-json"
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "ignored",
+            "reasonContains": "JSON"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": null
+      }
+    },
+    {
+      "name": "legacy-v1-config-snapshot-ignored",
+      "description": "v1 的 mfa_config_snapshot 不参与 v2 同步，必须忽略",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_config_snapshot",
+          "version": 1,
+          "sentAt": 1760000000000,
+          "configs": []
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "ignored"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": null
+      }
+    },
+    {
+      "name": "begin-then-empty-label-account-commit-fails",
+      "description": "issuer 与 accountName 同时为空的 account 丢弃；commit 因条数不足失败，旧快照不变",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-bad-label",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-bad-label",
+          "index": 0,
+          "account": {
+            "id": "bad-label",
+            "issuer": "",
+            "accountName": "",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-bad-label",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "dropped",
+            "reasonContains": "同时为空"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 0,
+          "committed": 0
+        },
+        "expectedStagingErrors": 1
+      }
+    },
+    {
+      "name": "begin-commit-count-mismatch",
+      "description": "commit.accountCount 与 begin 不一致 → 失败 ack，staging 丢弃",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-count",
+          "accountCount": 2
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-count",
+          "index": 0,
+          "account": {
+            "id": "count-1",
+            "issuer": "Count",
+            "accountName": "a",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-count",
+          "accountCount": 2
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 1,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "commit-syncid-mismatch",
+      "description": "commit.syncId 与 staging 不一致 → 失败",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-A",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-A",
+          "index": 0,
+          "account": {
+            "id": "mismatch-1",
+            "issuer": "Mismatch",
+            "accountName": "a",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-B",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 1,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "account-syncid-mismatch-dropped",
+      "description": "account.syncId 与 staging 不一致 → 丢弃并计错误",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-C",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-X",
+          "index": 0,
+          "account": {
+            "id": "mismatch-2",
+            "issuer": "Mismatch",
+            "accountName": "a",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-C",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "dropped",
+            "reasonContains": "syncId"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 0,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "commit-without-begin",
+      "description": "无 staging 时收到 commit → 失败 ack，快照不变",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-none",
+          "accountCount": 0
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "failed",
+            "reasonContains": "没有进行中的 staging"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 0,
+          "committed": 0,
+          "errorContains": "staging"
+        }
+      }
+    },
+    {
+      "name": "account-before-begin-dropped",
+      "description": "无 staging 时收到 account → 丢弃",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-none",
+          "index": 0,
+          "account": {
+            "id": "lonely",
+            "issuer": "Lonely",
+            "accountName": "a",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "dropped",
+            "reasonContains": "staging"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": null
+      }
+    },
+    {
+      "name": "invalid-account-fields-dropped",
+      "description": "algorithm/digits/period/secret/category 非法的 account 全部丢弃，commit 失败",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-fields",
+          "accountCount": 5
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-fields",
+          "index": 0,
+          "account": {
+            "id": "f-algo",
+            "issuer": "Bad",
+            "secret": "JBSWY3DPEHPK3PXP",
+            "algorithm": "MD5"
+          }
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-fields",
+          "index": 1,
+          "account": {
+            "id": "f-digits",
+            "issuer": "Bad",
+            "secret": "JBSWY3DPEHPK3PXP",
+            "digits": 5
+          }
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000003,
+          "syncId": "s-fields",
+          "index": 2,
+          "account": {
+            "id": "f-period",
+            "issuer": "Bad",
+            "secret": "JBSWY3DPEHPK3PXP",
+            "period": 4
+          }
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000004,
+          "syncId": "s-fields",
+          "index": 3,
+          "account": {
+            "id": "f-secret",
+            "issuer": "Bad",
+            "secret": "NOT-BASE32!"
+          }
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000005,
+          "syncId": "s-fields",
+          "index": 4,
+          "account": {
+            "id": "f-category",
+            "issuer": "Bad",
+            "secret": "JBSWY3DPEHPK3PXP",
+            "category": "0123456789012345678901234567890123"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000006,
+          "syncId": "s-fields",
+          "accountCount": 5
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "dropped"
+          },
+          {
+            "status": "dropped"
+          },
+          {
+            "status": "dropped"
+          },
+          {
+            "status": "dropped"
+          },
+          {
+            "status": "dropped"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 0,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "oversized-id-dropped",
+      "description": "id 超过 64 字符 → 丢弃该 account",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-long-id",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-long-id",
+          "index": 0,
+          "account": {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "issuer": "Long",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-long-id",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "dropped",
+            "reasonContains": "64"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 0,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "digits-as-string-dropped",
+      "description": "digits 必须是整数（字符串 \"6\" 非法）",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-digits-type",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-digits-type",
+          "index": 0,
+          "account": {
+            "id": "digits-string",
+            "issuer": "Type",
+            "secret": "JBSWY3DPEHPK3PXP",
+            "digits": "6"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-digits-type",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "dropped"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 0,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "duplicate-id-deduped-commit-fails",
+      "description": "同一次同步内重复 id 去重；合法去重后条数不足 → commit 失败",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-dup",
+          "accountCount": 2
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-dup",
+          "index": 0,
+          "account": {
+            "id": "dup-1",
+            "issuer": "Dup",
+            "accountName": "a",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-dup",
+          "index": 1,
+          "account": {
+            "id": "dup-1",
+            "issuer": "Dup",
+            "accountName": "b",
+            "secret": "MFRGGZDFMZTWQ2LK"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000003,
+          "syncId": "s-dup",
+          "accountCount": 2
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "deduped"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 1,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "fallback-id-when-missing",
+      "description": "account.id 缺省时用 index 兜底",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-fallback",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-fallback",
+          "index": 0,
+          "account": {
+            "issuer": "Fallback",
+            "accountName": "fb@test.invalid",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-fallback",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "committed"
+          }
+        ],
+        "finalSnapshot": {
+          "accountCount": 1
+        },
+        "stagingActive": false,
+        "lastAck": {
+          "ok": true,
+          "received": 1,
+          "committed": 1
+        }
+      }
+    },
+    {
+      "name": "defaults-and-secret-normalization",
+      "description": "缺省 algorithm/digits/period/category 使用默认值；secret 空格与 '=' 归一化",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-defaults",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-defaults",
+          "index": 0,
+          "account": {
+            "id": "defaults-1",
+            "issuer": "Defaults",
+            "secret": " JBSW Y3DP EHPK 3PXP= "
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-defaults",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "committed"
+          }
+        ],
+        "finalSnapshot": {
+          "accountCount": 1
+        },
+        "finalAccounts": [
+          {
+            "id": "defaults-1",
+            "issuer": "Defaults",
+            "accountName": "",
+            "category": "默认分类",
+            "secret": "JBSWY3DPEHPK3PXP",
+            "algorithm": "SHA1",
+            "digits": 6,
+            "period": 30
+          }
+        ],
+        "stagingActive": false,
+        "lastAck": {
+          "ok": true,
+          "received": 1,
+          "committed": 1
+        }
+      }
+    },
+    {
+      "name": "new-begin-discards-old-staging",
+      "description": "收到新 begin 时丢弃旧 staging，按新 syncId 提交空快照",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-old",
+          "accountCount": 2
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-old",
+          "index": 0,
+          "account": {
+            "id": "old-1",
+            "issuer": "Old",
+            "accountName": "a",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000002,
+          "syncId": "s-new",
+          "accountCount": 0
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000003,
+          "syncId": "s-new",
+          "accountCount": 0
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "committed"
+          }
+        ],
+        "finalSnapshot": {
+          "accountCount": 0
+        },
+        "stagingActive": false,
+        "lastAck": {
+          "ok": true,
+          "received": 0,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "empty-sync-clears-accounts",
+      "description": "accountCount=0 的同步成功提交后快照为空（清空手环账号）",
+      "initialSnapshot": "default",
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-empty",
+          "accountCount": 0
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000000001,
+          "syncId": "s-empty",
+          "accountCount": 0
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "committed"
+          }
+        ],
+        "finalSnapshot": {
+          "accountCount": 0
+        },
+        "stagingActive": false,
+        "lastAck": {
+          "ok": true,
+          "received": 0,
+          "committed": 0
+        }
+      }
+    },
+    {
+      "name": "staging-timeout-discards",
+      "description": "begin 后 120s 内无新消息 → staging 丢弃，后续 account/commit 失败",
+      "initialSnapshot": "default",
+      "clockOffsets": [
+        0,
+        120001,
+        120001
+      ],
+      "messages": [
+        {
+          "type": "mfa_sync_begin",
+          "version": 2,
+          "sentAt": 1760000000000,
+          "syncId": "s-timeout",
+          "accountCount": 1
+        },
+        {
+          "type": "mfa_sync_account",
+          "version": 2,
+          "sentAt": 1760000120001,
+          "syncId": "s-timeout",
+          "index": 0,
+          "account": {
+            "id": "timeout-1",
+            "issuer": "Timeout",
+            "accountName": "a",
+            "secret": "JBSWY3DPEHPK3PXP"
+          }
+        },
+        {
+          "type": "mfa_sync_commit",
+          "version": 2,
+          "sentAt": 1760000120001,
+          "syncId": "s-timeout",
+          "accountCount": 1
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "status": "accepted"
+          },
+          {
+            "status": "dropped",
+            "reasonContains": "staging"
+          },
+          {
+            "status": "failed"
+          }
+        ],
+        "finalSnapshot": "unchanged",
+        "stagingActive": false,
+        "lastAck": {
+          "ok": false,
+          "received": 0,
+          "committed": 0
+        }
+      }
+    }
+  ]
+}

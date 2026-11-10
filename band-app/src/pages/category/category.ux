@@ -1,0 +1,258 @@
+<template>
+  <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
+    <div class="header">
+      <text class="title" style="color: {{ theme.title }}">选择分类</text>
+      <text class="hint" style="color: {{ theme.secondary }}">点击分类立即应用</text>
+    </div>
+
+    <div class="list" if="{{ pageCategories.length > 0 }}">
+      <div class="item" for="{{ pageCategories }}" onclick="selectCategory($item.name)" style="background-color: {{ theme.cardBackground }}">
+        <text class="name" style="color: {{ theme.title }}">{{ $item.name }}</text>
+        <div class="meta">
+          <text class="count" style="color: {{ theme.secondary }}">{{ $item.count }} 个</text>
+          <text class="current" if="{{ $item.name === currentCategory }}" style="color: {{ theme.accent }}">当前</text>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty" if="{{ pageCategories.length === 0 }}">
+      <text class="empty-text" style="color: {{ theme.secondary }}">暂无分类，请先在手机 App 导入并同步</text>
+    </div>
+
+    <div class="footer" if="{{ pageCount > 1 }}">
+      <text class="page-indicator" style="color: {{ theme.secondary }}" onclick="nextPage">{{ page + 1 }} / {{ pageCount }} · 点击翻页</text>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import storage from "@system.storage"
+import { DEFAULT_CATEGORY, collectCategories } from "../../common/scripts/accountModel"
+import { loadSnapshot } from "../../common/scripts/mfaConfig"
+import {
+  CATEGORY_STORAGE_KEY,
+  DARK_THEME,
+  DEFAULT_DARK_MODE,
+  THEME_STORAGE_KEY,
+  cyclePage,
+  parseDarkMode,
+  themeFor
+} from "../../common/scripts/settings"
+
+const CATEGORIES_PER_PAGE = 4
+
+export default {
+  private: {
+    categories: [],
+    pageCategories: [],
+    currentCategory: DEFAULT_CATEGORY,
+    page: 0,
+    pageCount: 1,
+    theme: DARK_THEME
+  },
+
+  onInit() {
+    this.loadTheme()
+    this.loadCategories()
+  },
+
+  onShow() {
+    this.loadTheme()
+    this.loadCategories()
+  },
+
+  loadTheme() {
+    storage.get({
+      key: THEME_STORAGE_KEY,
+      default: DEFAULT_DARK_MODE ? "true" : "false",
+      success: value => {
+        this.theme = themeFor(parseDarkMode(value))
+      },
+      fail: () => {
+        this.theme = themeFor(DEFAULT_DARK_MODE)
+      }
+    })
+  },
+
+  loadCategories() {
+    storage.get({
+      key: CATEGORY_STORAGE_KEY,
+      default: DEFAULT_CATEGORY,
+      success: value => {
+        this.currentCategory = value || DEFAULT_CATEGORY
+        this.loadFromSnapshot()
+      },
+      fail: () => {
+        this.currentCategory = DEFAULT_CATEGORY
+        this.loadFromSnapshot()
+      }
+    })
+  },
+
+  loadFromSnapshot() {
+    loadSnapshot(snapshot => {
+      this.categories = collectCategories(snapshot.accounts)
+      let hasCurrent = false
+      for (let index = 0; index < this.categories.length; index++) {
+        if (this.categories[index].name === this.currentCategory) {
+          hasCurrent = true
+        }
+      }
+      if (!hasCurrent && this.categories.length > 0) {
+        this.currentCategory = this.categories[0].name
+      }
+      this.refreshPage()
+    })
+  },
+
+  refreshPage() {
+    const pageCount = Math.max(1, Math.ceil(this.categories.length / CATEGORIES_PER_PAGE))
+    if (this.page >= pageCount) {
+      this.page = 0
+    }
+    this.pageCount = pageCount
+    const start = this.page * CATEGORIES_PER_PAGE
+    this.pageCategories = this.categories.slice(start, start + CATEGORIES_PER_PAGE)
+  },
+
+  nextPage() {
+    if (this.pageCount <= 1) {
+      return
+    }
+    this.page = cyclePage(this.page, this.pageCount, 1)
+    this.refreshPage()
+  },
+
+  previousPage() {
+    if (this.pageCount <= 1) {
+      return
+    }
+    this.page = cyclePage(this.page, this.pageCount, -1)
+    this.refreshPage()
+  },
+
+  selectCategory(name) {
+    const category = name || DEFAULT_CATEGORY
+    storage.set({
+      key: CATEGORY_STORAGE_KEY,
+      value: category,
+      success: () => {
+        router.back()
+      },
+      fail: () => {
+        router.back()
+      }
+    })
+  },
+
+  handleSwipe(event) {
+    if (!event || !event.direction) {
+      return
+    }
+    if (event.direction === "up") {
+      this.nextPage()
+    } else if (event.direction === "down") {
+      this.previousPage()
+    } else if (event.direction === "right") {
+      router.back()
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px 6px;
+  flex-direction: column;
+  background-color: #000000;
+}
+
+.header {
+  width: 100%;
+  height: 40px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.title {
+  font-size: 23px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.hint {
+  margin-top: 1px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.list {
+  flex: 1;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.item {
+  flex: 1;
+  width: 100%;
+  margin-top: 4px;
+  padding: 0 16px;
+  border-radius: 13px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.name {
+  flex: 1;
+  font-size: 18px;
+  font-weight: bold;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  flex-direction: row;
+  align-items: center;
+}
+
+.count {
+  font-size: 13px;
+}
+
+.current {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.empty {
+  flex: 1;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-text {
+  font-size: 14px;
+  text-align: center;
+  lines: 2;
+}
+
+.footer {
+  width: 100%;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-indicator {
+  font-size: 12px;
+  text-align: center;
+}
+</style>

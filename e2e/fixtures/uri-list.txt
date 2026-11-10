@@ -1,0 +1,7 @@
+otpauth://totp/GitHub%3Ame%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub
+otpauth://totp/%E4%BC%81%E4%B8%9AVPN%3Aadmin?secret=3VEAS64Y6EOI6J4LVYCFHGUB37JBRNLAQTCLWI2JZTRSC4Y5XAVL33TPCF3U4EQROKPFVPEZPNXTHQ7YOOSDH36KJWVEYKXZ&issuer=%E4%BC%81%E4%B8%9AVPN&algorithm=SHA512&digits=10&period=60
+otpauth://totp/Cloudflare%3Auser%40example.com?secret=MFRGGZDFMZTWQ2LK&issuer=Cloudflare&period=15
+otpauth://totp/RFC6238%3Asha1%40test.invalid?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=RFC6238&digits=8
+otpauth://totp/RFC6238%3Asha256%40test.invalid?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA&issuer=RFC6238&algorithm=SHA256&digits=8
+otpauth://hotp/LegacyHOTP:hotp-user?secret=NBXXI4BNOVZGSLLTNNUXA&counter=7
+otpauth://totp/BadUri:bad?secret=NOT-BASE32!

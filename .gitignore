@@ -21,6 +21,7 @@ android-app/captures/
 *.apk
 *.aab
 *.jks
+!signing/dev-release.jks
 *.keystore
 
 # ide / os

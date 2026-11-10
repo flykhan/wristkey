@@ -118,14 +118,18 @@ unzip -p $RPK META-INF/CERT > /tmp/cert.zip
 unzip -p /tmp/cert.zip hash.json | head -c 800; echo
 # b) 定位签名块（可看到魔法串）
 grep -abo "RPK Sig Block 42" $RPK
-# c) 提取内嵌证书（Node，利用 crypto.X509Certificate 解析 DER）
-node tools/verify-rpk-signature.mjs $RPK    # 自建脚本，见下
-# d) 与我们的 PEM 指纹对比
+# c) 解析签名块 + 提取内嵌证书 + 验证 RSA-SHA256 + 与 PEM 比对
+node research/notes/verify-rpk-signature.mjs $RPK signing/rpk-sign/certificate.pem
+#   -> 打印 EOCD/签名块偏移、kv id、signdata 大小、内嵌证书 subject/指纹、签名验证结果、
+#      "MATCH rpk cert == PEM cert: true/false"（退出码 0/1）
+# d) 也可以手动对证书指纹
 openssl x509 -in signing/rpk-sign/certificate.pem -noout -fingerprint -sha256
 ```
 
-> 本机已用一次性脚本验证：签名块起始偏移 = 中央目录偏移 − 3508，内嵌证书 `CN=localhost`，SHA-256 指纹 `4E:8E:…:45:85`，与 toolkit 内置 `pem/certificate.pem` 完全一致。**[已验证]**
+> 本机已用 `research/notes/verify-rpk-signature.mjs` 实测 debug rpk：签名块起始偏移 44006（= 中央目录 47514 − 3508），
+> 内嵌证书 `CN=localhost`、RSA-SHA256 签名 **verify: true**、公钥与证书公钥一致、指纹与 toolkit 内置证书完全一致，退出码 0。**[已验证]**
 > 说明：单靠 openssl 无法直接验整包自定义签名块，需要按上述块格式解析；**最实用的验收是"rpk 内嵌证书指纹 == APK 签名证书指纹"**，这才是 interconnect 的判定条件。
+> 校验脚本位置：`research/notes/verify-rpk-signature.mjs`（只读调研产物，不参与构建；使用 `node:fs/node:crypto`，无第三方依赖）。
 
 ### 3.2 手动校验：APK 证书指纹
 

@@ -1,0 +1,16 @@
+# build artifacts / dependencies
+/.nyc_output
+/coverage
+/node_modules
+/dist
+/build
+*.log
+
+# ide / os
+/.idea
+/.vscode
+.DS_Store
+
+# Dev signing material is intentionally tracked: system.interconnect requires
+# the band .rpk and the Android APK to share the same certificate. These are
+# development-only keys (see sign/README.md), never production keys.

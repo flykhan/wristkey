@@ -1,0 +1,218 @@
+{
+  "description": "合法同步消息序列：begin → account×N → commit；account 来自 expected-import.json",
+  "syncId": "sync-1760000000000-e2e",
+  "messages": [
+    {
+      "type": "mfa_sync_begin",
+      "version": 2,
+      "sentAt": 1760000000000,
+      "syncId": "sync-1760000000000-e2e",
+      "accountCount": 11
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000001,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 0,
+      "account": {
+        "id": "s_9bb1d7340577",
+        "issuer": "RFC6238",
+        "accountName": "sha1@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        "algorithm": "SHA1",
+        "digits": 8,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000002,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 1,
+      "account": {
+        "id": "s_c31b0534e1e4",
+        "issuer": "RFC6238",
+        "accountName": "sha256@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+        "algorithm": "SHA256",
+        "digits": 8,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000003,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 2,
+      "account": {
+        "id": "s_537c9a35b939",
+        "issuer": "RFC6238",
+        "accountName": "sha512@test.invalid",
+        "category": "开发",
+        "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+        "algorithm": "SHA512",
+        "digits": 8,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000004,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 3,
+      "account": {
+        "id": "s_499b2b95c278",
+        "issuer": "Padded",
+        "accountName": "padding@example.com",
+        "category": "个人",
+        "secret": "OBQWI43FMNZGK5A",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000005,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 4,
+      "account": {
+        "id": "s_53eb9c453ea5",
+        "issuer": "邮件",
+        "accountName": "邮箱用户",
+        "category": "个人",
+        "secret": "Q42OTENK4TNSGR2YKPBALYM7WYRUTSM4",
+        "algorithm": "SHA1",
+        "digits": 8,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000006,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 5,
+      "account": {
+        "id": "s_c1de02d94ffa",
+        "issuer": "NoUsername",
+        "accountName": "",
+        "category": "个人",
+        "secret": "OYFVLVUXN3W27CRVG4VWSHVEUGZT7VCZ",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000007,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 6,
+      "account": {
+        "id": "s_6733bd3d4d84",
+        "issuer": "企业VPN",
+        "accountName": "admin",
+        "category": "云服务",
+        "secret": "3VEAS64Y6EOI6J4LVYCFHGUB37JBRNLAQTCLWI2JZTRSC4Y5XAVL33TPCF3U4EQROKPFVPEZPNXTHQ7YOOSDH36KJWVEYKXZ",
+        "algorithm": "SHA512",
+        "digits": 10,
+        "period": 60,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000008,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 7,
+      "account": {
+        "id": "s_6bcdee253ca0",
+        "issuer": "AWS",
+        "accountName": "",
+        "category": "云服务",
+        "secret": "5JUFAI77AJK5F6MLUO3DSJUOF34FUL7A",
+        "algorithm": "SHA256",
+        "digits": 6,
+        "period": 60,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000009,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 8,
+      "account": {
+        "id": "s_b57fa0798cf1",
+        "issuer": "GitHub",
+        "accountName": "me@example.com",
+        "category": "社交",
+        "secret": "JBSWY3DPEHPK3PXP",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000010,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 9,
+      "account": {
+        "id": "s_c12da9409db8",
+        "issuer": "Cloudflare",
+        "accountName": "user@example.com",
+        "category": "默认分类",
+        "secret": "MFRGGZDFMZTWQ2LK",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 15,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000011,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 10,
+      "account": {
+        "id": "s_9f2e8d94b4a2",
+        "issuer": "",
+        "accountName": "no-issuer@example.com",
+        "category": "默认分类",
+        "secret": "I53OJ55WUWVSNFYL32GL4LJD2K542DCD",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 30,
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_commit",
+      "version": 2,
+      "sentAt": 1760000000012,
+      "syncId": "sync-1760000000000-e2e",
+      "accountCount": 11
+    }
+  ]
+}

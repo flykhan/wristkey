@@ -76,10 +76,11 @@ unzip -o research/mfa_android/app/libs/xms-wearable-lib_1.4_release.aar -d /tmp/
 unzip -o /tmp/aarx/classes.jar -d /tmp/aarx/cls
 node /tmp/javap2.js $(find /tmp/aarx/cls -name '*.class' | grep -E 'message/|auth/|NodeApi|tasks/')
 
-# rpk 签名块与内嵌证书
+# rpk 签名块与内嵌证书（脚本已随调研产物提供，可复跑）
 grep -abo "RPK Sig Block 42" band-app/dist/*.rpk
-node /tmp/rpkverify2.js band-app/dist/*.rpk    # /tmp 脚本为一次性验证脚本
-openssl x509 -inform der -in /tmp/rpk-cert.der -noout -fingerprint -sha256
+node research/notes/verify-rpk-signature.mjs band-app/dist/*.rpk \
+  band-app/node_modules/@aiot-toolkit/aiotpack/lib/compiler/javascript/vela/utils/signature/pem/certificate.pem
+# 输出包含: 内嵌证书 SHA-256、RSA-SHA256 verify: true/false、MATCH rpk cert == PEM cert: true/false
 
 # Stratum 源码事实
 grep -n "OpenBackupMenu\|Backup.FileExtension\|LegacyBackupEncryption" research/stratum/Stratum.Droid/src/Activity/MainActivity.cs

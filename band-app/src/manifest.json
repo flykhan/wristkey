@@ -1,0 +1,46 @@
+{
+  "package": "dev.wristkey.app",
+  "name": "腕证",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minPlatformVersion": 1000,
+  "icon": "/common/logo.png",
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.router"
+    },
+    {
+      "name": "system.storage"
+    },
+    {
+      "name": "system.interconnect"
+    }
+  ],
+  "config": {
+    "logLevel": "warn",
+    "designWidth": "device-width"
+  },
+  "router": {
+    "entry": "pages/index",
+    "pages": {
+      "pages/index": {
+        "component": "index"
+      },
+      "pages/detail": {
+        "component": "detail"
+      },
+      "pages/menu": {
+        "component": "menu"
+      },
+      "pages/category": {
+        "component": "category"
+      },
+      "pages/copyright": {
+        "component": "copyright"
+      }
+    }
+  }
+}

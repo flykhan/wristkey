@@ -1,0 +1,109 @@
+{
+  "generator": "e2e/fixtures/generate.mjs",
+  "formatSpec": "docs/stratum-format.md + research/stratum/doc/BACKUP_FORMAT.md",
+  "deterministic": true,
+  "password": "test-password",
+  "updatedAt": 1760000000000,
+  "encryption": {
+    "strong": {
+      "header": "AUTHENTICATORPRO",
+      "layout": "header16 + salt16 + iv12 + ciphertext + tag16",
+      "keyDerivation": {
+        "algorithm": "Argon2id",
+        "parallelism": 4,
+        "memorySizeKiB": 65536,
+        "iterations": 3,
+        "outputBytes": 32
+      },
+      "cipher": "AES-256-GCM (no AAD, tag 16)",
+      "saltHex": "fc1dc9c4eb0bba5199d3d250d086f861",
+      "ivHex": "f2bf8da7f475c9c1023b4de0"
+    },
+    "legacy": {
+      "header": "AuthenticatorPro",
+      "layout": "header16 + salt20 + iv16 + ciphertext",
+      "keyDerivation": {
+        "algorithm": "PBKDF2-HMAC-SHA1",
+        "iterations": 64000,
+        "outputBytes": 32
+      },
+      "cipher": "AES-256-CBC + PKCS#7",
+      "saltHex": "14fcce10114b4de7425fce66b1b1d6fad14b1a19",
+      "ivHex": "d2281b327e32593af7257e9bea46d117"
+    }
+  },
+  "expected": {
+    "total": 22,
+    "imported": 11,
+    "skipped": 11
+  },
+  "coverage": {
+    "algorithms": [
+      "SHA1",
+      "SHA256",
+      "SHA512"
+    ],
+    "digits": [
+      6,
+      8,
+      10
+    ],
+    "periods": [
+      15,
+      30,
+      60
+    ],
+    "categories": [
+      "开发",
+      "个人",
+      "云服务",
+      "社交",
+      "默认分类"
+    ],
+    "skippedCodes": [
+      "TYPE_NOT_TOTP",
+      "TYPE_NOT_TOTP",
+      "TYPE_NOT_TOTP",
+      "INVALID_BASE32",
+      "EMPTY_SECRET",
+      "PERIOD_OUT_OF_RANGE",
+      "PERIOD_OUT_OF_RANGE",
+      "DIGITS_OUT_OF_RANGE",
+      "DIGITS_OUT_OF_RANGE",
+      "EMPTY_ISSUER_AND_USERNAME",
+      "INVALID_ALGORITHM"
+    ]
+  },
+  "files": [
+    {
+      "name": "plain-backup.json",
+      "bytes": 8559,
+      "sha256": "052ccc115ce287183d4b34d5cd73611fbab844f66b31f4e3796508ce2a695d2e"
+    },
+    {
+      "name": "expected-import.json",
+      "bytes": 5538,
+      "sha256": "87b1528d4626d63aa2cb89ebb034f6472700df1d6f194b8b001ecd099059f09a"
+    },
+    {
+      "name": "strong.stratum",
+      "bytes": 8619,
+      "sha256": "1696e381f0831c52106885f2699b74376ace82281b7a462df9d49fdb4a215e81"
+    },
+    {
+      "name": "legacy.stratum",
+      "bytes": 8612,
+      "sha256": "314187a3843d4944a3649c0fcc33b06be223819ff09d8e84116916bf7a1b970a"
+    },
+    {
+      "name": "uri-list.txt",
+      "bytes": 770,
+      "sha256": "331aa191a0bb001815d4d20a867347e1877dbd59b254bac8f04734a7b54c00f5"
+    },
+    {
+      "name": "protocol/valid-session.json",
+      "bytes": 5879,
+      "sha256": "9cdc6768cc5048692295bd9bb309ce680625d939a4560b601bded012d8e09f5b"
+    }
+  ]
+}

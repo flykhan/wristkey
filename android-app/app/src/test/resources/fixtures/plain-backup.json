@@ -1,0 +1,161 @@
+{
+  "Authenticators": [
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "GitHub",
+      "Username": "dev@example.com",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 0,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": "google",
+      "Issuer": "Google",
+      "Username": "me@gmail.com",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+      "Pin": null,
+      "Algorithm": 1,
+      "Digits": 8,
+      "Period": 60,
+      "Counter": 0,
+      "Ranking": 1,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "AWS",
+      "Username": "root",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+      "Pin": null,
+      "Algorithm": 2,
+      "Digits": 10,
+      "Period": 15,
+      "Counter": 0,
+      "Ranking": 2,
+      "CopyCount": 0
+    },
+    {
+      "Type": 1,
+      "Icon": null,
+      "Issuer": "LegacyHOTP",
+      "Username": "u1",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 3,
+      "CopyCount": 0
+    },
+    {
+      "Type": 4,
+      "Icon": null,
+      "Issuer": "Steam",
+      "Username": "steamuser",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 5,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 4,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadBase32",
+      "Username": "u2",
+      "Secret": "NOT-BASE32!",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 5,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "BadPeriod",
+      "Username": "u3",
+      "Secret": "OBSXE2LPMQWXIZLTOQWXGZLDOJSXIII",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 999,
+      "Counter": 0,
+      "Ranking": 6,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": null,
+      "Username": null,
+      "Secret": "MVWXA5DZFVXGC3LFFVZWKY3SMV2CC",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 7,
+      "CopyCount": 0
+    }
+  ],
+  "Categories": [
+    {
+      "Id": "eb3774e3",
+      "Name": "开发",
+      "Ranking": 0
+    },
+    {
+      "Id": "ac12e825",
+      "Name": "社交",
+      "Ranking": 1
+    },
+    {
+      "Id": "515dde86",
+      "Name": "云服务",
+      "Ranking": 2
+    }
+  ],
+  "AuthenticatorCategories": [
+    {
+      "CategoryId": "eb3774e3",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Ranking": 5
+    },
+    {
+      "CategoryId": "ac12e825",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Ranking": 1
+    },
+    {
+      "CategoryId": "eb3774e3",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+      "Ranking": 0
+    },
+    {
+      "CategoryId": "515dde86",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+      "Ranking": 0
+    },
+    {
+      "CategoryId": "eb3774e3",
+      "AuthenticatorSecret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Ranking": 9
+    }
+  ],
+  "CustomIcons": []
+}

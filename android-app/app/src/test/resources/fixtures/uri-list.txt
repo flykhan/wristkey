@@ -1,0 +1,4 @@
+otpauth://totp/GitHub:dev@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=GitHub&digits=6&period=30
+otpauth://totp/Google:me@gmail.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA&issuer=Google&algorithm=SHA256&digits=8&period=60
+otpauth://totp/AWS:root?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA&issuer=AWS&algorithm=SHA512&digits=10&period=15
+otpauth://hotp/LegacyHOTP:u1?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&counter=0
