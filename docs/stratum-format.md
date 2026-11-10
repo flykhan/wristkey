@@ -49,7 +49,7 @@ Stratum 的导出菜单实际提供 3 项（文件名 `backup-yyyy-MM-dd_HHmmss.
 
 ## 明文 JSON 结构
 
-`~json
+```json
 {
   "Authenticators": [
     { "Type": 2, "Icon": "google", "Issuer": "Google", "Username": "me@gmail.com",
@@ -62,7 +62,7 @@ Stratum 的导出菜单实际提供 3 项（文件名 `backup-yyyy-MM-dd_HHmmss.
   ],
   "CustomIcons": []
 }
-`~
+```
 
 键名为 **PascalCase**（System.Text.Json 默认序列化行为）；解析器应同时容忍 camelCase。
 

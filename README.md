@@ -21,7 +21,7 @@
 
 ## 架构
 
-`~text
+```text
 ┌────────────────────────────┐          ┌──────────────────────────────┐
 │ Android App (Kotlin)       │  xms     │ Vela 快应用 (JS)              │
 │  · Stratum 备份解密/解析    │ ───────▶ │  · 接收 begin/account/commit  │
@@ -30,7 +30,7 @@
 │  · 显示同步状态/ack         │  ack     │  · 分类浏览 / 详情 / 状态提示  │
 └────────────────────────────┘          └──────────────────────────────┘
        手机（应用私有存储）                   手环（快应用 storage，离线可用）
-`~
+```
 
 - 协议：[docs/protocol.md](docs/protocol.md)
 - Stratum 备份格式与字段映射：[docs/stratum-format.md](docs/stratum-format.md)
@@ -39,24 +39,24 @@
 
 ## 仓库结构
 
-`~text
+```text
 band-app/       手环端 Vela 快应用（aiot-toolkit 构建 .rpk）
 android-app/    手机端 Android App（Gradle + Kotlin + Compose）
 docs/           架构、协议、格式、构建安装、安全
 tools/          Node 工具：Stratum 备份解密/转换、协议夹具、交叉验证
 e2e/            端到端测试与构建报告
 signing/        开发用签名材料（两端口径一致，发布前必须替换）
-`~
+```
 
 ## 快速构建
 
-`~bash
+```bash
 # 手环端（需要 Node >= 18）
 cd band-app && npm install && npm run build && npm run release   # 产物 dist/*.rpk
 
 # 手机端（需要 JDK 17+ 与 Android SDK 36）
 cd android-app && ./gradlew assembleDebug                      # 产物 app/build/outputs/apk/debug/
-`~
+```
 
 手环端安装（真机）：用 AstroBox / 表盘自定义工具把 `.rpk` 装到小米手环 10 Pro；手机端安装同名同签名的 APK。
 **两端包名 + 签名证书必须一致**，否则 `system.interconnect` 无法建立连接。

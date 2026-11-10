@@ -11,7 +11,7 @@
 
 ## 端到端数据流
 
-`~text
+```text
 Stratum 导出文件 (.stratum / .json / .txt)
         │  SAF 文件选择器（或 ACTION_SEND / ACTION_VIEW）
         ▼
@@ -25,7 +25,7 @@ Android: 生成协议消息 begin → account × N → commit（JSON/UTF-8，经
         │  通过 system.interconnect 回 ack（best effort）
         ▼
 Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
-`~
+```
 
 ## 通信链路
 
@@ -42,7 +42,7 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
 
 `system.storage` 单 key `mfa_snapshot_v2`：
 
-`~json
+```json
 {
   "version": 2,
   "updatedAt": 1760000000000,
@@ -60,7 +60,7 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
     }
   ]
 }
-`~
+```
 
 - 快照整体写入（commit 时一次 set），避免半写；写入失败时保留旧快照。
 - 列表标题脱敏显示；完整 secret 仅用于本地计算。

@@ -20,17 +20,17 @@
 
 开始一次全量同步。收到即清空 staging。
 
-`~json
+```json
 { "type": "mfa_sync_begin", "version": 2, "sentAt": 1760000000000,
   "syncId": "sync-1760000000000-7f3a", "accountCount": 12 }
-`~
+```
 
 - `syncId`：本次同步唯一标识，同一次同步的后续消息必须携带相同值。
 - `accountCount`：即将发送的 `mfa_sync_account` 条数（0 表示清空手环账号）。
 
 ### 2. `mfa_sync_account`
 
-`~json
+```json
 { "type": "mfa_sync_account", "version": 2, "sentAt": 1760000000001,
   "syncId": "sync-1760000000000-7f3a", "index": 0,
   "account": {
@@ -44,7 +44,7 @@
     "period": 30,
     "updatedAt": 1760000000000
   } }
-`~
+```
 
 校验规则（手环端必须执行，非法消息直接丢弃并计入错误，不中断同步）：
 
@@ -61,10 +61,10 @@
 
 ### 3. `mfa_sync_commit`
 
-`~json
+```json
 { "type": "mfa_sync_commit", "version": 2, "sentAt": 1760000000010,
   "syncId": "sync-1760000000000-7f3a", "accountCount": 12 }
-`~
+```
 
 手环端处理：
 
@@ -76,11 +76,11 @@
 
 ### `mfa_sync_ack`
 
-`~json
+```json
 { "type": "mfa_sync_ack", "version": 2, "sentAt": 1760000000011,
   "syncId": "sync-1760000000000-7f3a", "ok": true,
   "received": 12, "committed": 12, "error": null }
-`~
+```
 
 手机端若实现接收回调则更新为"已确认"；否则显示"已发送（手环将离线使用）"。
 
@@ -88,10 +88,10 @@
 
 手环端无快照或用户主动点"重新同步"时发出，请求手机推送全量快照：
 
-`~json
+```json
 { "type": "mfa_sync_request", "version": 2, "sentAt": 1760000000020,
   "requestId": "req-1760000000020-1" }
-`~
+```
 
 手机端收到后执行一次完整同步（若已连接且已授权），否则忽略并记录日志。
 
