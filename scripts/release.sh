@@ -3,7 +3,7 @@
 #
 # 用法：
 #   bash scripts/release.sh            # 版本取 band-app/src/manifest.json
-#   bash scripts/release.sh 2.1.0      # 指定版本（必须与两端版本号一致）
+#   bash scripts/release.sh 2.1.1      # 指定版本（必须与两端版本号一致）
 #
 # 产物：
 #   releases/v<version>/wristkey-band-v<version>.rpk
@@ -59,9 +59,10 @@ cat > "$SUCCESS/README.txt" <<EOF
 手机端：wristkey-android-$TAG.apk
 校验和：SHA256SUMS
 
-安装顺序：先卸载旧包名（dev.wristkey.app）的两个应用，再安装本目录的手环 rpk 与手机 apk。
+安装提示：仍是 2.0.x（旧包名 dev.wristkey.app）的，先卸载手环快应用与手机 App 再安装；
+2.1.0 及以后同包名版本可直接覆盖安装，数据保留。
 两端必须同包名同签名（$PACKAGE）。手环菜单 → 关于 可确认版本为 $VERSION。
-旧版安装包已移到 旧版-2.0.x/，包名不同，不能与 $VERSION 混用。
+旧版安装包已放到 成功/ 下的「旧版-版本号」目录，不要与当前版本混装。
 EOF
 
 echo "==> 完成：$OUT"

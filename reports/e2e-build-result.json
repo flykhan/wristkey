@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-10T13:38:37.552Z",
+  "generatedAt": "2026-11-10T14:56:15.390Z",
   "node": "v22.22.2",
   "platform": "linux x64",
   "flags": {
@@ -7,14 +7,14 @@
     "withTests": true
   },
   "artifacts": {
-    "rpk": "band-app/dist/com.flykhan.wristkey.release.2.1.0.rpk",
+    "rpk": "band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk",
     "apk": "android-app/app/build/outputs/apk/release/app-release.apk"
   },
   "summary": {
-    "passed": 82,
+    "passed": 83,
     "failed": 0,
     "skipped": 0,
-    "total": 82
+    "total": 83
   },
   "checks": [
     {
@@ -74,13 +74,13 @@
     {
       "name": "band-app dist/*.rpk 存在",
       "status": "PASS",
-      "detail": "band-app/dist/com.flykhan.wristkey.release.2.1.0.rpk (114661B)",
+      "detail": "band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk (106788B)",
       "command": ""
     },
     {
       "name": "band-app release rpk 文件名",
       "status": "PASS",
-      "detail": "com.flykhan.wristkey.release.2.1.0.rpk",
+      "detail": "com.flykhan.wristkey.release.2.1.1.rpk",
       "command": ""
     },
     {
@@ -98,13 +98,13 @@
     {
       "name": "rpk versionName",
       "status": "PASS",
-      "detail": "2.1.0",
+      "detail": "2.1.1",
       "command": ""
     },
     {
       "name": "rpk versionCode",
       "status": "PASS",
-      "detail": "9",
+      "detail": "10",
       "command": ""
     },
     {
@@ -210,7 +210,7 @@
       "command": ""
     },
     {
-      "name": "UI v4 app.ux 冷启动锁屏跳转",
+      "name": "UI v4 启动不强制图案（2.1.1）",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -300,7 +300,13 @@
       "command": ""
     },
     {
-      "name": "UI v4 菜单 4 项（入口密码/立即同步/关于/退出）",
+      "name": "UI v4 菜单 3 项（立即同步/关于/退出）",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v4 菜单不显示入口密码（2.1.1）",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -356,7 +362,7 @@
     {
       "name": "android APK 存在",
       "status": "PASS",
-      "detail": "android-app/app/build/outputs/apk/release/app-release.apk (26492673B)",
+      "detail": "android-app/app/build/outputs/apk/release/app-release.apk (26492669B)",
       "command": ""
     },
     {
@@ -374,13 +380,13 @@
     {
       "name": "APK versionName",
       "status": "PASS",
-      "detail": "2.1.0",
+      "detail": "2.1.1",
       "command": ""
     },
     {
       "name": "APK versionCode",
       "status": "PASS",
-      "detail": "5",
+      "detail": "6",
       "command": ""
     },
     {
@@ -494,14 +500,14 @@
     {
       "name": "RPK 内嵌证书 DER",
       "status": "PASS",
-      "detail": "命中 offset 110635",
+      "detail": "命中 offset 102762",
       "command": ""
     },
     {
       "name": "scripts/check-signing.sh",
       "status": "PASS",
       "detail": "PASS: 包名 com.flykhan.wristkey，APK 与 RPK 使用同一证书（SHA-256 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4）",
-      "command": "bash scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.apk band-app/dist/com.flykhan.wristkey.release.2.1.0.rpk"
+      "command": "bash scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.apk band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk"
     },
     {
       "name": "APK 与 RPK 包名一致",
