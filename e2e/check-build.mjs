@@ -8,8 +8,8 @@
 //   node e2e/check-build.mjs --build --with-tests
 //
 // 产物检查项：
-//   1. band-app/dist/*.rpk 存在，manifest.package=dev.wristkey.app、name=腕证、deviceTypeList 含 watch；
-//   2. android-app APK 存在，package=dev.wristkey.app、应用名 腕证；
+//   1. band-app/dist/*.rpk 存在，manifest.package=com.flykhan.wristkey、name=腕证、deviceTypeList 含 watch；
+//   2. android-app APK 存在，package=com.flykhan.wristkey、应用名 腕证；
 //   3. APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 //   4. .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
 //   5. 三类指纹一致（APK / PEM / RPK 内嵌）。
@@ -28,14 +28,14 @@ import { base32Encode } from './lib/encoding.mjs';
 const E2E_ROOT = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
-const TARGET_PACKAGE = 'dev.wristkey.app';
+const TARGET_PACKAGE = 'com.flykhan.wristkey';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 2.0.2（v2.0.2：入口页 push 锁屏、解锁 back，修复页面栈为空/退出）/ APK 2.0.0（v2 重设计 + 入口图案）
-const EXPECTED_BAND_VERSION = '2.0.2';
-const EXPECTED_BAND_VERSION_CODE = 8;
-const EXPECTED_APK_VERSION = '2.0.0';
-const EXPECTED_APK_VERSION_CODE = 4;
-const EXPECTED_BAND_RPK_NAME = 'dev.wristkey.app.release.' + EXPECTED_BAND_VERSION + '.rpk';
+// 版本：band .rpk 2.1.0（v2.0.2：入口页 push 锁屏、解锁 back，修复页面栈为空/退出）/ APK 2.1.0（v2 重设计 + 入口图案）
+const EXPECTED_BAND_VERSION = '2.1.0';
+const EXPECTED_BAND_VERSION_CODE = 9;
+const EXPECTED_APK_VERSION = '2.1.0';
+const EXPECTED_APK_VERSION_CODE = 5;
+const EXPECTED_BAND_RPK_NAME = 'com.flykhan.wristkey.release.' + EXPECTED_BAND_VERSION + '.rpk';
 
 const argv = process.argv.slice(2);
 const flags = {
@@ -755,8 +755,8 @@ function checkAndroidApp() {
 function checkAndroidUiV4() {
   process.stdout.write('\n## android UI v4（v2.0 重设计 / 入口图案 / 密码）\n');
   const androidRoot = join(WORKSPACE, 'android-app');
-  const javaRoot = join(androidRoot, 'app', 'src', 'main', 'java', 'dev', 'wristkey', 'app');
-  const testRoot = join(androidRoot, 'app', 'src', 'test', 'java', 'dev', 'wristkey', 'app');
+  const javaRoot = join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'flykhan', 'wristkey');
+  const testRoot = join(androidRoot, 'app', 'src', 'test', 'java', 'com', 'flykhan', 'wristkey');
   const patternPin = readIfExists(join(javaRoot, 'pattern', 'PatternPin.kt'));
   const mainActivity = readIfExists(join(javaRoot, 'MainActivity.kt'));
   const appUi = readIfExists(join(javaRoot, 'ui', 'WristKeyApp.kt'));

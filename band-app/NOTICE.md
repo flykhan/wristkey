@@ -15,7 +15,7 @@ band-app/LICENSE 与下述署名是本项目对 Apache-2.0 第 4 条（保留版
 
 本项目以 BandOTP 快应用工程为起点（页面组织、交互思路与整体视觉结构），随后为 WristKey 重写：
 
-- src/manifest.json：包名 dev.wristkey.app、应用名「腕证」、版本 1.0.4、feature 保持
+- src/manifest.json：包名 com.flykhan.wristkey、应用名「腕证」、版本 1.0.4、feature 保持
   router/storage/interconnect、config.designWidth = "device-width"；
 - src/common/logo.png：替换为本项目生成的图标（不再使用上游图片资源）；
 - src/common/scripts/totp.js：重写为与运行时无关的纯 JS 实现，Base32 归一化/解码、

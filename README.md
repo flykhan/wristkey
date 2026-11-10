@@ -5,7 +5,9 @@
 不依赖手机在线。v2.0 起支持 **5 位图形入口锁屏**、账号详情中的 **用户名/密码**、全屏字母网格筛选，
 手机 App 的界面与交互也做了完整重设计。
 
-> 状态：v2.0 已构建并通过全量自动化验收；真机 UI/图案交互等待用户实拍反馈。
+> 状态：**v2.1.0** 已构建并通过全量自动化验收。包名统一为 **`com.flykhan.wristkey`**（域名 flykhan.com）。
+> 从 2.0.x 升级需**先卸载旧包名 `dev.wristkey.app` 的两端应用**，再安装 2.1.0；旧数据不会自动迁移。
+> 仓库：[github.com/flykhan/wristkey](https://github.com/flykhan/wristkey)；
 > 安装与同步流程见 [docs/build-install.md](docs/build-install.md)，日常使用见 [docs/usage.md](docs/usage.md)。
 
 ## 为什么这样做
@@ -66,15 +68,16 @@ signing/        开发用签名材料（两端口径一致，发布前必须替�
 
 ```bash
 # 手环端（需要 Node >= 18）
-cd band-app && npm install && npm test && npm run release   # 产物 dist/*.rpk
+cd band-app && npm install && npm test && npm run release   # 产物 dist/com.flykhan.wristkey.release.<version>.rpk
 
 # 手机端（需要 JDK 17+ 与 Android SDK 36）
 cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 ./gradlew testDebugUnitTest assembleRelease                 # 产物 app/build/outputs/apk/release/
 ```
 
-手环端安装（真机）：用 AstroBox / 表盘自定义工具把 `.rpk` 装到小米手环 10 Pro；手机端安装同名同签名的 APK。
-**两端包名 + 签名证书必须一致**，否则 `system.interconnect` 无法建立连接。
+手环端安装（真机）：用 AstroBox / 表盘自定义工具把 `.rpk` 装到小米手环 10 Pro；手机端安装同包名同签名的 APK。
+**两端包名（`com.flykhan.wristkey`）+ 签名证书必须一致**，否则 `system.interconnect` 无法建立连接。
+需要按规范命名的安装包时，直接运行 `bash scripts/release.sh`，见下文「发布命名规范」。
 
 ## 验证状态（2026-11-10，无真机 UI 验证）
 
@@ -84,15 +87,37 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 | 手机端 `./gradlew testDebugUnitTest`（Stratum/Bitwarden、密码、TOTP/Steam、协议 v3、图案、合并） | **106/106** |
 | e2e Node 验证（跨实现加解密、协议回放、Bitwarden 映射、band 模块对拍、协议 v3/pin） | **171/171** |
 | e2e Python 独立验证（第三方实现解密 + RFC/Steam/Bitwarden/pin 向量） | **40/40** |
-| 构建 / 包名 / 版本 / 权限 / 签名 / UI v4 静态检查（`--build --with-tests`） | **80 PASS / 0 FAIL** |
+| 构建 / 包名 / 版本 / 权限 / 签名 / UI v4 静态检查（`--build --with-tests`） | **82 PASS / 0 FAIL** |
 | APK 与 .rpk 同证书 | ✅ `SHA-256 b7cfba…85c4`（= `signing/rpk-sign/certificate.pem` = rpk 内嵌 DER） |
 | 真机（安装、interconnect、xms、480×336 UI、锁屏/图案/详情密码） | **待验证**：v1.0 启动闪退与 Steam 问题已由真机反馈定位修复；v2.0 UI 待实拍 |
 
 产物：
 
-- 手环：`band-app/dist/dev.wristkey.app.release.2.0.2.rpk`（114,640 B，sha256 `9f291264837ecd192d3bf7fe4cb727b395d9d132a9d01218f3a3a9623286b393`，2.0.2 / versionCode 8）
-- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（26,492,665 B，sha256 `dd53148580a56881eee40e3389af96c37d5dbdee37dee7fc3b7aef85e10a47e1`，2.0.0 / versionCode 4，无 INTERNET 权限）
+- 手环：`band-app/dist/com.flykhan.wristkey.release.2.1.0.rpk`（114,661 B，sha256 `34e1fcd0fed80ffd1551bd749d93d4bffed30840bcc508ef3efd3302949aa2f0`，2.1.0 / versionCode 9）
+- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（26,492,673 B，sha256 `4c1647243fcd96aaebe474eb22ec6124936eb32c69d6c6d45d4fc344198f2676`，2.1.0 / versionCode 5，无 INTERNET 权限）
+- 发布归档：`releases/v2.1.0/` 与根目录 `成功/`（规范命名 + `SHA256SUMS`）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
+
+## 发布命名规范
+
+- **包名**：`com.flykhan.wristkey`（对应域名 flykhan.com；两端必须完全一致）；
+- **语义化版本**：`MAJOR.MINOR.PATCH`，三处同步修改：`band-app/package.json`、
+  `band-app/src/manifest.json`、`android-app/app/build.gradle.kts`；
+- **Git 标签**：`v<version>`，例如 `v2.1.0`；
+- **GitHub Release 标题**：`WristKey v<version>`；
+- **Release 资产**（固定小写 kebab-case，带端与版本）：
+  - `wristkey-band-v<version>.rpk`
+  - `wristkey-android-v<version>.apk`
+  - `SHA256SUMS`
+- **本地归档**：`releases/v<version>/`，并同步到根目录 `成功/`，方便直接取用；
+- **一键发布**：
+
+```bash
+bash scripts/release.sh 2.1.0
+```
+
+脚本会校验三处版本一致、跑两端测试、构建、重命名归档并生成 `SHA256SUMS`；
+Android 的 Gradle 原始产物仍保留在 `app/build/outputs/apk/release/app-release.apk`。
 
 ## 参考与许可
 
@@ -132,5 +157,9 @@ TOTP Secret 与账号密码等同于账号凭证。请仅在自己信任的设�
    并触发 `state_error`。根因是入口页与锁屏页都用 `router.replace` 跳转，且 index 的 onInit/onShow 与 app.ux
    重复上锁，把页面栈清空。改为**入口 push 锁屏、解锁 back、只在 onShow 做一次门禁、彻底移除 replace**；发布
    **手环 2.0.2（versionCode 8）**。
+8. **2026-11-10 v2.1.0 + GitHub 发布**：包名统一迁移到 **`com.flykhan.wristkey`**（对应 flykhan.com），
+   两端版本升到 **2.1.0**（手环 versionCode 9 / 手机 versionCode 5），新增统一发布脚本与
+   `wristkey-band-v<version>.rpk` / `wristkey-android-v<version>.apk` 命名规范。因包名变更，
+   从 2.0.x 升级需卸载旧包后重装。
 
 详见 [reports/e2e-report.md](reports/e2e-report.md)。

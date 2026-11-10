@@ -91,7 +91,7 @@ keytool -importkeystore -srckeystore /tmp/wristkey.p12 -srcstoretype PKCS12 \
 
 ```bash
 openssl req -newkey rsa:2048 -nodes -keyout private.pem -x509 -days 3650 \
-  -out certificate.pem -subj "/CN=dev.wristkey.app"
+  -out certificate.pem -subj "/CN=com.flykhan.wristkey"
 ```
 （官方 FAQ 的打包说明即此方式；社区工具链调试证书也是自签 `CN=localhost`。）**[已验证]**
 
@@ -193,7 +193,7 @@ openssl x509 -in signing/rpk-sign/certificate.pem -noout -fingerprint -sha256
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 手机端同步报 `fingerprint verify failed` / 手环提示未安装 | APK 与 rpk 证书不一致；或手环端未安装/包名不一致 | 用同一 JKS 重出 APK 与 rpk；确认包名都是 `dev.wristkey.app`；手环成功安装后重开快应用 |
+| 手机端同步报 `fingerprint verify failed` / 手环提示未安装 | APK 与 rpk 证书不一致；或手环端未安装/包名不一致 | 用同一 JKS 重出 APK 与 rpk；确认包名都是 `com.flykhan.wristkey`；手环成功安装后重开快应用 |
 | 设备发现失败 / `getConnectedNodes` 为空 | 未配对、运动健康未在后台、穿戴服务未连接、权限未授权 | 打开小米运动健康确认已连接；重启蓝牙；用 `ServiceApi` 监听服务连接；申请 `DEVICE_MANAGER` |
 | 发送成功但手环没反应 | 包名/签名不一致；手环端未监听；消息不是合法 JSON；手环快应用未前台/被系统冻结 | 检查两端包名+指纹；先 `onopen` 后再发；每包 <1 KB |
 | AstroBox `third-party app install failed: InstallFailed 3` | 上一个快应用未加载完 / 空间不足 / 机型选错 | 等待后重试、清理空间、选 `xmb10p` |
@@ -204,7 +204,7 @@ openssl x509 -in signing/rpk-sign/certificate.pem -noout -fingerprint -sha256
 
 - [ ] `aiot release` 使用 `sign/` 证书成功产出 `.release.rpk`（无证书时应失败，验证查找顺序）
 - [ ] rpk 内嵌证书 SHA-256 == APK 签名证书 SHA-256
-- [ ] APK `applicationId` 与 rpk `manifest.package` 均为 `dev.wristkey.app`
+- [ ] APK `applicationId` 与 rpk `manifest.package` 均为 `com.flykhan.wristkey`
 - [ ] AstroBox 连接 10 Pro 成功（AuthKey/小米账号两种方式至少一种）
 - [ ] AstroBox 安装 release rpk 成功，设备型号选 `xmb10p`
 - [ ] 安装后重连小米运动健康，手环快应用可启动

@@ -24,7 +24,7 @@ import zlib from "node:zlib"
 const MAGIC = Buffer.from("RPK Sig Block 42")
 const SIG_BLOCK_ID = 0x01000101
 const FILES_BLOCK_ID = 0x01000201
-const EXPECTED_PACKAGE = "dev.wristkey.app"
+const EXPECTED_PACKAGE = "com.flykhan.wristkey"
 const DEV_CERT_SHA256 =
   "b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4"
 

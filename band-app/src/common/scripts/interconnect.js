@@ -6,7 +6,7 @@
  *   - deliver outgoing ack/request JSON strings
  *   - never throw on a missing/unavailable channel: ack is "best effort"
  *
- * The Android app must use the same package name (dev.wristkey.app) and the
+ * The Android app must use the same package name (com.flykhan.wristkey) and the
  * same signing certificate, otherwise system.interconnect refuses the channel.
  * Message validation/state handling lives in syncProtocol.js (pure, testable);
  * this module only does transport.

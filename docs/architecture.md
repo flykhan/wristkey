@@ -77,7 +77,7 @@ Android: 更新同步状态（已确认 / 已发送未确认 / 失败）
    HOTP/Mobile-OTP/Yandex 会跳过并在导入报告中列出。
 4. **不做二维码扫描（v1）**：本次需求是导入 Stratum 导出文件；设备管理界面保留手动新增/编辑。
 5. **派生自 BandOTP 但重新设计协议与身份**：`band-app/` 与 `android-app/` 分别基于 BandOTP 两端
-   （Apache-2.0）改造，保留 LICENSE/NOTICE；包名改为 `dev.wristkey.app`、自签证书、协议升级为 v3（v2 兼容），
+   （Apache-2.0）改造，保留 LICENSE/NOTICE；包名改为 `com.flykhan.wristkey`、自签证书、协议升级为 v3（v2 兼容），
    与上游互不兼容（这是预期行为：两端必须成对安装）。
 
 ## 失败与边界

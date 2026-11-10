@@ -27,7 +27,7 @@ cd band-app
 npm install
 npm test           # Node 端单元测试（TOTP/协议状态机，不依赖快应用运行时）
 npm run build      # aiot build（开发签名：sign/debug/ 或 sign/）
-npm run release    # 产出 dist/<package>.<version>.rpk（发布签名：sign/release/）
+npm run release    # 产出 dist/com.flykhan.wristkey.release.<version>.rpk（发布签名：sign/release/）
 ```
 
 签名机制（aiot-toolkit 2.0.5，已核对源码）：
@@ -65,18 +65,19 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
 2. 与 `signing/rpk-sign/certificate.pem` 指纹比对；
 3. 检查该证书 DER 是否内嵌在 `.rpk` 签名块中（aiot 会把证书 DER 写进包尾签名块）。
 
-三者一致才满足 interconnect 的"同包名 + 同证书"前提；包名在两侧也应为 `dev.wristkey.app`。
+三者一致才满足 interconnect 的"同包名 + 同证书"前提；包名在两侧也应为 `com.flykhan.wristkey`。
 
 ## 安装到真机（小米手环 10 Pro）
 
 1. 手环与手机在「小米运动健康」中保持配对；手机安装 AstroBox（或表盘自定义工具）；
 2. AstroBox 连接手环：打开 App → 授予附近设备/蓝牙权限 → 连接设备（工具内"AuthKey 读取工具"
    按提示跳转"小米健康研究"授权，或使用账号方式）→ 确认设备型号为 `xmb10p`；
-3. AstroBox → 快应用 → 「+」选择 `band-app/dist/*.release.rpk` → 安装（原文件直传，不重签名）；
-4. 手机安装 `app-release.apk`（与 rpk 同包名同证书）；打开 App → 授予"设备管理"权限；
-5. 导入 Stratum/Bitwarden 备份 → 在「同步」页同步（或先在手环打开一次「腕证」，再回到 App 同步）；
-6. 首次到「设置 → 入口图案」设置 5 位图形序列（或稍后在菜单里改）；
-7. 在手环应用列表打开「腕证」：先解锁图案，再检查 3 条/页、A-Z 筛选、详情密码与验证码。
+3. **先卸载旧包名** `dev.wristkey.app` 的手环快应用与手机 App（2.1.0 起包名改为 `com.flykhan.wristkey`）；
+4. AstroBox → 快应用 → 「+」选择 `releases/v2.1.0/wristkey-band-v2.1.0.rpk`（或 `band-app/dist/com.flykhan.wristkey.release.*.rpk`）→ 安装（原文件直传，不重签名）；
+5. 手机安装 `releases/v2.1.0/wristkey-android-v2.1.0.apk`（与 rpk 同包名同证书）；打开 App → 授予"设备管理"权限；
+6. 导入 Stratum/Bitwarden 备份 → 在「同步」页同步（或先在手环打开一次「腕证」，再回到 App 同步）；
+7. 首次到「设置 → 入口图案」设置 5 位图形序列（或稍后在菜单里改）；
+8. 在手环应用列表打开「腕证」：先解锁图案，再检查 3 条/页、A-Z 筛选、详情密码与验证码。
 
 > 包名/签名不一致时，同步会失败（xms 返回签名校验失败 / 手环提示 fingerprint verify failed）；
 > 先重装配套版本。安装工具本身不会重签名；但"快应用封装/改名"类工具会破坏签名，导致通信失效。
@@ -101,7 +102,7 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
 | 手环端安装失败 | AstroBox 版本/连接状态；rpk 是否 ≥1MB（未分包上限约 1MB）；设备型号是否选 `xmb10p`；报 `InstallFailed 3` 多为上一快应用未加载完/空间不足，稍后重试 |
 | 手环提示 fingerprint verify failed | 两端证书不一致：用 `scripts/check-signing.sh` 校验；重装配套 APK/rpk |
 | App 找不到手环 | 小米运动健康是否连接；蓝牙/附近设备权限；穿戴服务版本 |
-| 同步提示签名错误 | 两端证书是否一致（`scripts/check-signing.sh`）；包名是否都是 `dev.wristkey.app` |
+| 同步提示签名错误 | 两端证书是否一致（`scripts/check-signing.sh`）；包名是否都是 `com.flykhan.wristkey` |
 | 手环收不到消息 | 手环端应用是否打开过（interconnect 需两端都安装）；重开 App；查看 xms 错误码 |
 | 验证码不一致 | 手环时间是否准确；算法/位数/周期是否导入正确 |
 | Gradle 构建失败 | JAVA_HOME 是否为 17+；SDK 平台/build-tools 是否安装；网络能否访问 Google Maven |

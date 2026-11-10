@@ -1266,7 +1266,7 @@ async function main() {
 
     // 与 Android 单测源码中的期望值交叉核对
     const testPath = join(
-      WORKSPACE, 'android-app', 'app', 'src', 'test', 'java', 'dev', 'wristkey', 'app', 'bitwarden', 'BitwardenImporterTest.kt'
+      WORKSPACE, 'android-app', 'app', 'src', 'test', 'java', 'com', 'flykhan', 'wristkey', 'bitwarden', 'BitwardenImporterTest.kt'
     );
     if (existsSync(testPath)) {
       const testSource = readFileSync(testPath, 'utf8');

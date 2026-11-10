@@ -76,7 +76,7 @@
 ```
 
 要点：
-- `package`：全小写字母/数字/点；**与手机 App 的 applicationId 完全相同**（interconnect 要求）。本项目两端 = `dev.wristkey.app`。
+- `package`：全小写字母/数字/点；**与手机 App 的 applicationId 完全相同**（interconnect 要求）。本项目两端 = `com.flykhan.wristkey`。
 - `name`：应用名，≤ 6 个汉字（"腕证" 满足）；与图标 `icon`（建议 192×192）一起展示。
 - `deviceTypeList`：**只支持 `["watch"]`**；手环也归类为 watch，不能写 band/pill。**[已验证-官方文档 + 实例]**
 - `minPlatformVersion`：`1000` 是当前可用基线（BandOTP 与 BandTOTP 均为 1000；BandTOTP 的 AstroBox 资源含 `xmb10p` 下载项，证明该基线可覆盖 10 Pro）。官方文档另有 `minAPILevel`（API 版本）用于能力分级；interconnect 无高版本要求。**[已验证-实例/资源清单]**
