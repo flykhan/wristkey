@@ -12,8 +12,10 @@
 [AstroBox](https://astrobox.online/) / 表盘自定义工具安装。手环快应用与手机原生 App 之间通过
 `system.interconnect`（手环侧）↔ 小米穿戴服务 SDK（手机侧，`xms-wearable-lib`）通信，**要求两端包名与签名证书一致**。
 
-参考实现 [lin945/mi_band_mfa](https://github.com/lin945/mi_band_mfa)（Apache-2.0）已经证明这套链路在
-小米手环 9/9 Pro/10/10 Pro 上可用。本项目在其思路上重写并做两件事：
+社区项目 [BandOTP](https://github.com/lin945/mi_band_mfa)（Apache-2.0）与
+[BandTOTP](https://github.com/leset0ng/BandTOTP-Android) 表明这套链路在小米手环/手表系列上可行；
+官方 FAQ 明确"手表和手机通信前会检查应用签名，rpk 与手机 App 必须用配套证书"。
+本项目在其思路基础上改造并做两件事：
 
 1. **导入 Stratum 备份**：支持 Strong（Argon2id + AES-256-GCM）、Legacy（PBKDF2-SHA1 + AES-256-CBC）、
    明文 JSON 备份、`otpauth://` 文本列表；
