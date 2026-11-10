@@ -30,6 +30,7 @@ import {
 import {
   LOCK_IDLE_TIMEOUT_MS,
   getLastUnlockedAt,
+  isUnlockedFresh,
   markUnlocked,
   resetSession,
   shouldRelock
@@ -199,4 +200,9 @@ test("pin session relocks after the idle timeout", () => {
 
   resetSession()
   assert.equal(getLastUnlockedAt(), 0)
+
+  assert.equal(isUnlockedFresh(0, NOW), false)
+  assert.equal(isUnlockedFresh(NOW, NOW + 119999), true)
+  assert.equal(isUnlockedFresh(NOW, NOW + 120000), false)
+  assert.equal(isUnlockedFresh(NOW, NOW + 5, 5), false)
 })

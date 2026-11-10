@@ -2,7 +2,7 @@
   <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
     <div class="card" style="background-color: {{ theme.cardBackground }}">
       <text class="title" style="color: {{ theme.title }}">腕证 · WristKey</text>
-      <text class="version" style="color: {{ theme.accent }}">版本 2.0.0</text>
+      <text class="version" style="color: {{ theme.accent }}">版本 2.0.1</text>
 
       <text class="line" style="color: {{ theme.body }}">手环端离线 TOTP / Steam Guard / 密码 · 协议 v3</text>
       <text class="line" style="color: {{ theme.body }}">TOTP 依据 RFC 4226 / RFC 6238 独立实现</text>

@@ -91,8 +91,8 @@ test("menu exposes pin, sync, about and exit only", () => {
 
 test("picker page is registered and renders the 3-page 4x4 grid", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.0.0")
-  assert.equal(manifest.versionCode, 6)
+  assert.equal(manifest.versionName, "2.0.1")
+  assert.equal(manifest.versionCode, 7)
   assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
   assert.equal(manifest.router.pages["pages/picker"].component, "picker")
 

@@ -67,7 +67,7 @@ import {
 } from "../../common/scripts/syncProtocol"
 import { loadPin, savePin, deletePin, saveLock } from "../../common/scripts/pinStore"
 import { resetLockState } from "../../common/scripts/pin"
-import { shouldRelock } from "../../common/scripts/pinSession"
+import { shouldRelock } from "../../common/scripts/pinSessionStore"
 import {
   ACCOUNTS_PER_PAGE,
   DARK_THEME,
@@ -135,12 +135,18 @@ export default {
 
   ensureUnlocked(callback) {
     loadPin(pin => {
-      if (pin && shouldRelock(Date.now())) {
-        this.stopTicker()
-        router.replace({ uri: "/pages/lock" })
+      if (!pin) {
+        callback()
         return
       }
-      callback()
+      shouldRelock(Date.now(), relock => {
+        if (relock) {
+          this.stopTicker()
+          router.replace({ uri: "/pages/lock" })
+          return
+        }
+        callback()
+      })
     })
   },
 

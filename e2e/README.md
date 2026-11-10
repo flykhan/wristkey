@@ -213,7 +213,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - band-app/dist/*.rpk 存在，manifest.package == dev.wristkey.app、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
 - Android APK 存在，包名 dev.wristkey.app、应用名 腕证；
-- 版本号：rpk 2.0.0 / versionCode 6（UI v4 + 协议 v3），APK 2.0.0 / versionCode 4（Android v2 重设计 + 入口图案）；
+- 版本号：rpk 2.0.1 / versionCode 7（UI v4 + 协议 v3 + 持久化解锁会话），APK 2.0.0 / versionCode 4（Android v2 重设计 + 入口图案）；
 - APK 无 INTERNET；权限列表仅允许 *DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；

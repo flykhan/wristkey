@@ -90,7 +90,7 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 
 产物：
 
-- 手环：`band-app/dist/dev.wristkey.app.release.2.0.0.rpk`（113,923 B，sha256 `26ea809e0252c918d290945d6283760fd86ddca6821c5105036f91781b596a88`，2.0.0 / versionCode 6）
+- 手环：`band-app/dist/dev.wristkey.app.release.2.0.1.rpk`（114,700 B，sha256 `9a1e122d63586191c3daa49d4404a1e28943ec9d8782dcb621bc6b4531d3f563`，2.0.1 / versionCode 7）
 - 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（26,492,665 B，sha256 `dd53148580a56881eee40e3389af96c37d5dbdee37dee7fc3b7aef85e10a47e1`，2.0.0 / versionCode 4，无 INTERNET 权限）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
@@ -124,5 +124,9 @@ TOTP Secret 与账号密码等同于账号凭证。请仅在自己信任的设�
    **5 位图形锁屏 / 3 条/页 + 右侧功能条 / 全屏 4×4×3 网格 / 详情用户名密码 / 菜单四项**；
    手机 App 全量重设计并支持图案设置与下发；协议升级 v3（密码字段 + pin 消息，兼容 v2）。
    发布 **手环 2.0.0（versionCode 6） + 手机 APK 2.0.0（versionCode 4）**。
+6. **2026-11-10 手环输完图案没有进入下一屏**（2.0.0）：Vela 每个页面独立打包，内存中的解锁时间戳
+   不跨页面共享，`/pages/index` 读不到刚写入的解锁状态又跳回锁屏。改为用 `@system.storage` 持久化
+   解锁时间戳（`wristkey_unlock_v1`），跨页共享、2 分钟闲置重锁、冷启动清除；发布
+   **手环 2.0.1（versionCode 7）**。
 
 详见 [reports/e2e-report.md](reports/e2e-report.md)。

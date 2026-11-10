@@ -50,7 +50,7 @@ import {
   verifyPattern
 } from "../../common/scripts/pin"
 import { deletePin, loadPin, saveLock, savePin } from "../../common/scripts/pinStore"
-import { markUnlocked } from "../../common/scripts/pinSession"
+import { markUnlocked } from "../../common/scripts/pinSessionStore"
 import { sendPinState } from "../../common/scripts/interconnect"
 import { buildPinState } from "../../common/scripts/syncProtocol"
 import {
@@ -216,13 +216,14 @@ export default {
       }
       this.pin = created.record
       saveLock(resetLockState(Date.now()))
-      markUnlocked(Date.now())
       this.broadcastPin(created.record)
       this.hintText = "入口密码已保存"
       this.hintColor = this.theme.accent
-      setTimeout(() => {
-        router.back()
-      }, 600)
+      markUnlocked(Date.now(), () => {
+        setTimeout(() => {
+          router.back()
+        }, 600)
+      })
     })
   },
 
@@ -240,13 +241,14 @@ export default {
       }
       this.pin = null
       saveLock(resetLockState(Date.now()))
-      markUnlocked(Date.now())
       this.broadcastPin(null)
       this.hintText = "入口密码已关闭"
       this.hintColor = this.theme.accent
-      setTimeout(() => {
-        router.back()
-      }, 600)
+      markUnlocked(Date.now(), () => {
+        setTimeout(() => {
+          router.back()
+        }, 600)
+      })
     })
   },
 

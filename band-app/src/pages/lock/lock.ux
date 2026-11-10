@@ -40,7 +40,7 @@ import {
   verifyPattern
 } from "../../common/scripts/pin"
 import { loadLock, loadPin, saveLock } from "../../common/scripts/pinStore"
-import { markUnlocked } from "../../common/scripts/pinSession"
+import { markUnlocked } from "../../common/scripts/pinSessionStore"
 import {
   DARK_THEME,
   DEFAULT_DARK_MODE,
@@ -184,10 +184,13 @@ export default {
     if (result.ok && result.matched) {
       this.lock = resetLockState(Date.now())
       saveLock(this.lock)
-      markUnlocked(Date.now())
       this.input = []
       this.verifying = false
-      router.replace({ uri: "/pages/index" })
+      // Persist the unlock before navigating: index.ux reads the same storage
+      // key in its own bundle and would otherwise bounce back to the lock page.
+      markUnlocked(Date.now(), () => {
+        router.replace({ uri: "/pages/index" })
+      })
       return
     }
     this.handleFailure()

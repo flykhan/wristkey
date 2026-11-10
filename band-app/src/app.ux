@@ -1,12 +1,16 @@
 <script>
 import router from "@system.router"
 import { loadPin } from "./common/scripts/pinStore"
-import { resetSession, shouldRelock } from "./common/scripts/pinSession"
+import { clearSession, shouldRelock } from "./common/scripts/pinSessionStore"
 
 export default {
   onCreate() {
-    // No secrets or sync payloads are logged anywhere in this app.
-    resetSession()
+    // Cold start always asks for the pattern again. The flag covers the short
+    // window before the async storage delete completes.
+    this.coldStartPending = true
+    clearSession(() => {
+      this.coldStartPending = false
+    })
   },
   onShow() {
     const state = readRouteState()
@@ -14,9 +18,17 @@ export default {
     if (path.indexOf("/pages/lock") >= 0 || path.indexOf("/pages/pin") >= 0) {
       return
     }
-    if (!shouldRelock(Date.now())) {
+    if (this.coldStartPending) {
+      this.relock()
       return
     }
+    shouldRelock(Date.now(), relock => {
+      if (relock) {
+        this.relock()
+      }
+    })
+  },
+  relock() {
     loadPin(record => {
       if (record) {
         router.replace({ uri: "/pages/lock" })

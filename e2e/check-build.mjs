@@ -30,9 +30,9 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'dev.wristkey.app';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 2.0.0（v2.0：入口图案锁屏/5 位图示/详情/网格）/ APK 2.0.0（v2 重设计 + 入口图案）
-const EXPECTED_BAND_VERSION = '2.0.0';
-const EXPECTED_BAND_VERSION_CODE = 6;
+// 版本：band .rpk 2.0.1（v2.0.1：持久化解锁会话，修复解锁后回弹锁屏）/ APK 2.0.0（v2 重设计 + 入口图案）
+const EXPECTED_BAND_VERSION = '2.0.1';
+const EXPECTED_BAND_VERSION_CODE = 7;
 const EXPECTED_APK_VERSION = '2.0.0';
 const EXPECTED_APK_VERSION_CODE = 4;
 const EXPECTED_BAND_RPK_NAME = 'dev.wristkey.app.release.' + EXPECTED_BAND_VERSION + '.rpk';

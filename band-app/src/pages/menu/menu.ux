@@ -16,7 +16,7 @@
       </div>
       <div class="option" onclick="openCopyright" style="background-color: {{ theme.cardBackground }}">
         <text class="option-title" style="color: {{ theme.title }}">关于</text>
-        <text class="option-value" style="color: {{ theme.secondary }}">版本 2.0.0 · Apache-2.0</text>
+        <text class="option-value" style="color: {{ theme.secondary }}">版本 2.0.1 · Apache-2.0</text>
       </div>
       <div class="option" onclick="exitApp" style="background-color: {{ theme.cardBackground }}">
         <text class="option-title exit-text" style="color: {{ theme.progressDanger }}">退出应用</text>
