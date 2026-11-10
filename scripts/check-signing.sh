@@ -17,6 +17,15 @@ fi
 APKSIGNER="$(ls ~/Android/Sdk/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
 CERT_PEM="signing/rpk-sign/certificate.pem"
 
+# apksigner 需要 java 在 PATH 中；没有 JAVA_HOME 时自动找 ~/.jdks
+if [ -z "${JAVA_HOME:-}" ]; then
+  JAVA_DIR="$(ls -d ~/.jdks/jdk-* 2>/dev/null | sort -V | tail -1 || true)"
+  if [ -n "$JAVA_DIR" ]; then
+    export JAVA_HOME="$JAVA_DIR"
+    export PATH="$JAVA_HOME/bin:$PATH"
+  fi
+fi
+
 fail=0
 [ -f "$APK" ] || { echo "缺少 APK: $APK"; fail=1; }
 [ -f "$RPK" ] || { echo "缺少 RPK: $RPK"; fail=1; }
@@ -46,7 +55,11 @@ if package != expected:
 PY
 
 # 2. APK 证书指纹
-apk_out="$("$APKSIGNER" verify --print-certs "$APK" 2>&1)"
+apk_out="$("$APKSIGNER" verify --print-certs "$APK" 2>&1 || true)"
+if [ -z "$apk_out" ]; then
+  echo "FAIL: apksigner 无法执行（检查 JDK/JAVA_HOME）"
+  exit 1
+fi
 apk_sha="$(printf '%s\n' "$apk_out" | grep -o 'SHA-256 digest: [0-9a-f]*' | head -1 | awk '{print $3}')"
 apk_dn="$(printf '%s\n' "$apk_out" | grep -o 'certificate DN: .*' | head -1 | sed 's/certificate DN: //')"
 [ -n "$apk_sha" ] || { echo "解析 APK 证书指纹失败"; printf '%s\n' "$apk_out"; exit 1; }
