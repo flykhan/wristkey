@@ -7,6 +7,7 @@ import {
   counterToBytes,
   decodeBase32,
   digest,
+  generateSteam,
   generateTotp,
   groupCode,
   hmac,
@@ -14,7 +15,12 @@ import {
   normalizeAlgorithm,
   normalizeBase32,
   normalizeDigits,
-  normalizePeriod
+  normalizeOtpType,
+  normalizePeriod,
+  OTP_TYPE_STEAM,
+  OTP_TYPE_TOTP,
+  STEAM_ALPHABET,
+  STEAM_DIGITS
 } from "../src/common/scripts/totp.js"
 
 // RFC 6238 appendix B seeds (public test data; never real credentials).
@@ -249,4 +255,96 @@ test("buildTokenState reports countdown, progress and validity", () => {
   assert.equal(invalid.valid, false)
   assert.equal(invalid.code, "------")
   assert.equal(invalid.status, "密钥异常")
+})
+
+/* --------------------------------------------------------------------------
+ * Steam Guard (docs/protocol.md "Steam Guard")
+ * ------------------------------------------------------------------------ */
+
+// Public test secret for Steam Guard vectors, independently verified with a
+// Python steam_totp implementation (never a real credential).
+const STEAM_SECRET = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU"
+const STEAM_VECTORS = [
+  [59, "3DP36"],
+  [1111111109, "GX57J"],
+  [1111111111, "TCJ4Y"],
+  [1234567890, "VYNVB"],
+  [1640846388, "2Y4TM"],
+  [1735689600, "DQ5KF"]
+]
+
+test("Steam Guard vectors (HMAC-SHA1, 5 characters, fixed 30 s)", () => {
+  for (const [timestamp, expected] of STEAM_VECTORS) {
+    const code = generateSteam(STEAM_SECRET, timestamp * 1000)
+    assert.equal(code, expected, "T=" + timestamp)
+    assert.equal(code.length, STEAM_DIGITS)
+    for (const character of code) {
+      assert.ok(
+        STEAM_ALPHABET.indexOf(character) >= 0,
+        "character " + character + " not in Steam alphabet"
+      )
+    }
+  }
+})
+
+test("Steam codes are not decimal TOTP codes and are not padded", () => {
+  const code = generateSteam(STEAM_SECRET, 59000)
+  assert.equal(code, "3DP36")
+  // Same secret/time as a normal TOTP would yield a very different 6 digit code.
+  const numeric = generateTotp(STEAM_SECRET, 59000, 30, 6, "SHA1")
+  assert.match(numeric, /^[0-9]{6}$/)
+  assert.notEqual(code, numeric)
+  assert.equal(generateSteam(STEAM_SECRET, 59000).length, 5)
+})
+
+test("generateSteam rejects invalid secrets and accepts raw key bytes", () => {
+  assert.throws(() => generateSteam("NOT-BASE32", 59000), /invalid base32 secret/)
+  const keyBytes = decodeBase32(STEAM_SECRET)
+  assert.equal(generateSteam(keyBytes, 59000), "3DP36")
+})
+
+test("normalizeOtpType defaults to totp and accepts steam case-insensitively", () => {
+  assert.equal(normalizeOtpType(undefined), OTP_TYPE_TOTP)
+  assert.equal(normalizeOtpType(null), OTP_TYPE_TOTP)
+  assert.equal(normalizeOtpType(""), OTP_TYPE_TOTP)
+  assert.equal(normalizeOtpType("totp"), OTP_TYPE_TOTP)
+  assert.equal(normalizeOtpType("TOTP"), OTP_TYPE_TOTP)
+  assert.equal(normalizeOtpType("steam"), OTP_TYPE_STEAM)
+  assert.equal(normalizeOtpType(" Steam "), OTP_TYPE_STEAM)
+  assert.equal(normalizeOtpType("hotp"), null)
+})
+
+test("buildTokenState dispatches Steam accounts and keeps TOTP unchanged", () => {
+  const steamAccount = {
+    id: "steam",
+    issuer: "Steam",
+    accountName: "me",
+    category: "游戏",
+    secret: STEAM_SECRET,
+    otpType: "steam",
+    // Deliberately conflicting values: the view model must force Steam rules.
+    algorithm: "SHA1",
+    digits: 5,
+    period: 30
+  }
+  const steam = buildTokenState(steamAccount, 59000)
+  assert.equal(steam.valid, true)
+  assert.equal(steam.otpType, "steam")
+  assert.equal(steam.isSteam, true)
+  assert.equal(steam.code, "3DP36")
+  assert.equal(steam.groupedCode, "3DP36") // no digit grouping / no padding
+  assert.equal(steam.code.length, 5)
+  assert.equal(steam.digits, 5)
+  assert.equal(steam.period, 30)
+  assert.equal(steam.algorithm, "SHA1")
+  assert.equal(steam.remaining, 1)
+
+  const numeric = buildTokenState(
+    { ...steamAccount, otpType: undefined, digits: 6, secret: "JBSWY3DPEHPK3PXP" },
+    59000
+  )
+  assert.equal(numeric.otpType, "totp")
+  assert.equal(numeric.isSteam, false)
+  assert.equal(numeric.code.length, 6)
+  assert.match(numeric.groupedCode, /^[0-9]{3} [0-9]{3}$/)
 })

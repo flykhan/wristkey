@@ -69,6 +69,32 @@ class AccountMergeTest {
     }
 
     @Test
+    fun mergeCorrectsMisimportedTotpIntoSteamBySecret() {
+        val secret = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU"
+        val misimported = WristKeyAccount(
+            id = Secret.accountIdForSecret(secret),
+            issuer = "Steam",
+            accountName = "alice",
+            secret = secret,
+            digits = 6,
+            period = 30,
+            algorithm = "SHA1",
+            updatedAt = 1L,
+            otpType = OTP_TYPE_TOTP,
+        )
+        val steam = misimported.copy(digits = 5, updatedAt = 9L, otpType = OTP_TYPE_STEAM)
+
+        val summary = AccountMerge.merge(listOf(misimported), listOf(steam), ImportMode.MERGE)
+
+        assertEquals(1, summary.accounts.size)
+        assertEquals(1, summary.updated.size)
+        assertEquals(0, summary.added.size)
+        assertEquals(OTP_TYPE_STEAM, summary.accounts.single().otpType)
+        assertEquals(5, summary.accounts.single().digits)
+        assertEquals(9L, summary.accounts.single().updatedAt)
+    }
+
+    @Test
     fun skippedItemsAreCarriedIntoSummary() {
         val skipped = listOf(StratumSkip("HOTP", "u1", "TYPE_NOT_TOTP", "Type=1 不是 TOTP（2）"))
         val summary = AccountMerge.merge(

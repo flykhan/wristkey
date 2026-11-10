@@ -4,15 +4,18 @@
  * Pure validation/normalisation shared by the sync protocol, storage and UI.
  * No Vela runtime dependency, so it is covered by tests/accountModel.test.mjs.
  *
- * Validation rules follow docs/protocol.md v2:
+ * Validation rules follow docs/protocol.md v2 (including otpType="steam"):
  *   id           non-empty string, <= 64 (falls back to the message index)
  *   issuer       string, <= 64; issuer and accountName must not both be empty
  *   accountName  string, <= 64
  *   category     string, default "默认分类", <= 32
  *   secret       Base32 A-Z2-7 (spaces/''='' padding allowed), normalised
- *   algorithm    SHA1 / SHA256 / SHA512 (case-insensitive), default SHA1
- *   digits       6-10 integer, default 6
- *   period       5-300 integer seconds, default 30
+ *   otpType      "totp" (default) or "steam" (case-insensitive)
+ *   algorithm    SHA1 / SHA256 / SHA512 (case-insensitive), default SHA1;
+ *                forced to SHA1 for Steam
+ *   digits       6-10 integer, default 6; forced to 5 for Steam
+ *                (digits=5 is only legal together with otpType="steam")
+ *   period       5-300 integer seconds, default 30; forced to 30 for Steam
  *   updatedAt    optional Unix milliseconds
  *
  * Fields that are present but invalid make the whole account invalid (the
@@ -22,8 +25,12 @@
 import {
   ALGORITHMS,
   DEFAULT_ALGORITHM,
+  OTP_TYPE_STEAM,
+  STEAM_DIGITS,
+  STEAM_PERIOD,
   normalizeBase32,
   normalizeDigits,
+  normalizeOtpType,
   normalizePeriod
 } from "./totp.js"
 
@@ -83,6 +90,12 @@ export function normalizeAccount(raw, options) {
     return fail(secret.error, "secret")
   }
 
+  const otpType = normalizeOtpType(raw.otpType)
+  if (otpType === null) {
+    return fail("otp_type_invalid", "otpType")
+  }
+  const isSteam = otpType === OTP_TYPE_STEAM
+
   let algorithm = DEFAULT_ALGORITHM
   if (raw.algorithm !== undefined && raw.algorithm !== null &&
       String(raw.algorithm).trim().length > 0) {
@@ -93,13 +106,38 @@ export function normalizeAccount(raw, options) {
     algorithm = candidate
   }
 
-  const digits = normalizeDigits(raw.digits)
-  if (digits === null) {
-    return fail("digits_out_of_range", "digits")
-  }
-  const period = normalizePeriod(raw.period)
-  if (period === null) {
-    return fail("period_out_of_range", "period")
+  let digits
+  let period
+  if (isSteam) {
+    // Steam Guard is fixed to 5 alphanumeric characters / 30 s / SHA1. An
+    // explicitly conflicting field means sender and band disagree, so the
+    // account is dropped instead of being displayed with a wrong code.
+    if (algorithm !== "SHA1") {
+      return fail("steam_algorithm_invalid", "algorithm")
+    }
+    if (hasValue(raw.digits)) {
+      const parsedDigits = Number(raw.digits)
+      if (!isFinite(parsedDigits) || parsedDigits !== STEAM_DIGITS) {
+        return fail("steam_digits_invalid", "digits")
+      }
+    }
+    if (hasValue(raw.period)) {
+      const parsedPeriod = Number(raw.period)
+      if (!isFinite(parsedPeriod) || parsedPeriod !== STEAM_PERIOD) {
+        return fail("steam_period_invalid", "period")
+      }
+    }
+    digits = STEAM_DIGITS
+    period = STEAM_PERIOD
+  } else {
+    digits = normalizeDigits(raw.digits)
+    if (digits === null) {
+      return fail("digits_out_of_range", "digits")
+    }
+    period = normalizePeriod(raw.period)
+    if (period === null) {
+      return fail("period_out_of_range", "period")
+    }
   }
 
   let category = DEFAULT_CATEGORY
@@ -129,6 +167,7 @@ export function normalizeAccount(raw, options) {
       accountName: accountName,
       category: category,
       secret: secret.value,
+      otpType: otpType,
       algorithm: algorithm,
       digits: digits,
       period: period,
@@ -317,6 +356,10 @@ function fail(error, field) {
     result.field = field
   }
   return result
+}
+
+function hasValue(value) {
+  return value !== undefined && value !== null && String(value).trim().length > 0
 }
 
 function toText(value) {

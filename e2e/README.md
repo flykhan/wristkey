@@ -26,11 +26,11 @@ e2e/
 │   └── runner.mjs               PASS/FAIL 运行器与断言
 ├── fixtures/
 │   ├── generate.mjs             确定性夹具生成器（固定 salt/iv/时间戳）
-│   ├── plain-backup.json        明文 Stratum 备份（11 导入 + 11 跳过）
+│   ├── plain-backup.json        明文 Stratum 备份（13 导入 + 10 跳过，含 Steam）
 │   ├── expected-import.json     参考映射结果（协议 account + 跳过报告）
 │   ├── strong.stratum           Strong 加密夹具（密码 test-password）
 │   ├── legacy.stratum           Legacy 加密夹具（密码 test-password）
-│   ├── uri-list.txt             otpauth:// 列表（5 导入 + 2 跳过）
+│   ├── uri-list.txt             otpauth:// 列表（8 导入 + 2 跳过，含 3 种 Steam 形式）
 │   ├── manifest.json            文件哈希、加密参数、覆盖矩阵
 │   └── protocol/
 │       ├── valid-session.json   合法同步消息序列（1 begin + 11 account + 1 commit）
@@ -61,29 +61,44 @@ python3 -m venv .venv
 # 4) 构建产物与签名一致性（等 band-app/android-app 构建后）
 node check-build.mjs                 # 静态检查
 node check-build.mjs --with-tests    # + band npm test / android gradle test
-node check-build.mjs --build         # + band release / android assembleDebug
+node check-build.mjs --build --with-tests   # 终验：重建 rpk/APK + 双端单测 + 全量检查
+node check-build.mjs --build         # + band release / android assembleRelease
 ~~~
 
 npm run verify 退出码 0 = 全部通过、1 = 有失败；结果同时写入 verify-result.json。
 
 ## 夹具覆盖矩阵
 
-plain-backup.json 共 22 条 Authenticator：**11 条可导入 + 11 条应跳过**。
+plain-backup.json 共 23 条 Authenticator：**13 条可导入 + 10 条应跳过**。
 
 | 类别 | 覆盖 |
 | --- | --- |
 | 算法 | SHA1 / SHA256 / SHA512（Algorithm 0/1/2） |
-| digits | 6 / 8 / 10 |
+| digits | 5（Steam）/ 6 / 8 / 10 |
 | period | 15 / 30 / 60（协议边界 5–300） |
+| otpType | totp / steam（Type=4，含 issuer≠Steam 的 Steam 账号） |
 | 分类 | 4 个分类 + 默认分类；多分类取 AuthenticatorCategory.Ranking 最小者 |
 | 排序 | Ranking 与分类内 Ranking 混合；无分类排最后 |
 | 边界 | secret 带 = 填充、Unicode issuer/username、issuer 空、username 空 |
-| 跳过 | Type=1 HOTP、Type=4 Steam、Type=3 Mobile-OTP、非法 Base32、空 secret、period=4/301、digits=5/11、issuer+username 全空、Algorithm=7 |
+| 跳过 | Type=1 HOTP、Type=3 Mobile-OTP、非法 Base32、空 secret、period=4/301、digits=5/11（TOTP）、issuer+username 全空、Algorithm=7 |
 
 跳过的条目在 expected-import.json 的 skipped 数组中逐条给出
 {stratumIndex, issuer, username, code, reason}（**不含 secret**）。
-code 取值：TYPE_NOT_TOTP、INVALID_BASE32、EMPTY_SECRET、PERIOD_OUT_OF_RANGE、
-DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_ALGORITHM。
+code 取值：UNSUPPORTED_OTP_TYPE（HOTP/Mobile-OTP）、INVALID_BASE32、EMPTY_SECRET、
+PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_ALGORITHM。
+
+### Steam Guard（otpType=steam）
+
+- Stratum `Type=4` 映射为 `otpType="steam"`，固定 `digits=5`、`period=30`、`algorithm=SHA1`
+  （忽略备份里的 Digits/Period/Algorithm）；
+- 码为 5 位字母数字（字母表 23456789BCDFGHJKMNPQRTVWXY），不是 10 的幂取模；
+- 公开向量（secret OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU）：T=59→3DP36、1111111109→GX57J、
+  1111111111→TCJ4Y、1234567890→VYNVB、1640846388→2Y4TM、1735689600→DQ5KF；
+- URI 三种识别形式：issuer/label 前缀 Steam、非 Steam issuer 的裸 `&steam` 标记、`encoder=steam`；
+- 夹具含 2 个备份 Steam 账号（issuer=Steam / issuer=Valve）与 3 个 URI 形式，secret 均独立。
+
+> tools/fixtures 的旧 Python 夹具中 Steam 与 GitHub **共用 secret**，按 Stratum 主键规则会
+> 被 DUPLICATE_SECRET 跳过（已知 3 导入/5 跳过），Steam 正向用例以 e2e/fixtures 为准。
 
 > 3 个 RFC6238 账号的 secret 就是 RFC 6238 Appendix B 的公开种子（Base32 编码），
 > 因此可以直接用 RFC 表验证手环端/手机端 TOTP 实现。
@@ -100,27 +115,29 @@ DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_ALGORITHM。
 
 ## 协议夹具
 
-- protocol/valid-session.json：mfa_sync_begin → mfa_sync_account × 11 → mfa_sync_commit，
-  syncId=sync-1760000000000-e2e，单条消息最大约 400B（< 1KB 限制）。
-- protocol/invalid-cases.json：19 个手环端接收状态机用例，逐条声明期望：
-  版本 1/未知 type 忽略、非法 JSON、v1 快照忽略、空标签/非法字段/超长 id/字符串 digits 丢弃、
-  commit 条数/syncId 不匹配、无 staging、重复 id 去重、缺省 id 兜底、缺省字段归一化、
-  新 begin 丢弃旧 staging、空同步清空、120s staging 超时。
+- protocol/valid-session.json：mfa_sync_begin → mfa_sync_account × 13 → mfa_sync_commit，
+  syncId=sync-1760000000000-e2e，account 载荷含 otpType，单条消息最大约 490B（< 1KB 限制）。
+- protocol/invalid-cases.json：25 个手环端接收状态机用例，逐条声明期望（依据 docs/protocol.md
+  的校验规则与“确定性约定”）：版本 1/未知 type 忽略、非法 JSON、v1 快照忽略、非法 begin 保留 staging、
+  空标签/非法字段/超长 id/字符串 digits 丢弃、commit 条数/syncId 不匹配（account_count_mismatch /
+  sync_id_mismatch）、无 staging（no_active_begin）、同 index 重复覆盖（duplicate_index 不失败）、
+  同 id 不同 index 丢弃后到者（incomplete_sync）、缺省 id/字段兜底、Steam 账号固定字段、
+  Steam 非法字段丢弃、新 begin 丢弃旧 staging、空同步清空、120s staging 超时。
   每个用例给出 expect.results（逐条状态）、finalSnapshot（不变/账号数）、lastAck 等断言。
 
 ## verify.mjs 覆盖（A–I）
 
 | 节 | 内容 |
 | --- | --- |
-| A | RFC 6238 三种算法 × 6 个时间点 + RFC 4226 HOTP 10 向量 + digits 长度 |
+| A | RFC 6238 三种算法 × 6 个时间点 + RFC 4226 HOTP 10 向量 + digits 长度 + **Steam Guard 6 组向量** |
 | B | 文件哈希可复现、覆盖矩阵、映射结果与 expected-import.json 一致、id 独立复算、分类 Id、排序规则、跳过报告不含 secret |
 | C | Strong/Legacy 解密 == 明文、错误密码/错误头部/截断拒绝、同 salt/iv 再加密逐字节一致 |
-| D | **跨实现**：Python 夹具（tools/fixtures）解密、固定 salt/iv 再加密逐字节一致、映射 3/5 与分类、URI 列表、与 tools/src/stratum.mjs 双向对拍 |
-| E | URI 列表 5 导入 / 2 跳过，字段与明文映射一致（无分类 → 默认分类） |
+| D | **跨实现**：Python 夹具（tools/fixtures）解密、固定 salt/iv 再加密逐字节一致、映射 3/5（旧夹具 Steam 共用 secret 已知跳过）、URI 列表、与 tools/src/stratum.mjs 双向对拍（Steam 支持自适应） |
+| E | URI 列表 8 导入 / 2 跳过；普通 TOTP 字段与明文映射一致；**3 种 Steam 形式均识别为 otpType=steam** |
 | F | 合法会话：信封/大小/索引/同步号、手环端回放提交、ack、手机端状态机、request |
-| G | 字段边界：最大字段消息 < 1KB、13 类非法 account 丢弃、未知字段忽略、小写算法容忍 |
-| H | 回放 invalid-cases.json 的 19 个用例 |
-| I | **跨端 TOTP**：band-app 纯模块 vs 独立实现（RFC 向量、HOTP、3×5×5×5 矩阵、夹具全部账号） |
+| G | 字段边界：最大字段消息 < 1KB（含 Steam）、13 类非法 account + 4 类非法 Steam account 丢弃、未知字段忽略、小写算法/otpType 容忍 |
+| H | 回放 invalid-cases.json 的 25 个用例（含 Steam / duplicate_index / 非法 begin / 失败 ack 原因码） |
+| I | **跨端 TOTP/Steam**：band-app 纯模块 vs 独立实现（RFC 向量、HOTP、3×5×5×5 矩阵、夹具 TOTP 账号、**Steam 6 向量 + Steam 账号跨端对拍**） |
 
 ## 交叉验证证据（双向、非自证）
 
@@ -141,26 +158,27 @@ DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_ALGORITHM。
 - band-app/dist/*.rpk 存在，manifest.package == dev.wristkey.app、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
 - Android APK 存在，包名 dev.wristkey.app、应用名 腕证；
+- 版本号：rpk 1.0.2 / versionCode 3，APK 1.1 / versionCode 2（Steam 修复版）；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
 - 三者指纹一致，并可选择调用团队统一的 scripts/check-signing.sh；
 - 结果写入 ../reports/e2e-build-result.json，退出码 0 = 无 FAIL（SKIP 可接受）。
 
-## 协议/格式的参考选择（文档未明确规定处）
+## 协议/格式的确定性约定（与 docs/protocol.md 对齐）
 
-以下选择不影响互通时，跨端实现应保持一致；已同步给 Lead：
+旧版文档未明确、现已写入 docs/protocol.md 的规则，e2e 参考实现严格照此执行：
 
-1. **account.id 计算**：s_ + sha1(归一化 secret) 前 12 位十六进制；
-   归一化 = 大写、去空白、去 -、去 =（与 tools/src/stratum.mjs 一致）。
-   文档未说明 = 填充如何处理，建议在 docs/stratum-format.md 中明确。
-2. **快照排序**：文档仅说“按排序输出”。参考实现规则：分类间按 Category.Ranking，
-   分类内按 AuthenticatorCategories.Ranking，无分类归入「默认分类」并排最后，
-   同键按 Authenticator.Ranking、secret 决定。跨端对拍建议**按 id 集合**而不是数组顺序。
-3. **非法 begin**：文档只规定“收到 begin 即清空 staging”。参考实现：缺 syncId/accountCount
-   的非法 begin 忽略，**保留**旧 staging。
-4. **account 单个字段非法**：丢弃整条 account 并计入错误（依据“非法消息直接丢弃，不中断同步”）。
-5. **URI 列表**：不含分类信息，映射后一律 默认分类。
-6. **algorithm 大小写**：手环端参考实现对 sha1 等小写容忍并归一化为大写。
+1. **account.id**：s_ + sha1(归一化 secret) 前 12 位；归一化 = 大写、去空白、去 -、去 =；
+2. **快照顺序**：协议不保证顺序，跨端对拍用 id 集合 + 字段值，不比较数组下标；
+3. **空同步**：begin/commit accountCount=0 合法，写入空快照（清空账号）；
+4. **重复 index**：同轮重复 index 后到覆盖先到（duplicate_index，不算失败）；
+   同 account.id 出现在不同 index → 丢弃后到者；
+5. **非法 begin**：syncId 空/超长或 accountCount 非 0–500 整数 → 忽略并**保留**当前 staging；
+6. **失败 ack 原因码**：no_active_begin / sync_id_mismatch / account_count_mismatch / incomplete_sync；
+7. **staging 超时**：120s 无新消息自动丢弃，不计入错误；
+8. **otpType**：可选 totp（缺省）/steam（大小写不敏感）；Steam 固定 digits=5/period=30/SHA1，
+   码为 5 位字母数字（docs/protocol.md Steam Guard 一节）；
+9. **URI 列表**：无分类 → 默认分类；Steam 三种识别形式见夹具覆盖矩阵。
 
 ## 安全与许可
 

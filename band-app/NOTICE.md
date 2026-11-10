@@ -15,12 +15,14 @@ band-app/LICENSE 与下述署名是本项目对 Apache-2.0 第 4 条（保留版
 
 本项目以 BandOTP 快应用工程为起点（页面组织、交互思路与整体视觉结构），随后为 WristKey 重写：
 
-- src/manifest.json：包名 dev.wristkey.app、应用名「腕证」、版本 1.0.0、feature 保持
+- src/manifest.json：包名 dev.wristkey.app、应用名「腕证」、版本 1.0.2、feature 保持
   router/storage/interconnect、config.designWidth = "device-width"；
 - src/common/logo.png：替换为本项目生成的图标（不再使用上游图片资源）；
 - src/common/scripts/totp.js：重写为与运行时无关的纯 JS 实现，Base32 归一化/解码、
   HMAC-SHA1/SHA256/SHA512（SHA-256/512 为自行实现）、RFC 4226 HOTP / RFC 6238 TOTP、
-  digits 6–10、period 5–300，并以 RFC 6238 公开测试向量校验；
+  digits 6–10、period 5–300，并以 RFC 6238 公开测试向量校验；另按 docs/protocol.md 的
+  Steam Guard 规则实现 5 位字母数字码（字母表 23456789BCDFGHJKMNPQRTVWXY，固定 30 s / SHA1），
+  并用公开 Steam 向量校验；
 - src/common/scripts/accountModel.js、syncProtocol.js、settings.js：新增的纯函数模块
   （账号校验、协议 v2 状态机、分页/主题等），无运行时依赖，便于 Node 测试；
 - src/common/scripts/mfaConfig.js：重写为 v2 快照存储（单 key 原子写、加载容错、

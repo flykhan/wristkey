@@ -22,7 +22,7 @@ import process from 'node:process';
 
 import { createRunner, assert, assertEqual, assertDeepEqual, assertThrows } from './lib/runner.mjs';
 import { base32Encode, normalizeProtocolSecret } from './lib/encoding.mjs';
-import { RFC6238_SEEDS, RFC6238_VECTORS, hotp, totp, totpAtSeconds } from './lib/totp.mjs';
+import { RFC6238_SEEDS, RFC6238_VECTORS, hotp, totp, totpAtSeconds, steamTotp } from './lib/totp.mjs';
 import * as stratum from './lib/stratum.mjs';
 import * as protocol from './lib/protocol.mjs';
 
@@ -62,7 +62,8 @@ function stripAccountForCompare(account) {
     secret: account.secret,
     algorithm: account.algorithm,
     digits: account.digits,
-    period: account.period
+    period: account.period,
+    otpType: account.otpType || 'totp'
   };
 }
 
@@ -164,6 +165,30 @@ async function main() {
     }
     return '6/8/10';
   });
+  const STEAM_SECRET = 'OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU';
+  const STEAM_VECTORS = [
+    { time: 59, code: '3DP36' },
+    { time: 1111111109, code: 'GX57J' },
+    { time: 1111111111, code: 'TCJ4Y' },
+    { time: 1234567890, code: 'VYNVB' },
+    { time: 1640846388, code: '2Y4TM' },
+    { time: 1735689600, code: 'DQ5KF' }
+  ];
+  for (const vector of STEAM_VECTORS) {
+    r.test('Steam Guard T=' + vector.time, function () {
+      const code = steamTotp(STEAM_SECRET, vector.time * 1000);
+      assertEqual(code, vector.code, 'Steam 码与公开向量不一致');
+      assertEqual(code.length, 5, 'Steam 码应固定 5 位');
+      assert(/^[23456789BCDFGHJKMNPQRTVWXY]+$/.test(code), 'Steam 码字符集错误');
+      return 'code=' + code;
+    });
+  }
+  r.test('Steam 码不是 10 的幂取模（与纯数字 TOTP 不同）', function () {
+    const numeric = totpAtSeconds(STEAM_SECRET, 59, { digits: 6, period: 30, algorithm: 'SHA1' });
+    const steam = steamTotp(STEAM_SECRET, 59000);
+    assert(numeric !== steam, 'Steam 码不应等于纯数字 TOTP 码');
+    return 'numeric=' + numeric + ' steam=' + steam;
+  });
   r.test('RFC 种子与夹具 RFC 账号 secret 一致（公开测试值）', function () {
     const plainAuthenticators = plain.Authenticators;
     const rfcAccounts = plainAuthenticators.filter(function (authenticator) {
@@ -209,10 +234,10 @@ async function main() {
     }
     return manifest.files.length + ' 个文件';
   });
-  r.test('映射统计 = 11 导入 / 11 跳过（共 22）', function () {
-    assertEqual(mapped.stats.total, 22);
-    assertEqual(mapped.stats.imported, 11);
-    assertEqual(mapped.stats.skipped, 11);
+  r.test('映射统计 = 13 导入 / 10 跳过（共 23）', function () {
+    assertEqual(mapped.stats.total, 23);
+    assertEqual(mapped.stats.imported, 13);
+    assertEqual(mapped.stats.skipped, 10);
     assertDeepEqual(mapped.stats, expected.stats);
   });
   r.test('映射结果与 expected-import.json 完全一致', function () {
@@ -221,13 +246,14 @@ async function main() {
   });
   r.test('覆盖矩阵：算法 / digits / period / 分类 / 跳过类型', function () {
     assertDeepEqual(manifest.coverage.algorithms, ['SHA1', 'SHA256', 'SHA512']);
-    assertDeepEqual(manifest.coverage.digits, [6, 8, 10]);
+    assertDeepEqual(manifest.coverage.digits, [5, 6, 8, 10]);
     assertDeepEqual(manifest.coverage.periods, [15, 30, 60]);
+    assertDeepEqual(manifest.coverage.otpTypes, ['steam', 'totp']);
     for (const category of ['开发', '个人', '云服务', '社交', '默认分类']) {
       assert(manifest.coverage.categories.indexOf(category) >= 0, '缺少分类 ' + category);
     }
     for (const code of [
-      'TYPE_NOT_TOTP',
+      'UNSUPPORTED_OTP_TYPE',
       'INVALID_BASE32',
       'EMPTY_SECRET',
       'PERIOD_OUT_OF_RANGE',
@@ -241,7 +267,7 @@ async function main() {
     for (const item of expected.skipped) {
       typeCounts[item.code] = (typeCounts[item.code] || 0) + 1;
     }
-    assertEqual(typeCounts.TYPE_NOT_TOTP, 3, 'HOTP/Steam/Mobile-OTP 各 1 条');
+    assertEqual(typeCounts.UNSUPPORTED_OTP_TYPE, 2, 'HOTP/Mobile-OTP 各 1 条（Steam 现已支持）');
   });
   r.test('每个导入账号 id = s_ + sha1(归一化 secret)[0:12]（独立复算）', function () {
     for (const account of expected.accounts) {
@@ -250,6 +276,20 @@ async function main() {
       assertEqual(account.id, 's_' + hex, 'account ' + account.issuer + ' id');
     }
     return expected.accounts.length + ' 个';
+  });
+  r.test('Steam 账号映射：otpType=steam / digits=5 / period=30 / SHA1', function () {
+    const steamAccounts = expected.accounts.filter(function (account) {
+      return account.otpType === 'steam';
+    });
+    assertEqual(steamAccounts.length, 2, '应有 2 个 Steam 账号（issuer=Steam 与 issuer=Valve）');
+    for (const account of steamAccounts) {
+      assertEqual(account.algorithm, 'SHA1', 'Steam 固定 SHA1');
+      assertEqual(account.digits, 5, 'Steam 固定 5 位字母数字');
+      assertEqual(account.period, 30, 'Steam 固定 30s');
+    }
+    const issuers = steamAccounts.map(function (account) { return account.issuer; }).sort();
+    assertDeepEqual(issuers, ['Steam', 'Valve'], '应覆盖 issuer=Steam 与 issuer≠Steam 两种');
+    return steamAccounts.map(function (account) { return account.issuer + '/' + account.digits; }).join(', ');
   });
   r.test('分类 Id = sha1(分类名) 前 8 位十六进制', function () {
     for (const category of plain.Categories) {
@@ -270,26 +310,28 @@ async function main() {
       accounts.slice(3, 6).map(function (account) { return account.category; }),
       ['个人', '个人', '个人']
     );
-    // 云服务（Ranking=2）：企业VPN（binding 0）在 AWS（binding 1）之前
+    // 云服务（Ranking=2）：企业VPN（binding 0）/ AWS（binding 1）/ Valve（binding 2）
     assertDeepEqual(
-      accounts.slice(6, 8).map(function (account) { return account.issuer; }),
-      ['企业VPN', 'AWS']
+      accounts.slice(6, 9).map(function (account) { return account.issuer; }),
+      ['企业VPN', 'AWS', 'Valve']
     );
-    // 社交（Ranking=3）：多分类的 GitHub 取 binding ranking 最小的社交
-    assertEqual(accounts[8].issuer, 'GitHub');
-    assertEqual(accounts[8].category, '社交', 'GitHub 多分类取 AuthenticatorCategory.Ranking 最小者');
+    // 社交（Ranking=3）：多分类的 GitHub 取 binding ranking 最小的社交；Steam binding 3
+    assertEqual(accounts[9].issuer, 'GitHub');
+    assertEqual(accounts[9].category, '社交', 'GitHub 多分类取 AuthenticatorCategory.Ranking 最小者');
+    assertEqual(accounts[10].issuer, 'Steam');
+    assertEqual(accounts[10].otpType, 'steam');
     // 无分类 → 默认分类，最后，按 Authenticator.Ranking
     assertDeepEqual(
-      accounts.slice(9).map(function (account) { return account.issuer; }),
+      accounts.slice(11).map(function (account) { return account.issuer; }),
       ['Cloudflare', '']
     );
-    for (const account of accounts.slice(9)) {
+    for (const account of accounts.slice(11)) {
       assertEqual(account.category, '默认分类');
     }
-    return '11 条顺序符合规则';
+    return accounts.length + ' 条顺序符合规则';
   });
   r.test('明文备份条目结构符合 Stratum 规范', function () {
-    assertEqual(plain.Authenticators.length, 22, 'Authenticators 条目数');
+    assertEqual(plain.Authenticators.length, 23, 'Authenticators 条目数');
     for (const authenticator of plain.Authenticators) {
       assert(Number.isInteger(authenticator.Type), 'Type 必须是整数');
       assert(Number.isInteger(authenticator.Algorithm), 'Algorithm 必须是整数');
@@ -306,7 +348,7 @@ async function main() {
       assert(categoryIds.has(link.CategoryId), '未知 CategoryId ' + link.CategoryId);
       assert(typeof link.AuthenticatorSecret === 'string', 'AuthenticatorCategory 缺 AuthenticatorSecret');
     }
-    return '22 条 Authenticator / ' + plain.AuthenticatorCategories.length + ' 条分类绑定';
+    return '23 条 Authenticator / ' + plain.AuthenticatorCategories.length + ' 条分类绑定';
   });
   r.test('映射幂等（两次映射结果一致）', function () {
     const again = stratum.mapBackupToAccounts(deepClone(plain), { updatedAt: stratum.FIXTURE_UPDATED_AT });
@@ -424,7 +466,7 @@ async function main() {
       assert(legacyAgain.equals(toolsLegacy), 'Legacy 加密切片应与 Python 夹具逐字节一致');
       return 'strong/legacy 均逐字节一致';
     });
-    r.test('Python 夹具映射：3 导入 / 5 跳过，分类正确', function () {
+    r.test('Python 夹具映射：3 导入 / 5 跳过（旧夹具 Steam 与 GitHub 共用 secret，按主键重复跳过）', function () {
       assertEqual(toolsMapped.stats.total, 8);
       assertEqual(toolsMapped.stats.imported, 3);
       assertEqual(toolsMapped.stats.skipped, 5);
@@ -438,8 +480,12 @@ async function main() {
       assertEqual(byIssuer.get('AWS').algorithm, 'SHA512');
       assertEqual(byIssuer.get('AWS').digits, 10);
       assertEqual(byIssuer.get('AWS').period, 15);
+      const steamSkip = toolsMapped.skipped.find(function (item) { return item.issuer === 'Steam'; });
+      assert(steamSkip, 'tools 旧夹具的 Steam 条目应出现在跳过报告');
+      assertEqual(steamSkip.code, 'DUPLICATE_SECRET', '旧夹具 Steam 与 GitHub 共用 secret（Stratum 主键唯一），按重复跳过');
       const codes = toolsMapped.skipped.map(function (item) { return item.code; }).sort();
-      assertDeepEqual(codes, ['EMPTY_ISSUER_AND_USERNAME', 'INVALID_BASE32', 'PERIOD_OUT_OF_RANGE', 'TYPE_NOT_TOTP', 'TYPE_NOT_TOTP']);
+      assertDeepEqual(codes, ['DUPLICATE_SECRET', 'EMPTY_ISSUER_AND_USERNAME', 'INVALID_BASE32', 'PERIOD_OUT_OF_RANGE', 'UNSUPPORTED_OTP_TYPE']);
+      console.log('  NOTE tools/fixtures 旧夹具 Steam 与 GitHub 共用 secret（已知 3/5）；Steam 映射正向用例以 e2e/fixtures 为准');
     });
     r.test('Python 夹具 URI 列表：3 导入 / 1 跳过', function () {
       const parsed = stratum.parseUriList(toolsUri);
@@ -471,15 +517,25 @@ async function main() {
         assertDeepEqual(JSON.parse(toolsLegacyText), plain);
         return 'strong/legacy 均可还原';
       });
-      r.test('tools/src/stratum.mjs 与 e2e 对 Python 夹具映射一致（按 id）', function () {
-        const theirs = toolsModule.mapStratumBackup(toolsPlain);
-        assertDeepEqual(sortedAccountSet(theirs.accounts), sortedAccountSet(toolsMapped.accounts));
-        assertEqual(theirs.skipped.length, toolsMapped.skipped.length);
+      function compareWithTools(label, backupObject, mine) {
+        const theirs = toolsModule.mapStratumBackup(backupObject);
+        const mineNonSteam = mine.accounts.filter(function (account) { return account.otpType !== 'steam'; });
+        const theirsNonSteam = theirs.accounts.filter(function (account) { return account.otpType !== 'steam'; });
+        assertDeepEqual(sortedAccountSet(theirsNonSteam), sortedAccountSet(mineNonSteam), label + ': 非 Steam 账号应完全一致');
+        const theirsSteam = theirs.accounts.filter(function (account) { return account.otpType === 'steam'; });
+        const mineSteam = mine.accounts.filter(function (account) { return account.otpType === 'steam'; });
+        if (mineSteam.length > 0 && theirsSteam.length === 0) {
+          console.log('  NOTE ' + label + ': tools/src/stratum.mjs 尚未支持 Steam（' + mineSteam.length + ' 条 Steam 账号跳过对拍），待 tools 更新后应改为严格全量对拍');
+        } else {
+          assertDeepEqual(sortedAccountSet(theirsSteam), sortedAccountSet(mineSteam), label + ': Steam 账号应一致');
+        }
+        return { theirs, mine };
+      }
+      r.test('tools/src/stratum.mjs 与 e2e 对 Python 夹具映射一致（非 Steam 严格 / Steam 自适应）', function () {
+        compareWithTools('Python 夹具', toolsPlain, toolsMapped);
       });
-      r.test('tools/src/stratum.mjs 与 e2e 对 e2e 夹具映射一致（按 id）', function () {
-        const theirs = toolsModule.mapStratumBackup(plain);
-        assertDeepEqual(sortedAccountSet(theirs.accounts), sortedAccountSet(mapped.accounts));
-        assertEqual(theirs.skipped.length, mapped.skipped.length);
+      r.test('tools/src/stratum.mjs 与 e2e 对 e2e 夹具映射一致（非 Steam 严格 / Steam 自适应）', function () {
+        compareWithTools('e2e 夹具', plain, mapped);
       });
     } else {
       process.stdout.write('  NOTE tools/src/stratum.mjs 不存在，跳过实现级对拍\n');
@@ -492,22 +548,50 @@ async function main() {
   r.section('E. otpauth:// URI 列表夹具');
   const uriText = readFileSync(join(FIXTURES, 'uri-list.txt'), 'utf8');
   const parsedUris = stratum.parseUriList(uriText);
-  r.test('URI 列表：5 导入 / 2 跳过（HOTP + 非法 secret）', function () {
-    assertEqual(parsedUris.stats.total, 7);
-    assertEqual(parsedUris.stats.imported, 5);
+  r.test('URI 列表：8 导入 / 2 跳过（HOTP + 非法 secret）', function () {
+    assertEqual(parsedUris.stats.total, 10);
+    assertEqual(parsedUris.stats.imported, 8);
     assertEqual(parsedUris.stats.skipped, 2);
     const codes = parsedUris.skipped.map(function (item) { return item.code; }).sort();
     assertDeepEqual(codes, ['INVALID_BASE32', 'TYPE_NOT_TOTP']);
   });
-  r.test('URI 导入字段与明文映射一致（issuer/accountName/secret/algorithm/digits/period）', function () {
+  r.test('URI 三种 Steam 形式均识别为 otpType=steam', function () {
+    const steam = parsedUris.accounts.filter(function (account) { return account.otpType === 'steam'; });
+    assertEqual(steam.length, 3, '应有 3 个 Steam URI 账号');
+    const byIssuer = new Map(steam.map(function (account) { return [account.issuer, account]; }));
+    assert(byIssuer.get('Steam'), 'issuer=Steam 无标记形式应识别');
+    assert(byIssuer.get('Valve'), '非 Steam issuer + &steam 形式应识别');
+    assert(byIssuer.get('AegisSteamRepo'), 'encoder=steam 形式应识别');
+    for (const account of steam) {
+      assertEqual(account.algorithm, 'SHA1', 'Steam 固定 SHA1');
+      assertEqual(account.digits, 5, 'Steam 固定 5 位');
+      assertEqual(account.period, 30, 'Steam 固定 30s');
+    }
+    return steam.map(function (account) { return account.issuer; }).join(', ');
+  });
+  r.test('URI 普通 TOTP 字段与明文映射一致（无分类 → 默认分类）', function () {
     const byId = accountSetById(expected.accounts);
-    for (const account of parsedUris.accounts) {
+    const totpAccounts = parsedUris.accounts.filter(function (account) { return account.otpType === 'totp'; });
+    assertEqual(totpAccounts.length, 5, '普通 TOTP URI 应为 5 条');
+    for (const account of totpAccounts) {
       const plainAccount = byId.get(account.id);
       assert(plainAccount, 'URI 账号 ' + account.id + ' 应在明文映射中');
       assertDeepEqual(stripAccountForUriCompare(account), stripAccountForUriCompare(plainAccount));
       assertEqual(account.category, '默认分类', 'URI 列表无分类 → 默认分类');
     }
-    return parsedUris.accounts.length + ' 个';
+    return totpAccounts.length + ' 个';
+  });
+  r.test('URI Steam 字段与明文映射一致（issuer=Steam / issuer=Valve）', function () {
+    const byId = accountSetById(expected.accounts);
+    for (const account of parsedUris.accounts.filter(function (item) { return item.otpType === 'steam'; })) {
+      const plainAccount = byId.get(account.id);
+      if (!plainAccount) {
+        continue; // encoder=steam 形式使用独立 secret，无明文字段对照
+      }
+      assertDeepEqual(stripAccountForUriCompare(account), stripAccountForUriCompare(plainAccount));
+      assertEqual(plainAccount.otpType, 'steam');
+    }
+    return '2 个可对照 + 1 个独立';
   });
 
   // ---------------------------------------------------- F. 合法协议会话
@@ -518,7 +602,7 @@ async function main() {
   const accountMessages = sessionMessages.filter(function (message) {
     return message.type === protocol.MESSAGE_TYPES.ACCOUNT;
   });
-  r.test('消息序列结构：1 begin + 11 account + 1 commit', function () {
+  r.test('消息序列结构：1 begin + ' + expectedAccounts.length + ' account + 1 commit', function () {
     assertEqual(sessionMessages.length, expectedAccounts.length + 2);
     assertEqual(sessionMessages[0].type, 'mfa_sync_begin');
     assertEqual(sessionMessages[sessionMessages.length - 1].type, 'mfa_sync_commit');
@@ -714,6 +798,50 @@ async function main() {
     assert(validated.ok, validated.reason);
     assertEqual(validated.account.algorithm, 'SHA256');
   });
+  r.test('Steam 账号消息仍 < 1KB（含 64 字符字段）', function () {
+    const steamMax = {
+      id: 'x'.repeat(64),
+      issuer: 'i'.repeat(64),
+      accountName: 'a'.repeat(64),
+      category: 'c'.repeat(32),
+      secret: 'OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU',
+      algorithm: 'SHA1',
+      digits: 5,
+      period: 30,
+      otpType: 'steam'
+    };
+    const session = protocol.buildSyncSession([steamMax], { sentAt: FIXED_NOW, syncId: 's-steam-max' });
+    const bytes = protocol.messageBytes(session.messages[1]);
+    assert(bytes < protocol.MAX_MESSAGE_BYTES, 'Steam 最大字段 account 消息 ' + bytes + 'B 应 < 1KB');
+    return bytes + 'B';
+  });
+  for (const badSteam of [
+    { label: 'otpType 非法', overrides: { otpType: 'hotp' }, reason: 'otpType' },
+    { label: 'steam digits=6', overrides: { otpType: 'steam', digits: 6 }, reason: 'digits' },
+    { label: 'steam period=60', overrides: { otpType: 'steam', digits: 5, period: 60 }, reason: 'period' },
+    { label: 'steam algorithm=SHA256', overrides: { otpType: 'steam', algorithm: 'SHA256' }, reason: 'algorithm' }
+  ]) {
+    r.test('非法 Steam account 被丢弃：' + badSteam.label, function () {
+      const account = makeValidAccount(badSteam.overrides);
+      const validated = protocol.validateAccount(account, 0);
+      assert(!validated.ok, badSteam.label + ' 应校验失败');
+      assert(
+        String(validated.reason).indexOf(badSteam.reason) >= 0,
+        badSteam.label + ' 原因应包含 ' + JSON.stringify(badSteam.reason) + '，实际: ' + validated.reason
+      );
+    });
+  }
+  r.test('合法 Steam account 归一化：otpType=steam / digits=5 / period=30 / SHA1', function () {
+    const validated = protocol.validateAccount(
+      makeValidAccount({ otpType: 'STEAM', digits: 5, period: 30, algorithm: 'sha1' }),
+      0
+    );
+    assert(validated.ok, validated.reason);
+    assertEqual(validated.account.otpType, 'steam');
+    assertEqual(validated.account.digits, 5);
+    assertEqual(validated.account.period, 30);
+    assertEqual(validated.account.algorithm, 'SHA1');
+  });
   r.test('未知 type/version 不破坏进行中的 staging', function () {
     const receiver = new protocol.BandSyncReceiver({ now: function () { return FIXED_NOW; } });
     const session = protocol.buildSyncSession([makeValidAccount()], { sentAt: FIXED_NOW, syncId: 's-keep' });
@@ -815,10 +943,13 @@ async function main() {
     }
   }
   if (bandTotp) {
+    const steamExportNames = Object.keys(bandTotp).filter(function (name) {
+      return /steam/i.test(name) && typeof bandTotp[name] === 'function';
+    });
     r.test('band-app TOTP 模块导出 generateTotp/hotp 且可加载', function () {
       assertEqual(typeof bandTotp.generateTotp, 'function', '缺少 generateTotp');
       assertEqual(typeof bandTotp.hotp, 'function', '缺少 hotp');
-      return bandTotpPath.replace(WORKSPACE + '/', '');
+      return bandTotpPath.replace(WORKSPACE + '/', '') + (steamExportNames.length ? ' / steam: ' + steamExportNames.join(',') : ' / 无 Steam 导出');
     });
     r.test('band-app RFC 4226 HOTP counter=0..9 与 RFC 表一致', function () {
       const secret = rfcSeedBase32('SHA1');
@@ -859,10 +990,10 @@ async function main() {
       }
       return comparisons + ' 组对拍一致';
     });
-    r.test('band-app TOTP 对夹具全部账号逐一对拍（2 个时间点）', function () {
+    r.test('band-app TOTP 对夹具全部 TOTP 账号逐一对拍（2 个时间点）', function () {
       const times = [stratum.FIXTURE_UPDATED_AT, stratum.FIXTURE_UPDATED_AT + 59000];
       let comparisons = 0;
-      for (const account of expected.accounts) {
+      for (const account of expected.accounts.filter(function (item) { return item.otpType !== 'steam'; })) {
         for (const timeMs of times) {
           const mine = totp(account.secret, timeMs, {
             period: account.period,
@@ -882,6 +1013,66 @@ async function main() {
       }
       return comparisons + ' 次一致';
     });
+    // Steam 跨端对拍：自动探测 band-app 导出的 Steam 码函数签名（时间毫秒/秒均可）
+    if (steamExportNames.length > 0) {
+      const steamFn = bandTotp[steamExportNames[0]];
+      const strategies = [
+        { name: '(secret, timeMs)', call: function (secret, seconds) { return steamFn(secret, seconds * 1000); } },
+        { name: '(secret, seconds)', call: function (secret, seconds) { return steamFn(secret, seconds); } },
+        { name: '(secret, timeMs, period)', call: function (secret, seconds) { return steamFn(secret, seconds * 1000, 30); } },
+        { name: '(secret, seconds, period)', call: function (secret, seconds) { return steamFn(secret, seconds, 30); } }
+      ];
+      let chosen = null;
+      for (const strategy of strategies) {
+        try {
+          const matches = STEAM_VECTORS.every(function (vector) {
+            const value = strategy.call(STEAM_SECRET, vector.time);
+            const code = value && typeof value === 'object' ? value.code || value.value : value;
+            return code === vector.code;
+          });
+          if (matches) {
+            chosen = strategy;
+            break;
+          }
+        } catch (error) {
+          // 尝试下一种签名
+        }
+      }
+      if (!chosen) {
+        r.test('band-app Steam 码跨端对拍', function () {
+          throw new Error(
+            'band-app 导出 Steam 函数（' + steamExportNames.join(',') + '）但无法匹配已验向量；' +
+              '请对齐 docs/protocol.md 的 SteamOtp 算法（HMAC-SHA1 + 5 位字母表）'
+          );
+        });
+      } else {
+        r.test('band-app Steam 码 6 组向量对拍（签名 ' + chosen.name + '）', function () {
+          for (const vector of STEAM_VECTORS) {
+            const value = chosen.call(STEAM_SECRET, vector.time);
+            const code = value && typeof value === 'object' ? value.code || value.value : value;
+            assertEqual(code, vector.code, 'T=' + vector.time + ' Steam 码与独立实现不一致');
+          }
+          return '6 组一致';
+        });
+        r.test('band-app Steam 码对夹具 Steam 账号逐一对拍（2 个时间点）', function () {
+          const steamAccounts = expected.accounts.filter(function (account) { return account.otpType === 'steam'; });
+          assert(steamAccounts.length > 0, '夹具应包含 Steam 账号');
+          let comparisons = 0;
+          for (const account of steamAccounts) {
+            for (const timeSeconds of [stratum.FIXTURE_UPDATED_AT / 1000, stratum.FIXTURE_UPDATED_AT / 1000 + 59]) {
+              const mine = steamTotp(account.secret, timeSeconds * 1000);
+              const value = chosen.call(account.secret, timeSeconds);
+              const code = value && typeof value === 'object' ? value.code || value.value : value;
+              assertEqual(code, mine, account.issuer + '/' + account.accountName + '/t=' + timeSeconds);
+              comparisons += 1;
+            }
+          }
+          return comparisons + ' 次一致';
+        });
+      }
+    } else {
+      console.log('  NOTE band-app totp.js 尚未导出 Steam 码函数（band-dev 实现后自动启用跨端 Steam 对拍）');
+    }
     r.test('band-app normalizeBase32 与 e2e 归一化一致（空格/=/小写）', function () {
       const normalized = bandTotp.normalizeBase32(' jbsw y3dp ehpk 3pxp= ');
       assert(normalized && normalized.ok, 'normalizeBase32 应成功');

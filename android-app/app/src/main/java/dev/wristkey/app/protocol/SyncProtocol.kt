@@ -1,7 +1,11 @@
 package dev.wristkey.app.protocol
 
+import dev.wristkey.app.OTP_TYPE_STEAM
 import dev.wristkey.app.Secret
+import dev.wristkey.app.SteamOtp
+import dev.wristkey.app.SUPPORTED_OTP_TYPES
 import dev.wristkey.app.WristKeyAccount
+import dev.wristkey.app.normalizeOtpType
 import org.json.JSONObject
 import java.util.Locale
 import java.util.Random
@@ -99,17 +103,25 @@ object SyncProtocol {
         .put("syncId", syncId)
         .put("accountCount", accountCount)
 
-    /** 协议 account 载荷；字段超长时截断，保证手环端校验通过。 */
-    fun encodeAccount(account: WristKeyAccount): JSONObject = JSONObject()
-        .put("id", account.id.take(MAX_ID_LENGTH))
-        .put("issuer", account.issuer.take(MAX_NAME_LENGTH))
-        .put("accountName", account.accountName.take(MAX_NAME_LENGTH))
-        .put("category", account.categoryLabel.take(MAX_CATEGORY_LENGTH))
-        .put("secret", Secret.normalize(account.secret))
-        .put("algorithm", account.algorithm.uppercase(Locale.US))
-        .put("digits", account.digits)
-        .put("period", account.period)
-        .put("updatedAt", account.updatedAt)
+    /**
+     * 协议 account 载荷；字段超长时截断，保证手环端校验通过。
+     * Steam 账号强制 digits=5 / period=30 / algorithm=SHA1，并显式携带 otpType。
+     */
+    fun encodeAccount(account: WristKeyAccount): JSONObject {
+        val otpType = normalizeOtpType(account.otpType)
+        val isSteam = otpType == OTP_TYPE_STEAM
+        return JSONObject()
+            .put("id", account.id.take(MAX_ID_LENGTH))
+            .put("issuer", account.issuer.take(MAX_NAME_LENGTH))
+            .put("accountName", account.accountName.take(MAX_NAME_LENGTH))
+            .put("category", account.categoryLabel.take(MAX_CATEGORY_LENGTH))
+            .put("secret", Secret.normalize(account.secret))
+            .put("algorithm", if (isSteam) SteamOtp.ALGORITHM else account.algorithm.uppercase(Locale.US))
+            .put("digits", if (isSteam) SteamOtp.DIGITS else account.digits)
+            .put("period", if (isSteam) SteamOtp.PERIOD else account.period)
+            .put("otpType", otpType)
+            .put("updatedAt", account.updatedAt)
+    }
 
     fun messageBytes(message: String): Int = message.toByteArray(Charsets.UTF_8).size
 
@@ -171,18 +183,38 @@ object SyncProtocol {
             return "secret 不是合法 Base32"
         }
 
+        val otpTypeRaw = readString(json, "otpType")
+        if (otpTypeRaw != null && otpTypeRaw.trim().lowercase(Locale.US) !in SUPPORTED_OTP_TYPES) {
+            return "otpType 不是 totp / steam"
+        }
+        val otpType = normalizeOtpType(otpTypeRaw)
+        val isSteam = otpType == OTP_TYPE_STEAM
+
         val algorithm = (readString(json, "algorithm") ?: "SHA1").uppercase(Locale.US)
         if (algorithm !in setOf("SHA1", "SHA256", "SHA512")) {
             return "algorithm 不是 SHA1/SHA256/SHA512"
         }
 
-        val digits = readInteger(json, "digits") ?: 6L
-        if (digits < 6L || digits > 10L) {
-            return "digits 不是 6-10 的整数"
-        }
-        val period = readInteger(json, "period") ?: 30L
-        if (period < 5L || period > 300L) {
-            return "period 不是 5-300 的整数"
+        val digits = readInteger(json, "digits") ?: if (isSteam) SteamOtp.DIGITS.toLong() else 6L
+        val period = readInteger(json, "period") ?: if (isSteam) SteamOtp.PERIOD.toLong() else 30L
+        if (isSteam) {
+            // Steam 固定 5 位（字母数字）/ 30 秒 / SHA1（docs/protocol.md）。
+            if (digits != SteamOtp.DIGITS.toLong()) {
+                return "Steam 账号 digits 必须为 5"
+            }
+            if (period != SteamOtp.PERIOD.toLong()) {
+                return "Steam 账号 period 必须为 30"
+            }
+            if (algorithm != SteamOtp.ALGORITHM) {
+                return "Steam 账号 algorithm 必须为 SHA1"
+            }
+        } else {
+            if (digits < 6L || digits > 10L) {
+                return "digits 不是 6-10 的整数"
+            }
+            if (period < 5L || period > 300L) {
+                return "period 不是 5-300 的整数"
+            }
         }
         if (json.has("updatedAt")) {
             val updatedAt = readInteger(json, "updatedAt") ?: return "updatedAt 不是整数"

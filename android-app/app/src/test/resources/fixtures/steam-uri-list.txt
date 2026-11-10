@@ -1,0 +1,5 @@
+# Steam URI 识别的 3 种形式 + 1 个普通 TOTP 对照
+otpauth://totp/Steam:alice?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Steam
+otpauth://totp/Game:bob?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA&issuer=Game&steam
+otpauth://totp/Other:carol?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Other&encoder=steam
+otpauth://totp/GitHub:dave?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&digits=6&period=30

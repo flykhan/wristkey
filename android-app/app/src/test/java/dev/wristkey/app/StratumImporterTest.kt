@@ -61,10 +61,11 @@ class StratumImporterTest {
         assertEquals(15, aws.period)
         assertEquals("s_537c9a35b939", aws.id)
 
+        // Steam(Type=4) 已支持；该夹具中的 Steam 条目与 GitHub 共用同一条 secret，按主键判为重复。
         assertEquals(
             listOf(
-                "TYPE_NOT_TOTP",
-                "TYPE_NOT_TOTP",
+                "TYPE_NOT_SUPPORTED",
+                "DUPLICATE_SECRET",
                 "INVALID_BASE32",
                 "PERIOD_OUT_OF_RANGE",
                 "EMPTY_ISSUER_AND_USERNAME",
@@ -116,6 +117,58 @@ class StratumImporterTest {
             StratumImporter.import(TestFixtures.bytes("unknown.bin"))
         }
         assertEquals(StratumImporter.UNKNOWN_MESSAGE, error.message)
+    }
+
+    @Test
+    fun steamBackupType4ImportsAsSteamAccounts() {
+        val result = StratumImporter.import(TestFixtures.bytes("steam-backup.json"), updatedAt = TestFixtures.FIXED_UPDATED_AT)
+
+        assertEquals(StratumFormat.PLAIN_JSON, result.format)
+        assertEquals(3, result.importedCount)
+        assertEquals(0, result.skippedCount)
+        assertEquals(listOf(true, false, true), result.accounts.map { it.isSteam })
+
+        val steam = result.accounts.first { it.accountName == "alice" }
+        assertEquals("Steam", steam.issuer)
+        assertEquals("游戏", steam.category)
+        assertEquals(OTP_TYPE_STEAM, steam.otpType)
+        assertEquals(5, steam.digits)
+        assertEquals(30, steam.period)
+        assertEquals("SHA1", steam.algorithm)
+        assertEquals(Secret.accountIdForSecret("OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU"), steam.id)
+        // Steam 向量：T=59 → 3DP36；period 固定 30。
+        assertEquals("3DP36", steam.currentCode(59_000L))
+
+        // 备份里写的是 Digits=6 / Period=60 / Algorithm=1，Steam 导入必须强制 5/30/SHA1。
+        val weird = result.accounts.first { it.accountName == "weird-fields" }
+        assertEquals(OTP_TYPE_STEAM, weird.otpType)
+        assertEquals(5, weird.digits)
+        assertEquals(30, weird.period)
+        assertEquals("SHA1", weird.algorithm)
+
+        val github = result.accounts.first { it.issuer == "GitHub" }
+        assertEquals(OTP_TYPE_TOTP, github.otpType)
+        assertEquals(6, github.digits)
+        assertEquals(30, github.period)
+    }
+
+    @Test
+    fun steamUriListFormsAreDetected() {
+        val result = StratumImporter.import(TestFixtures.bytes("steam-uri-list.txt"), updatedAt = TestFixtures.FIXED_UPDATED_AT)
+
+        assertEquals(StratumFormat.URI_LIST, result.format)
+        assertEquals(4, result.importedCount)
+        assertEquals(0, result.skippedCount)
+        // 前 3 行分别是 issuer 前缀 / 裸 &steam / encoder=steam；第 4 行是普通 TOTP。
+        assertEquals(listOf(true, true, true, false), result.accounts.map { it.isSteam })
+        result.accounts.filter { it.isSteam }.forEach { account ->
+            assertEquals(5, account.digits)
+            assertEquals(30, account.period)
+            assertEquals("SHA1", account.algorithm)
+        }
+        assertEquals("3DP36", result.accounts.first().currentCode(59_000L))
+        assertEquals(6, result.accounts.last().digits)
+        assertEquals(OTP_TYPE_TOTP, result.accounts.last().otpType)
     }
 
     @Test

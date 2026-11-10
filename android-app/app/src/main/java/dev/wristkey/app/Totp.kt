@@ -18,7 +18,7 @@ object Totp {
     ): String {
         require(period in 5..300) { "period 必须在 5-300 秒" }
         require(digits in 6..10) { "digits 必须在 6-10 位" }
-        val counter = timeMillis / 1000L / period
+        val counter = counterFor(timeMillis, period)
         return generateHotp(secret, counter, digits, algorithm)
     }
 
@@ -29,6 +29,18 @@ object Totp {
         algorithm: String = "SHA1",
     ): String {
         require(digits in 6..10) { "digits 必须在 6-10 位" }
+        val material = truncatedMaterial(secret, counter, algorithm)
+        val modulus = POWERS_OF_TEN[digits]
+        val otp = material.toLong() % modulus
+        return otp.toString().padStart(digits, '0')
+    }
+
+    /**
+     * RFC 4226 动态截断后的 31 位整数（HOTP/TOTP/Steam 共用）。
+     *
+     * `material = ((hash[offset] & 0x7f) << 24) | ...`，offset = hash[last] & 0x0f。
+     */
+    fun truncatedMaterial(secret: String, counter: Long, algorithm: String = "SHA1"): Int {
         val normalizedAlgorithm = algorithm.uppercase(Locale.US)
         require(normalizedAlgorithm in SUPPORTED_ALGORITHMS) { "不支持的算法: $algorithm" }
 
@@ -38,14 +50,14 @@ object Totp {
         val hash = mac.doFinal(counterToBytes(counter))
 
         val offset = hash[hash.size - 1].toInt() and 0x0F
-        val binary = ((hash[offset].toInt() and 0x7F) shl 24) or
+        return ((hash[offset].toInt() and 0x7F) shl 24) or
             ((hash[offset + 1].toInt() and 0xFF) shl 16) or
             ((hash[offset + 2].toInt() and 0xFF) shl 8) or
             (hash[offset + 3].toInt() and 0xFF)
-        val modulus = POWERS_OF_TEN[digits]
-        val otp = binary.toLong() % modulus
-        return otp.toString().padStart(digits, '0')
     }
+
+    /** TOTP 时间步计数：floor(unixSeconds / period)。 */
+    fun counterFor(timeMillis: Long, period: Int): Long = timeMillis / 1000L / period
 
     /** 当前周期剩余秒数（1..period）。 */
     fun remainingSeconds(timeMillis: Long, period: Int = 30): Int {
@@ -63,5 +75,7 @@ object Totp {
         return buffer
     }
 
-    private val POWERS_OF_TEN = longArrayOf(1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000, 10_000_000_000L)
+    private val POWERS_OF_TEN = longArrayOf(
+        1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000, 10_000_000_000L,
+    )
 }

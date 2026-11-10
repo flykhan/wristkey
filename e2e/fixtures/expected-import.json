@@ -2,9 +2,9 @@
   "source": "plain-backup.json",
   "note": "参考映射结果（e2e/lib/stratum.mjs mapBackupToAccounts）。排序规则见 e2e/README.md；文档未强制排序，跨端对拍请按 account.id 集合比较。",
   "stats": {
-    "total": 22,
-    "imported": 11,
-    "skipped": 11
+    "total": 23,
+    "imported": 13,
+    "skipped": 10
   },
   "accounts": [
     {
@@ -16,6 +16,7 @@
       "algorithm": "SHA1",
       "digits": 8,
       "period": 30,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -27,6 +28,7 @@
       "algorithm": "SHA256",
       "digits": 8,
       "period": 30,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -38,6 +40,7 @@
       "algorithm": "SHA512",
       "digits": 8,
       "period": 30,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -49,6 +52,7 @@
       "algorithm": "SHA1",
       "digits": 6,
       "period": 30,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -60,6 +64,7 @@
       "algorithm": "SHA1",
       "digits": 8,
       "period": 30,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -71,6 +76,7 @@
       "algorithm": "SHA1",
       "digits": 6,
       "period": 30,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -82,6 +88,7 @@
       "algorithm": "SHA512",
       "digits": 10,
       "period": 60,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -93,6 +100,19 @@
       "algorithm": "SHA256",
       "digits": 6,
       "period": 60,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_a35a35aa4762",
+      "issuer": "Valve",
+      "accountName": "valveuser",
+      "category": "云服务",
+      "secret": "DB2F7GGXX2QCR3OPIJATZ6TFLKLZ5NAA",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "otpType": "steam",
       "updatedAt": 1760000000000
     },
     {
@@ -104,6 +124,19 @@
       "algorithm": "SHA1",
       "digits": 6,
       "period": 30,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
+    },
+    {
+      "id": "s_847c687b87c0",
+      "issuer": "Steam",
+      "accountName": "steamuser",
+      "category": "社交",
+      "secret": "OJ7I2APOUGXV5ZPCEFAUK2GBICSKW2H4",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "otpType": "steam",
       "updatedAt": 1760000000000
     },
     {
@@ -115,6 +148,7 @@
       "algorithm": "SHA1",
       "digits": 6,
       "period": 15,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     },
     {
@@ -126,6 +160,7 @@
       "algorithm": "SHA1",
       "digits": 6,
       "period": 30,
+      "otpType": "totp",
       "updatedAt": 1760000000000
     }
   ],
@@ -134,74 +169,67 @@
       "stratumIndex": 11,
       "issuer": "LegacyHOTP",
       "username": "hotp-user",
-      "code": "TYPE_NOT_TOTP",
-      "reason": "Type=1 不是 TOTP（2）"
-    },
-    {
-      "stratumIndex": 12,
-      "issuer": "Steam",
-      "username": "steamuser",
-      "code": "TYPE_NOT_TOTP",
-      "reason": "Type=4 不是 TOTP（2）"
-    },
-    {
-      "stratumIndex": 13,
-      "issuer": "MobileOTP",
-      "username": "mobile",
-      "code": "TYPE_NOT_TOTP",
-      "reason": "Type=3 不是 TOTP（2）"
+      "code": "UNSUPPORTED_OTP_TYPE",
+      "reason": "Type=1 不受支持（仅 TOTP=2 / Steam=4）"
     },
     {
       "stratumIndex": 14,
+      "issuer": "MobileOTP",
+      "username": "mobile",
+      "code": "UNSUPPORTED_OTP_TYPE",
+      "reason": "Type=3 不受支持（仅 TOTP=2 / Steam=4）"
+    },
+    {
+      "stratumIndex": 15,
       "issuer": "BadBase32",
       "username": "bad",
       "code": "INVALID_BASE32",
       "reason": "非法 Base32（要求 A-Z2-7，允许 = 填充）"
     },
     {
-      "stratumIndex": 15,
+      "stratumIndex": 16,
       "issuer": "EmptySecret",
       "username": "empty",
       "code": "EMPTY_SECRET",
       "reason": "secret 为空"
     },
     {
-      "stratumIndex": 16,
+      "stratumIndex": 17,
       "issuer": "BadPeriodLow",
       "username": "period",
       "code": "PERIOD_OUT_OF_RANGE",
       "reason": "Period=4 不在 5-300"
     },
     {
-      "stratumIndex": 17,
+      "stratumIndex": 18,
       "issuer": "BadPeriodHigh",
       "username": "period",
       "code": "PERIOD_OUT_OF_RANGE",
       "reason": "Period=301 不在 5-300"
     },
     {
-      "stratumIndex": 18,
+      "stratumIndex": 19,
       "issuer": "BadDigitsLow",
       "username": "digits",
       "code": "DIGITS_OUT_OF_RANGE",
       "reason": "Digits=5 不在 6-10"
     },
     {
-      "stratumIndex": 19,
+      "stratumIndex": 20,
       "issuer": "BadDigitsHigh",
       "username": "digits",
       "code": "DIGITS_OUT_OF_RANGE",
       "reason": "Digits=11 不在 6-10"
     },
     {
-      "stratumIndex": 20,
+      "stratumIndex": 21,
       "issuer": "",
       "username": "",
       "code": "EMPTY_ISSUER_AND_USERNAME",
       "reason": "issuer 与 username 同时为空"
     },
     {
-      "stratumIndex": 21,
+      "stratumIndex": 22,
       "issuer": "BadAlgorithm",
       "username": "algo",
       "code": "INVALID_ALGORITHM",

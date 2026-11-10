@@ -1,14 +1,60 @@
-# WristKey 端到端验收报告（终版）
+# WristKey 端到端验收报告（终版 v2 — Steam Guard 修复）
 
-- 任务：task-4（e2e 测试夹具与验证框架）
-- 执行：qa，2026-11-10 15:37 (Asia/Shanghai)
-- 结论：**PASS** —— 两端构建产物齐全、包名/应用名一致、APK 与 .rpk 使用同一签名证书；
-  Node 端 121/121、Python 端 17/17、构建/签名检查 25 PASS / 0 FAIL / 0 SKIP；
-  band-app 单测 48/48、android-app JVM 单测 58/58（9 个测试类）。
-- 未覆盖：真机（小米手环 10 Pro）上的安装、interconnect 握手、xms 投递与 480×336 UI 实机表现，
-  本环境无真机，见第 6 节。
+- 任务：task-7（e2e/QA：Steam 夹具、跨实现对拍与终验）
+- 执行：qa，2026-11-10 16:09 (Asia/Shanghai)
+- 结论：**PASS** —— Steam Guard 已按新规范在两端实现并通过跨端验证；
+  band-app 69/69、android-app JVM 72/72、Node e2e 145/145、Python 24/24、
+  构建/包名/版本/签名检查 29 PASS / 0 FAIL / 0 SKIP；APK 与 .rpk 同证书、包名一致。
+- 未覆盖：真机（小米手环 10 Pro）上的 Steam 显示/安装/同步，见第 7 节。
 
-## 1. 环境
+## 1. Steam Guard 修复（band 1.0.2 / APK 1.1）
+
+### 1.1 问题与根因（真机发现）
+
+真机上 Steam 账号被当成普通 TOTP 显示 **6 位数字**，而不是 Steam 的 5 位字母数字码。根因有三层：
+
+1. **手环端**：旧版只实现 10 的幂取模 + 补零到 digits 位的 TOTP，没有 Steam 码生成逻辑。
+2. **手机端导入**：旧版 Stratum 规范把 Type=4 列为“跳过项”，Steam 账号根本进不了快照；
+   URI 列表里 otpauth://totp/Steam:...（issuer=Steam 且无额外标记）会被当普通 TOTP（digits=6/30s）。
+3. **协议**：account 没有类型字段，手环端无法区分 TOTP 与 Steam，digits=5 反而被当作非法丢弃。
+
+### 1.2 规范与协议变更（docs 已更新）
+
+- docs/protocol.md：account 新增可选 otpType（"totp" 缺省 / "steam"，大小写不敏感）；
+  Steam 固定 digits=5、period=30、algorithm=SHA1；明确 SteamOtp 算法：
+  HMAC-SHA1 → RFC 4226 动态截断 → 5 次 ALPHABET[material % 26]（字母表
+  23456789BCDFGHJKMNPQRTVWXY），不是 10 的幂取模；并补充“确定性约定”
+  （id/顺序/空同步/重复 index/非法 begin/失败 ack 原因码/超时）。
+- docs/stratum-format.md：Type=4（Steam）改为支持，映射为 otpType="steam" 并强制 5/30/SHA1；
+  URI 列表三种 Steam 识别形式：issuer/label 前缀 Steam、非 Steam issuer 的裸 &steam、encoder=steam。
+
+### 1.3 两端修复
+
+| 端 | 修复 | 版本 |
+| --- | --- | --- |
+| band-app | 新增 generateSteam（5 位字母表、HMAC-SHA1、无补零/无 10 的幂）；协议校验支持 otpType，Steam 固定字段；UI 原样显示字母数字码 | **1.0.2** / versionCode 3 |
+| android-app | 备份 Type=4 导入（忽略存储的 Digits/Period/Algorithm，固定 5/30/SHA1）；URI 三种 Steam 形式识别；快照发送 otpType；显示不做数字补零 | **1.1** / versionCode 2 |
+
+### 1.4 QA 夹具与跨端验证
+
+- **夹具**：plain-backup 增加 2 个 Steam 条目（issuer=Steam 与 issuer≠Steam 的 Valve），
+  secret 与其他账号**完全独立**（避免 Stratum 主键重复被跳过）；uri-list 覆盖 3 种 Steam 形式
+  （issuer=Steam 无标记 / 非 Steam issuer+&steam / encoder=steam）+ 5 条普通 TOTP + 2 条应跳过。
+  当前统计：**23 条 = 13 导入 + 10 跳过**；URI **10 行 = 8 导入 + 2 跳过**。
+- **Steam 码 6 组公开向量**（secret OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU）：
+  T=59→3DP36、1111111109→GX57J、1111111111→TCJ4Y、1234567890→VYNVB、
+  1640846388→2Y4TM、1735689600→DQ5KF。三套独立实现一致：
+  e2e Node（node:crypto）、band-app generateSteam、Python（hmac/hashlib）。
+- **协议**：invalid-cases 扩到 25 例，覆盖 otpType=steam 合法/非法（digits≠5、period≠30、
+  algorithm≠SHA1、otpType 非法值）、大小写不敏感、duplicate_index 覆盖、非法 begin、
+  失败 ack 原因码等；valid-session 含 13 条 account（2 条 Steam）且单条 < 1KB。
+- **已知差异**：tools/fixtures 的旧 Python 夹具中 Steam 与 GitHub **共用 secret**，
+  按 Stratum 主键规则触发 DUPLICATE_SECRET（已知仍 3 导入/5 跳过），不作为 Steam 正向用例；
+  e2e 对 tools/src/stratum.mjs 的对拍对非 Steam 子集严格一致，Steam 支持情况自适应。
+- **验证结果**：Steam 相关 20+ 断言全过（含 band-app generateSteam 6 向量对拍、
+  2 个夹具 Steam 账号 ×2 时间点对拍、3 种 URI 识别、协议 Steam 用例）。
+
+## 2. 环境
 
 | 项 | 值 |
 | --- | --- |
@@ -18,104 +64,96 @@
 | Python | 3.14.8（e2e/.venv：argon2-cffi 25.1.0 + cryptography 50.0.2） |
 | JDK | /home/lsl/.jdks/jdk-21.0.13+9 |
 | Android SDK | ~/Android/Sdk（platforms android-34/36.1；build-tools 34.0.0/36.1.0/37.0.0） |
-| 时间 | 2026-11-10 15:37 CST |
+| 时间 | 2026-11-10 16:09 CST |
 | 真机 | **无** |
 
-## 2. 产物清单与校验值
+## 3. 产物清单与校验值
 
 | 产物 | 路径 | 大小 | SHA-256 | 关键属性 |
 | --- | --- | --- | --- | --- |
-| band .rpk | band-app/dist/dev.wristkey.app.release.1.0.0.rpk | 54,726 B | e7acdfbcab6c29db0daa5f76a66dd25a520cf44ff0570df7a6abe8ade5374c10 | package=dev.wristkey.app，name=腕证，versionName=1.0.0，deviceTypeList=[watch]，features=router/storage/interconnect，designWidth=device-width |
-| android release APK | android-app/app/build/outputs/apk/release/app-release.apk | 26,263,473 B | ff1a9eb94907d4573ca3b0b38fcc0c5a5d8a45b3f024858c31fe685d06eac300 | package=dev.wristkey.app，label=腕证，versionName=1.0，minSdk 28，targetSdk 36 |
+| band .rpk | band-app/dist/dev.wristkey.app.release.1.0.2.rpk | 56,645 B | 51dd8b9519bf2bfffde613fb0a8a72d184ecc587691e2cd3a96f8602ab8e9f4b | package=dev.wristkey.app，name=腕证，versionName=1.0.2，versionCode=3，deviceTypeList=[watch] |
+| android release APK | android-app/app/build/outputs/apk/release/app-release.apk | 26,263,473 B | 6fb73d769699ffc90af868f14f41c34a8e0d143c4a5d03552944e73067156550 | package=dev.wristkey.app，label=腕证，versionName=1.1，versionCode=2，minSdk 28，targetSdk 36 |
 | 签名证书 PEM | signing/rpk-sign/certificate.pem | — | SHA-256 指纹 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4 | CN=WristKey Dev, OU=WristKey, O=WristKey, C=CN |
 | 测试夹具 | e2e/fixtures/（6 个文件） | 见附录 | 见附录 | 确定性生成，密码 test-password |
 
-> APK 证书 SHA-256 = signing/rpk-sign/certificate.pem = b7cfba…85c4；
-> .rpk 内嵌同一证书 DER（命中 offset 51180）；三者一致。dist 中旧参考 rpk 已被 band-dev 清理，
-> 当前 dist 仅含本项目的 release rpk。
+> 本次 --build 重新构建了 band rpk（band-dev 交付件为 56,639 B / sha256 61558db6…f28bc8；
+> 重建后为 56,645 B / sha256 51dd8b95…e9f4b，内容与版本一致，仅构建时间戳/压缩差异）。
+> APK 重建后与交付件 sha256 完全一致（6fb73d76…56550）。
+> .rpk 内嵌证书 DER 命中 offset 53099（重建后偏移变化属正常）；APK 证书 = PEM = b7cfba…85c4。
 
-## 3. 验收执行结果
+## 4. 验收执行结果
 
-### 3.1 band-app 构建与单测
-
-~~~
-npm --prefix band-app test
-# tests 48 / pass 48 / fail 0
-
-npm --prefix band-app run release     # 由 check-build --build 执行，退出码 0
-# 产出 band-app/dist/dev.wristkey.app.release.1.0.0.rpk (54,726 B)
-~~~
-
-### 3.2 android-app 构建与单测
+### 4.1 band-app
 
 ~~~
-cd android-app && ./gradlew testDebugUnitTest assembleDebug
-# BUILD SUCCESSFUL；JVM 单测 58 passed / 0 failed / 9 个测试类
-# release APK 已由 android-dev 产出（本次未重新 assembleRelease，仅核验现有产物）
+npm --prefix band-app test          # tests 69 / pass 69 / fail 0
+npm --prefix band-app run release   # 由 check-build --build 执行，退出码 0
+# 产出 dev.wristkey.app.release.1.0.2.rpk（56,645 B）
 ~~~
 
-### 3.3 构建/包名/签名检查（node e2e/check-build.mjs --build --with-tests）
+### 4.2 android-app
 
 ~~~
-构建检查: 25 PASS / 0 FAIL / 0 SKIP
+cd android-app && ./gradlew testDebugUnitTest assembleRelease
+# BUILD SUCCESSFUL；JVM 单测 72 passed / 0 failed / 10 个测试类
+# release APK versionName=1.1 versionCode=2（26,263,473 B，重建后 hash 与交付件一致）
 ~~~
 
-25 项全 PASS，覆盖：
-- band-app manifest（package/name/deviceTypeList/features/designWidth）；
-- band-app npm test 48 用例、npm run release 构建成功、dist/*.rpk 存在；
-- rpk manifest.package=dev.wristkey.app、manifest.name=腕证；
-- android gradle testDebugUnitTest assembleDebug 成功、58 用例 / 9 测试类；
-- release APK 存在、package=dev.wristkey.app、应用名=腕证；
-- 签名 PEM / APK 证书 / RPK 内嵌 DER 三方一致；
-- scripts/check-signing.sh PASS；APK 与 RPK 包名一致。
+### 4.3 构建/包名/版本/签名检查（node e2e/check-build.mjs --build --with-tests）
 
-结果明细：reports/e2e-build-result.json。
+~~~
+构建检查: 29 PASS / 0 FAIL / 0 SKIP
+~~~
 
-### 3.4 签名一致性（bash scripts/check-signing.sh，显式 release 产物）
+29 项覆盖：band manifest/features/designWidth、npm test 69 用例、npm run release、
+rpk package/name/versionName=1.0.2/versionCode=3、android gradle test+assembleRelease
+（72 用例/10 类）、APK package/label/versionName=1.1/versionCode=2、
+APK/PEM/RPK-DER 三方签名一致、scripts/check-signing.sh PASS、包名一致。
+
+明细：reports/e2e-build-result.json。
+
+### 4.4 签名一致性（bash scripts/check-signing.sh，默认参数）
 
 ~~~
 APK: android-app/app/build/outputs/apk/release/app-release.apk
-RPK: band-app/dist/dev.wristkey.app.release.1.0.0.rpk
+RPK: band-app/dist/dev.wristkey.app.release.1.0.2.rpk
 RPK package: dev.wristkey.app | name: 腕证
 APK 证书 SHA-256: b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4
 APK 证书 DN: CN=WristKey Dev, OU=WristKey, O=WristKey, C=CN
 签名 PEM SHA-256: b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4
-RPK 内嵌证书 DER: 是 (offset 51180)
-PASS: 包名 dev.wristkey.app，APK 与 RPK 使用同一证书（SHA-256 b7cfba…85c4）
+RPK 内嵌证书 DER: 是 (offset 53099)
+PASS: 包名 dev.wristkey.app，APK 与 RPK 使用同一证书
 ~~~
 
-注：scripts/check-signing.sh 不带参数时默认取 dist 下字典序第一个 .rpk；若未来 dist 同时存在
-debug/release 两个 rpk，建议显式传入 release rpk 路径（本次已显式传入）。
-
-### 3.5 e2e Node 验证（cd e2e && npm run verify）
+### 4.5 e2e Node 验证（cd e2e && npm run verify）
 
 ~~~
-WristKey e2e verify: 121 passed, 0 failed, 121 total
+WristKey e2e verify: 145 passed, 0 failed, 145 total
 ~~~
 
 | 节 | 断言数 | 内容 |
 | --- | --- | --- |
-| A. RFC 6238 / RFC 4226 向量 | 21 | 3 算法 × 6 时间点 + HOTP 10 向量 + digits 长度 |
-| B. 夹具覆盖矩阵与明文映射 | 12 | 哈希可复现、11/11 映射、id 独立复算、分类 Id、排序、跳过报告无 secret |
-| C. Strong/Legacy 加解密 | 8 | 解密 == 明文；错误密码/头部/截断；同 salt/iv 再加密逐字节一致 |
-| D. 跨实现交叉验证 | 9 | Python 夹具解密、固定 salt/iv 再加密逐字节一致、映射 3/5、URI、与 tools/src/stratum.mjs 双向 |
-| E. URI 列表 | 2 | 5 导入 / 2 跳过，字段与明文映射一致 |
-| F. 协议 v2 合法会话与双端状态机 | 9 | 信封/大小/索引/同步号、手环端回放提交、ack、request |
-| G. 协议字段边界 | 18 | 最大字段消息 538B < 1KB；13 类非法 account 丢弃；未知字段忽略 |
-| H. 非法/边界用例回放 | 19 | invalid-cases.json 全过（超时/去重/空同步/新 begin 等） |
-| I. 跨端 TOTP 对拍 | 23 | band-app totp.js vs 独立实现：RFC 向量 + 375 组矩阵 + 22 次夹具账号 |
+| A. RFC 6238 / RFC 4226 / Steam 向量 | 28 | 3 算法×6 时间点 + HOTP 10 向量 + **Steam 6 向量** + 码长/字符集 |
+| B. 夹具覆盖矩阵与明文映射 | 13 | 哈希可复现、13/10 映射、id 独立复算、Steam 固定字段、排序、跳过报告 |
+| C. Strong/Legacy 加解密 | 8 | 解密 == 明文；错误密码/头部/截断；再加密逐字节一致 |
+| D. 跨实现交叉验证 | 9 | Python 夹具解密/再加密、映射、URI、与 tools/src/stratum.mjs 双向（Steam 自适应） |
+| E. URI 列表 | 4 | 8 导入/2 跳过；**3 种 Steam 形式**；普通 TOTP/Steam 字段与明文映射一致 |
+| F. 协议 v2 合法会话与双端状态机 | 9 | 15 条消息（含 2 Steam）、信封/大小/索引/同步号、回放提交、ack、request |
+| G. 协议字段边界 | 24 | 最大字段消息 < 1KB（含 Steam）、非法字段/非法 Steam 丢弃、未知字段忽略 |
+| H. 非法/边界用例回放 | 25 | 含 Steam、duplicate_index、非法 begin、失败 ack 原因码、120s 超时 |
+| I. 跨端 TOTP/Steam 对拍 | 25 | RFC 向量、HOTP、375 组矩阵、夹具 TOTP 账号、**Steam 6 向量 + 账号对拍** |
 
-### 3.6 e2e Python 独立验证
+### 4.6 e2e Python 独立验证（含 Steam）
 
 ~~~
 cd e2e && .venv/bin/python python/verify_fixtures.py
-Python verify: 17 passed, 0 failed, 17 total
+Python verify: 24 passed, 0 failed, 24 total
 ~~~
 
-含：e2e 加密夹具 Python 独立解密、tools/fixtures 解密、**Stratum 官方 decrypt_backup.py
-（GPL-3.0，仅离线校验）可解密 e2e 两个加密夹具**、RFC 6238 夹具账号复算、加密参数常量校验。
+含：e2e 加密夹具 Python 独立解密、Stratum 官方 decrypt_backup.py 解密我方 Strong/Legacy 夹具、
+RFC 6238 夹具账号复算、**Steam Guard 6 组向量 + 2 个 Type=4 夹具条目检查**、加密参数常量校验。
 
-## 4. 跨实现交叉验证证据（双向、非自证）
+## 5. 跨实现交叉验证证据（双向、非自证）
 
 | # | 方向 | 结果 |
 | --- | --- | --- |
@@ -124,50 +162,39 @@ Python verify: 17 passed, 0 failed, 17 total
 | 3 | tools/fixtures（Python 生成）→ e2e Node 解密 | PASS |
 | 4 | e2e 密文 → tools/src/stratum.mjs 解密 | PASS |
 | 5 | 固定 salt/iv 再加密 → 与 Python 产物逐字节一致 | PASS |
-| 6 | 映射对拍（e2e vs tools）按 id 集合一致 | PASS（e2e 11/11、tools 3/5） |
+| 6 | 映射对拍（e2e vs tools）非 Steam 严格一致；Steam 自适应（tools 旧夹具共用 secret 已知 3/5） | PASS |
 | 7 | TOTP 跨端（band-app vs 独立实现） | PASS（RFC 向量、375 矩阵、夹具账号） |
+| 8 | **Steam 跨端**（band-app generateSteam vs e2e Node vs Python） | PASS（6 组向量 + 夹具 Steam 账号） |
 
-## 5. 夹具覆盖矩阵
+## 6. 夹具覆盖矩阵
 
-e2e/fixtures/plain-backup.json 共 22 条 Authenticator = 11 导入 + 11 跳过：
+e2e/fixtures/plain-backup.json：23 条 = **13 导入 + 10 跳过**；uri-list.txt：10 行 = 8 导入 + 2 跳过。
 
 | 维度 | 覆盖 |
 | --- | --- |
 | 算法 | SHA1 / SHA256 / SHA512 |
-| digits | 6 / 8 / 10 |
+| digits | 5（Steam）/ 6 / 8 / 10 |
 | period | 15 / 30 / 60 |
+| otpType | totp / steam（issuer=Steam 与 issuer=Valve 两种 Steam） |
 | 分类 | 开发 / 个人 / 云服务 / 社交 / 默认分类；多分类取 Binding Ranking 最小者 |
 | 边界 | secret 带 = 填充、Unicode issuer/username、issuer 空、username 空 |
-| 跳过 | HOTP(Type=1)、Steam(Type=4)、Mobile-OTP(Type=3)、非法 Base32、空 secret、period 4/301、digits 5/11、issuer+username 全空、Algorithm=7 |
+| 跳过 | HOTP(Type=1)、Mobile-OTP(Type=3)、非法 Base32、空 secret、period 4/301、digits 5/11（TOTP）、issuer+username 全空、Algorithm=7 |
 
 加密夹具：Strong = AUTHENTICATORPRO + salt16 + iv12 + AES-256-GCM(Argon2id p4 m65536 t3 out32) + tag16；
 Legacy = AuthenticatorPro + salt20 + iv16 + AES-256-CBC/PKCS7(PBKDF2-SHA1 64000 dk32)；密码 test-password。
 
-协议夹具：valid-session.json（1 begin + 11 account + 1 commit，最大消息 400B < 1KB）；
-invalid-cases.json（19 例：版本/未知 type/非法 JSON 忽略、非法字段丢弃、commit 条数/syncId 不匹配、
-无 staging、重复 id 去重、缺省 id 兜底、缺省字段归一化、新 begin 丢弃旧 staging、空同步、120s 超时）。
+## 7. 未验证项与残余风险
 
-## 6. 未验证项与残余风险
-
-1. **真机链路未验证（中）**：无小米手环 10 Pro 真机，system.interconnect 的包名+签名握手、
-   .rpk 通过 AstroBox/表盘自定义工具安装、xms 实际消息大小/投递/重连、手环端 480×336 UI 与
-   离线计算均只在代码/单测/夹具层验证。
-2. **ack 为 best effort（低）**：xms SDK 是否提供消息接收回调未在真机确认；手环 ack 目前只影响
-   UI 提示，不影响离线可用性。
-3. **APK 版本号**：APK versionName=1.0，rpk versionName=1.0.0，不影响校验，发布前可统一。
+1. **真机未验证（中）**：无小米手环 10 Pro 真机，本次 Steam 修复的显示效果、rpk 安装、
+   interconnect 包名+签名握手、xms 投递/重连、480×336 UI 均未实机复验；
+   真机发现的原问题已由两端实现 + 夹具/单测/跨端对拍覆盖，但最终仍需一次真机回归
+   （Steam 账号应显示 5 位字母数字码，且 30s 刷新）。
+2. **tools 旧夹具 Steam 共用 secret（低）**：tools/fixtures 的 Steam 条目与 GitHub 共用 secret，
+   会按 DUPLICATE_SECRET 跳过（已知 3/5）；Steam 正向用例以 e2e/fixtures 为准。
+3. **ack 为 best effort（低）**：xms SDK 是否提供消息接收回调未在真机确认。
 4. **band-app 导入 totp.js 的 Node 警告（低）**：band-app/package.json 未声明 type=module，
-   e2e verify 导入时出现 MODULE_TYPELESS_PACKAGE_JSON 警告，不影响正确性；建议后续补上。
-5. **夹具 secret 均为公开测试值**：不得替换为真实凭证（e2e/README 已注明）。
-
-## 7. 协议/格式参考选择（docs 未明确规定处）
-
-1. account.id = s_ + sha1(归一化 secret)[0:12]；归一化 = 大写、去空白、去 -、去 =（与 tools 一致）；
-2. 快照排序：分类间按 Category.Ranking、类内按 AuthenticatorCategories.Ranking、无分类排最后；
-   跨端对拍建议按 id 集合而非数组顺序；
-3. 非法 begin（缺 syncId/accountCount）忽略并保留旧 staging；
-4. account 单字段非法 → 丢弃整条并计错误，不中断同步；
-5. URI 列表无分类 → 默认分类；
-6. algorithm 小写容忍并归一化为大写。
+   e2e verify 导入时出现 MODULE_TYPELESS_PACKAGE_JSON 警告，不影响正确性。
+5. **夹具 secret 均为公开测试值**：禁止替换为真实凭证。
 
 ## 8. 复现命令
 
@@ -179,18 +206,16 @@ npm run verify
 python3 -m venv .venv && .venv/bin/pip install -r python/requirements.txt
 .venv/bin/python python/verify_fixtures.py
 
-# B. 两端构建 + 单测 + 包名/签名全量验收
+# B. 两端构建 + 单测 + 版本/包名/签名全量验收
 cd ..
 npm --prefix band-app test
 npm --prefix band-app run release
-cd android-app && ./gradlew testDebugUnitTest assembleDebug && cd ..
+cd android-app && ./gradlew testDebugUnitTest assembleRelease && cd ..
 node e2e/check-build.mjs --build --with-tests
 
-# C. 签名一致性（显式 release 产物，需 java 在 PATH）
+# C. 签名一致性（默认参数，需 java 在 PATH）
 JAVA_HOME=$(ls -d ~/.jdks/jdk-* | sort -V | tail -1)
-PATH="$JAVA_HOME/bin:$PATH" bash scripts/check-signing.sh \
-  android-app/app/build/outputs/apk/release/app-release.apk \
-  band-app/dist/dev.wristkey.app.release.1.0.0.rpk
+PATH="$JAVA_HOME/bin:$PATH" bash scripts/check-signing.sh
 ~~~
 
 ## 9. 附录
@@ -199,54 +224,20 @@ PATH="$JAVA_HOME/bin:$PATH" bash scripts/check-signing.sh \
 
 | 文件 | 字节 | SHA-256 |
 | --- | --- | --- |
-| plain-backup.json | 8559 | 052ccc115ce287183d4b34d5cd73611fbab844f66b31f4e3796508ce2a695d2e |
-| expected-import.json | 5538 | 87b1528d4626d63aa2cb89ebb034f6472700df1d6f194b8b001ecd099059f09a |
-| strong.stratum | 8619 | 1696e381f0831c52106885f2699b74376ace82281b7a462df9d49fdb4a215e81 |
-| legacy.stratum | 8612 | 314187a3843d4944a3649c0fcc33b06be223819ff09d8e84116916bf7a1b970a |
-| uri-list.txt | 770 | 331aa191a0bb001815d4d20a867347e1877dbd59b254bac8f04734a7b54c00f5 |
-| protocol/valid-session.json | 5879 | 9cdc6768cc5048692295bd9bb309ce680625d939a4560b601bded012d8e09f5b |
+| plain-backup.json | 9117 | 08fec2213cb649aab13ffb030ef29aca4a1c1f1573a7b790ba7b1929012c5da0 |
+| expected-import.json | 6314 | c6e85738422cc374e24bf4fea17c8bed5c37337d6e7e5a0c36516b9aa7ff9b5a |
+| strong.stratum | 9177 | 0f2e4ede24e65e98f5353299373e54429eb8875688873bf1ad73931039a03b47 |
+| legacy.stratum | 9172 | e09d27f3aba2aade51e028ce8afe2f0d9ec426bbdb89b4a6bdecaa33e9ec96f6 |
+| uri-list.txt | 1060 | 84579b76426b442bea8a324187a95787f386ad6800eb177d14861df51e09b886 |
+| protocol/valid-session.json | 7179 | 6a2cf11f3ad9528b294cb4d9b81d558aa70bca806e640aec515a346707422ec1 |
 
 ### 9.2 本次验收日志
 
-完整命令输出保存于 /tmp/final-acceptance.log（含 band/android 单测、check-build 25 项、
-e2e verify、Python verify、check-signing 输出）。关键退出码均为 0。
+完整命令输出：/tmp/final-acceptance-steam.log（band/android 单测、check-build 29 项、
+e2e verify 145 项、Python 24 项、check-signing）。关键退出码均为 0。
 
 ### 9.3 相关文档
 
-- e2e/README.md：夹具/框架用法、覆盖矩阵、歧义记录；
-- e2e/verify-result.json：Node 121 项逐条结果；
-- reports/e2e-build-result.json：构建检查 25 项逐条结果。
-
----
-
-## 10. 真机回归修复（2026-11-10 15:53，v1.0.1）
-
-真机（小米手环 10 Pro）首次安装 v1.0.0 后打开闪退。用户日志（/data/offlinelog/tmp.log）关键行：
-
-~~~
-[AIOTJS] [jse_dump_obj:907] TypeError: cannot set property 'style' of null
-    at <anonymous> (@aiot/app:1)
-[AIOTJS] [initUserData:81] appData is undefined
-[AIOTJS] [initAppEnv:507] init user data failed
-[AIOTJS] [run:416] initAppEnv failed
-[qapp] state_error: [dev.wristkey.app]: [forground]-->[stopped]
-~~~
-
-根因：`band-app/src/app.ux` 只有裸 `export default {...}`，缺少 Vela 要求的 `<script>…</script>` 包裹；
-编译产物 `build/app.js` 因此得到 null 默认导出，运行到 `n.default.style = []` 时报
-`cannot set property 'style' of null`，随即 initAppEnv 失败退出。
-（页面 .ux 都有正确的 template/script/style 三段，仅 app.ux 遗漏。）
-
-修复：`app.ux` 用 `<script>` 包裹；`manifest.json` 升到 versionName 1.0.1 / versionCode 2；
-新增 `band-app/tests/uxStructure.test.mjs` 回归测试（app.ux/pages 结构 + manifest 要素），band 单测 51/51。
-
-修复后产物：
-
-| 产物 | 大小 | SHA-256 |
-| --- | --- | --- |
-| `band-app/dist/dev.wristkey.app.release.1.0.1.rpk` | 54,794 B | `ec560bed51118ec7beccb7432fa7a66fb33f01a1d5b64e709fa85077bc05abf2` |
-
-校验：`band-app/scripts/verify-rpk.mjs` 11/11 PASS；`scripts/check-signing.sh` PASS（APK 与 rpk 同证书、同包名）。
-
-> 该问题无法通过 Node/CI 构建测试发现（构建/签名均通过），只有真机运行会暴露；
-> 已用源码结构回归测试覆盖。真机复测仍需用户安装 v1.0.1 后确认。
+- e2e/README.md：夹具/框架用法、Steam 规则、覆盖矩阵、确定性约定；
+- e2e/verify-result.json：Node 145 项逐条结果；
+- reports/e2e-build-result.json：构建检查 29 项逐条结果。

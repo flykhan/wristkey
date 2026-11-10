@@ -343,8 +343,10 @@ export function mapBackupToAccounts(backup, options) {
     }
 
     const type = readField(authenticator, 'type');
-    if (Number(type) !== STRATUM_TYPE.TOTP) {
-      skip('TYPE_NOT_TOTP', 'Type=' + asString(type) + ' 不是 TOTP（2）');
+    const typeNumber = Number(type);
+    const isSteam = typeNumber === STRATUM_TYPE.STEAM;
+    if (typeNumber !== STRATUM_TYPE.TOTP && !isSteam) {
+      skip('UNSUPPORTED_OTP_TYPE', 'Type=' + asString(type) + ' 不受支持（仅 TOTP=2 / Steam=4）');
       return;
     }
     if (!secret) {
@@ -361,25 +363,38 @@ export function mapBackupToAccounts(backup, options) {
       return;
     }
 
-    const algorithmValue = readField(authenticator, 'algorithm');
-    const algorithm = algorithmValue == null ? 0 : Number(algorithmValue);
-    if (algorithm !== 0 && algorithm !== 1 && algorithm !== 2) {
-      skip('INVALID_ALGORITHM', 'Algorithm=' + asString(algorithmValue) + ' 不是 0/1/2');
-      return;
-    }
+    let algorithm;
+    let digits;
+    let period;
+    let otpType;
+    if (isSteam) {
+      // SteamOtp 固定 5 位 / 30s / SHA1；忽略备份中存储的 Digits/Period/Algorithm
+      otpType = 'steam';
+      algorithm = 0;
+      digits = 5;
+      period = 30;
+    } else {
+      const algorithmValue = readField(authenticator, 'algorithm');
+      algorithm = algorithmValue == null ? 0 : Number(algorithmValue);
+      if (algorithm !== 0 && algorithm !== 1 && algorithm !== 2) {
+        skip('INVALID_ALGORITHM', 'Algorithm=' + asString(algorithmValue) + ' 不是 0/1/2');
+        return;
+      }
 
-    const digitsValue = readField(authenticator, 'digits');
-    const digits = digitsValue == null ? 6 : Number(digitsValue);
-    if (!Number.isInteger(digits) || digits < 6 || digits > 10) {
-      skip('DIGITS_OUT_OF_RANGE', 'Digits=' + asString(digitsValue) + ' 不在 6-10');
-      return;
-    }
+      const digitsValue = readField(authenticator, 'digits');
+      digits = digitsValue == null ? 6 : Number(digitsValue);
+      if (!Number.isInteger(digits) || digits < 6 || digits > 10) {
+        skip('DIGITS_OUT_OF_RANGE', 'Digits=' + asString(digitsValue) + ' 不在 6-10');
+        return;
+      }
 
-    const periodValue = readField(authenticator, 'period');
-    const period = periodValue == null ? 30 : Number(periodValue);
-    if (!Number.isInteger(period) || period < 5 || period > 300) {
-      skip('PERIOD_OUT_OF_RANGE', 'Period=' + asString(periodValue) + ' 不在 5-300');
-      return;
+      const periodValue = readField(authenticator, 'period');
+      period = periodValue == null ? 30 : Number(periodValue);
+      if (!Number.isInteger(period) || period < 5 || period > 300) {
+        skip('PERIOD_OUT_OF_RANGE', 'Period=' + asString(periodValue) + ' 不在 5-300');
+        return;
+      }
+      otpType = 'totp';
     }
 
     if (issuer.trim() === '' && username.trim() === '') {
@@ -399,6 +414,7 @@ export function mapBackupToAccounts(backup, options) {
       algorithm: ALGORITHM_NAMES[algorithm],
       digits,
       period,
+      otpType,
       updatedAt
     };
     seenSecrets.add(canonical);
@@ -445,6 +461,18 @@ export function buildOtpAuthUri(account) {
   const issuer = asString(account.issuer);
   const accountName = asString(account.accountName);
   const label = encodeURIComponent(issuer ? issuer + ':' + accountName : accountName) || encodeURIComponent('account');
+  if (account.otpType === 'steam') {
+    // docs/stratum-format.md：Stratum 导出为 otpauth://totp/Steam:...；
+    // issuer 不是 Steam 时追加裸 &steam 标记，保证导入端能识别。
+    let steamUri = 'otpauth://totp/' + label + '?secret=' + canonicalSecretForId(account.secret);
+    if (issuer) {
+      steamUri += '&issuer=' + encodeURIComponent(issuer);
+    }
+    if (issuer.trim().toLowerCase() !== 'steam') {
+      steamUri += '&steam';
+    }
+    return steamUri;
+  }
   const params = new URLSearchParams();
   params.set('secret', canonicalSecretForId(account.secret));
   if (issuer) {
@@ -490,6 +518,42 @@ export function parseOtpAuthUri(uri, options) {
   if (!secretRaw || !isValidProtocolSecret(secretRaw)) {
     return { ok: false, code: 'INVALID_BASE32', reason: 'secret 缺失或非法 Base32' };
   }
+  const issuerText = issuer == null ? '' : String(issuer);
+  const accountNameText = accountName == null ? '' : String(accountName);
+  if (issuerText.trim() === '' && accountNameText.trim() === '') {
+    return { ok: false, code: 'EMPTY_ISSUER_AND_USERNAME', reason: 'issuer 与 username 同时为空' };
+  }
+
+  // docs/stratum-format.md：任一命中即按 Steam 导入：
+  // 裸 steam 标记 / encoder=steam / issuer 或 label 前缀为 Steam（大小写不敏感）；
+  // digits=5 且 issuer 为 Steam 被 issuer 前缀规则覆盖。
+  const issuerLower = issuerText.trim().toLowerCase();
+  const labelLower = labelRaw.trim().toLowerCase();
+  const encoder = String(params.get('encoder') || '').toLowerCase();
+  const isSteam =
+    params.has('steam') ||
+    encoder === 'steam' ||
+    issuerLower.startsWith('steam') ||
+    labelLower.startsWith('steam');
+  const secret = normalizeProtocolSecret(secretRaw).toUpperCase();
+  if (isSteam) {
+    return {
+      ok: true,
+      account: {
+        id: secretToAccountId(secret),
+        issuer: issuerText,
+        accountName: accountNameText,
+        category: DEFAULT_CATEGORY,
+        secret,
+        algorithm: 'SHA1',
+        digits: 5,
+        period: 30,
+        otpType: 'steam',
+        updatedAt
+      }
+    };
+  }
+
   const algorithm = String(params.get('algorithm') || 'SHA1').toUpperCase();
   if (ALGORITHM_NAMES.indexOf(algorithm) < 0) {
     return { ok: false, code: 'INVALID_ALGORITHM', reason: 'algorithm=' + algorithm + ' 不受支持' };
@@ -502,12 +566,6 @@ export function parseOtpAuthUri(uri, options) {
   if (!Number.isInteger(period) || period < 5 || period > 300) {
     return { ok: false, code: 'PERIOD_OUT_OF_RANGE', reason: 'period=' + String(params.get('period')) + ' 不在 5-300' };
   }
-  const issuerText = issuer == null ? '' : String(issuer);
-  const accountNameText = accountName == null ? '' : String(accountName);
-  if (issuerText.trim() === '' && accountNameText.trim() === '') {
-    return { ok: false, code: 'EMPTY_ISSUER_AND_USERNAME', reason: 'issuer 与 username 同时为空' };
-  }
-  const secret = normalizeProtocolSecret(secretRaw).toUpperCase();
   return {
     ok: true,
     account: {
@@ -519,6 +577,7 @@ export function parseOtpAuthUri(uri, options) {
       algorithm,
       digits,
       period,
+      otpType: 'totp',
       updatedAt
     }
   };

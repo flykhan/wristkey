@@ -4,7 +4,7 @@
 // 用法（在仓库根目录或 e2e/ 下执行均可）：
 //   node e2e/check-build.mjs                    # 只做静态检查（产物存在 / 包名 / 签名一致性）
 //   node e2e/check-build.mjs --with-tests       # 额外跑 band-app npm test、android gradle testDebugUnitTest
-//   node e2e/check-build.mjs --build            # 额外跑 band-app npm run release、android gradlew assembleDebug
+//   node e2e/check-build.mjs --build            # 额外跑 band-app npm run release、android gradlew assembleRelease
 //   node e2e/check-build.mjs --build --with-tests
 //
 // 产物检查项：
@@ -30,6 +30,11 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'dev.wristkey.app';
 const TARGET_APP_NAME = '腕证';
+// Steam 修复版本（2026-11-10）：band .rpk 1.0.2 / APK 1.1
+const EXPECTED_BAND_VERSION = '1.0.2';
+const EXPECTED_BAND_VERSION_CODE = 3;
+const EXPECTED_APK_VERSION = '1.1';
+const EXPECTED_APK_VERSION_CODE = 2;
 
 const argv = process.argv.slice(2);
 const flags = {
@@ -307,6 +312,16 @@ function checkBandApp() {
   } else {
     fail('rpk manifest.name', '期望 ' + TARGET_APP_NAME + '，实际 ' + String(rpkManifest.name));
   }
+  if (rpkManifest.versionName === EXPECTED_BAND_VERSION) {
+    pass('rpk versionName', EXPECTED_BAND_VERSION);
+  } else {
+    fail('rpk versionName', '期望 ' + EXPECTED_BAND_VERSION + '（Steam 修复版），实际 ' + String(rpkManifest.versionName));
+  }
+  if (rpkManifest.versionCode === EXPECTED_BAND_VERSION_CODE) {
+    pass('rpk versionCode', String(EXPECTED_BAND_VERSION_CODE));
+  } else {
+    fail('rpk versionCode', '期望 ' + EXPECTED_BAND_VERSION_CODE + '，实际 ' + String(rpkManifest.versionCode));
+  }
   return { rpk, rpkManifest };
 }
 
@@ -336,7 +351,7 @@ function checkAndroidApp() {
         tasks.push('testDebugUnitTest');
       }
       if (flags.build) {
-        tasks.push('assembleDebug');
+        tasks.push('assembleRelease');
       }
       const result = run('./gradlew', tasks.concat(['--console=plain', '--no-daemon']), {
         cwd: androidRoot,
@@ -381,6 +396,10 @@ function checkAndroidApp() {
       const labelMatch = badging.stdout.match(/application-label:'([^']*)'/);
       const packageName = packageMatch ? packageMatch[1] : null;
       const label = labelMatch ? labelMatch[1] : null;
+      const versionMatch = badging.stdout.match(/versionName='([^']+)'/);
+      const versionCodeMatch = badging.stdout.match(/versionCode='([^']+)'/);
+      const versionName = versionMatch ? versionMatch[1] : null;
+      const versionCode = versionCodeMatch ? Number(versionCodeMatch[1]) : null;
       if (packageName === TARGET_PACKAGE) {
         pass('APK package', TARGET_PACKAGE);
       } else {
@@ -390,6 +409,16 @@ function checkAndroidApp() {
         pass('APK 应用名', TARGET_APP_NAME);
       } else {
         fail('APK 应用名', '期望 ' + TARGET_APP_NAME + '，实际 ' + String(label));
+      }
+      if (versionName === EXPECTED_APK_VERSION) {
+        pass('APK versionName', EXPECTED_APK_VERSION);
+      } else {
+        fail('APK versionName', '期望 ' + EXPECTED_APK_VERSION + '（Steam 修复版），实际 ' + String(versionName));
+      }
+      if (versionCode === EXPECTED_APK_VERSION_CODE) {
+        pass('APK versionCode', String(EXPECTED_APK_VERSION_CODE));
+      } else {
+        fail('APK versionCode', '期望 ' + EXPECTED_APK_VERSION_CODE + '，实际 ' + String(versionCode));
       }
     } else {
       fail('aapt2 dump badging', firstLine(badging.stderr) || String(badging.status), aapt2 + ' dump badging ' + apk);

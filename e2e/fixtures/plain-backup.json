@@ -183,6 +183,20 @@
       "CopyCount": 0
     },
     {
+      "Type": 4,
+      "Icon": null,
+      "Issuer": "Valve",
+      "Username": "valveuser",
+      "Secret": "DB2F7GGXX2QCR3OPIJATZ6TFLKLZ5NAA",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 5,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 13,
+      "CopyCount": 0
+    },
+    {
       "Type": 3,
       "Icon": null,
       "Issuer": "MobileOTP",
@@ -381,6 +395,16 @@
       "CategoryId": "2d7c0c32",
       "AuthenticatorSecret": "OYFVLVUXN3W27CRVG4VWSHVEUGZT7VCZ",
       "Ranking": 3
+    },
+    {
+      "CategoryId": "ac12e825",
+      "AuthenticatorSecret": "OJ7I2APOUGXV5ZPCEFAUK2GBICSKW2H4",
+      "Ranking": 3
+    },
+    {
+      "CategoryId": "515dde86",
+      "AuthenticatorSecret": "DB2F7GGXX2QCR3OPIJATZ6TFLKLZ5NAA",
+      "Ranking": 2
     }
   ],
   "CustomIcons": []

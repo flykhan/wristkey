@@ -7,7 +7,7 @@
       "version": 2,
       "sentAt": 1760000000000,
       "syncId": "sync-1760000000000-e2e",
-      "accountCount": 11
+      "accountCount": 13
     },
     {
       "type": "mfa_sync_account",
@@ -24,6 +24,7 @@
         "algorithm": "SHA1",
         "digits": 8,
         "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -42,6 +43,7 @@
         "algorithm": "SHA256",
         "digits": 8,
         "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -60,6 +62,7 @@
         "algorithm": "SHA512",
         "digits": 8,
         "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -78,6 +81,7 @@
         "algorithm": "SHA1",
         "digits": 6,
         "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -96,6 +100,7 @@
         "algorithm": "SHA1",
         "digits": 8,
         "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -114,6 +119,7 @@
         "algorithm": "SHA1",
         "digits": 6,
         "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -132,6 +138,7 @@
         "algorithm": "SHA512",
         "digits": 10,
         "period": 60,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -150,6 +157,7 @@
         "algorithm": "SHA256",
         "digits": 6,
         "period": 60,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -160,14 +168,15 @@
       "syncId": "sync-1760000000000-e2e",
       "index": 8,
       "account": {
-        "id": "s_b57fa0798cf1",
-        "issuer": "GitHub",
-        "accountName": "me@example.com",
-        "category": "社交",
-        "secret": "JBSWY3DPEHPK3PXP",
+        "id": "s_a35a35aa4762",
+        "issuer": "Valve",
+        "accountName": "valveuser",
+        "category": "云服务",
+        "secret": "DB2F7GGXX2QCR3OPIJATZ6TFLKLZ5NAA",
         "algorithm": "SHA1",
-        "digits": 6,
+        "digits": 5,
         "period": 30,
+        "otpType": "steam",
         "updatedAt": 1760000000000
       }
     },
@@ -178,14 +187,15 @@
       "syncId": "sync-1760000000000-e2e",
       "index": 9,
       "account": {
-        "id": "s_c12da9409db8",
-        "issuer": "Cloudflare",
-        "accountName": "user@example.com",
-        "category": "默认分类",
-        "secret": "MFRGGZDFMZTWQ2LK",
+        "id": "s_b57fa0798cf1",
+        "issuer": "GitHub",
+        "accountName": "me@example.com",
+        "category": "社交",
+        "secret": "JBSWY3DPEHPK3PXP",
         "algorithm": "SHA1",
         "digits": 6,
-        "period": 15,
+        "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
@@ -196,6 +206,44 @@
       "syncId": "sync-1760000000000-e2e",
       "index": 10,
       "account": {
+        "id": "s_847c687b87c0",
+        "issuer": "Steam",
+        "accountName": "steamuser",
+        "category": "社交",
+        "secret": "OJ7I2APOUGXV5ZPCEFAUK2GBICSKW2H4",
+        "algorithm": "SHA1",
+        "digits": 5,
+        "period": 30,
+        "otpType": "steam",
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000012,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 11,
+      "account": {
+        "id": "s_c12da9409db8",
+        "issuer": "Cloudflare",
+        "accountName": "user@example.com",
+        "category": "默认分类",
+        "secret": "MFRGGZDFMZTWQ2LK",
+        "algorithm": "SHA1",
+        "digits": 6,
+        "period": 15,
+        "otpType": "totp",
+        "updatedAt": 1760000000000
+      }
+    },
+    {
+      "type": "mfa_sync_account",
+      "version": 2,
+      "sentAt": 1760000000013,
+      "syncId": "sync-1760000000000-e2e",
+      "index": 12,
+      "account": {
         "id": "s_9f2e8d94b4a2",
         "issuer": "",
         "accountName": "no-issuer@example.com",
@@ -204,15 +252,16 @@
         "algorithm": "SHA1",
         "digits": 6,
         "period": 30,
+        "otpType": "totp",
         "updatedAt": 1760000000000
       }
     },
     {
       "type": "mfa_sync_commit",
       "version": 2,
-      "sentAt": 1760000000012,
+      "sentAt": 1760000000014,
       "syncId": "sync-1760000000000-e2e",
-      "accountCount": 11
+      "accountCount": 13
     }
   ]
 }

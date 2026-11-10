@@ -1,0 +1,53 @@
+{
+  "Authenticators": [
+    {
+      "Type": 4,
+      "Icon": null,
+      "Issuer": "Steam",
+      "Username": "alice",
+      "Secret": "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 5,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 0,
+      "CopyCount": 0
+    },
+    {
+      "Type": 2,
+      "Icon": null,
+      "Issuer": "GitHub",
+      "Username": "dev@example.com",
+      "Secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "Pin": null,
+      "Algorithm": 0,
+      "Digits": 6,
+      "Period": 30,
+      "Counter": 0,
+      "Ranking": 1,
+      "CopyCount": 0
+    },
+    {
+      "Type": 4,
+      "Icon": null,
+      "Issuer": "Steam",
+      "Username": "weird-fields",
+      "Secret": "MZXW6YTBOI======",
+      "Pin": null,
+      "Algorithm": 1,
+      "Digits": 6,
+      "Period": 60,
+      "Counter": 0,
+      "Ranking": 2,
+      "CopyCount": 0
+    }
+  ],
+  "Categories": [
+    { "Id": "6f0d1a2b", "Name": "游戏", "Ranking": 0 }
+  ],
+  "AuthenticatorCategories": [
+    { "CategoryId": "6f0d1a2b", "AuthenticatorSecret": "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU", "Ranking": 0 }
+  ],
+  "CustomIcons": []
+}

@@ -1,13 +1,17 @@
 // WristKey e2e — 同步协议 v2 参考实现（手机端状态机 + 手环端接收状态机）。
 // 依据 docs/protocol.md 独立实现，用于夹具生成与协议合法性校验。
 //
-// 说明（文档未明确处的参考选择，均已标注）：
+// 依据 docs/protocol.md 的校验规则与“确定性约定”：
 //   - 未知 type / version != 2 → 忽略（不计错误、不清 staging）；
-//   - 非法 begin（缺 syncId / accountCount）→ 忽略，保留旧 staging；
-//   - 收到 account 时校验 staging 超时（默认 120s 无新消息 → 丢弃 staging）；
-//   - account 字段违反校验规则 → 丢弃并计入 errors（不中断同步）；
-//   - 同一次同步内重复 id → 去重（保留首条，后续丢弃，不计 errors）；
-//   - commit 校验 syncId / accountCount / 合法且去重后条数；失败 → 丢弃 staging，旧快照不变。
+//   - 非法 begin（syncId 空/超长、accountCount 非 0-500 整数）→ 忽略，保留旧 staging；
+//   - 收到 account 时校验 staging 超时（默认 120s 无新消息 → 丢弃 staging，不计错误）；
+//   - account 字段违反校验规则（含 Steam 固定 5/30/SHA1、otpType 取值）→ 丢弃并计入 errors；
+//   - 同一 index 重复发送 → 后到覆盖先到（duplicate_index，不算失败）；
+//     同一 account.id 出现在不同 index → 丢弃后到者；
+//   - otpType：缺省 totp；steam 为 5 位字母数字码（Steam Guard，见 docs/protocol.md）；
+//   - commit 校验 syncId / accountCount / 已暂存条数；失败原因码
+//     no_active_begin / sync_id_mismatch / account_count_mismatch / incomplete_sync；
+//     失败 → 丢弃 staging，旧快照不变。
 
 import { normalizeProtocolSecret, isValidProtocolSecret } from './encoding.mjs';
 
@@ -16,6 +20,10 @@ export const MAX_MESSAGE_BYTES = 1024;
 export const STAGING_TIMEOUT_MS = 120000;
 export const DEFAULT_CATEGORY = '默认分类';
 export const ALGORITHM_NAMES = ['SHA1', 'SHA256', 'SHA512'];
+export const OTP_TYPES = ['totp', 'steam'];
+export const MAX_ACCOUNT_COUNT = 500;
+export const STEAM_DIGITS = 5;
+export const STEAM_PERIOD = 30;
 
 export const MESSAGE_TYPES = Object.freeze({
   BEGIN: 'mfa_sync_begin',
@@ -91,28 +99,57 @@ export function validateAccount(raw, index) {
   }
   const secret = normalizeProtocolSecret(raw.secret);
 
-  let algorithm = 'SHA1';
-  if (raw.algorithm !== undefined && raw.algorithm !== null) {
-    if (typeof raw.algorithm !== 'string' || ALGORITHM_NAMES.indexOf(raw.algorithm.toUpperCase()) < 0) {
-      return { ok: false, reason: 'algorithm 不是 SHA1/SHA256/SHA512' };
+  let otpType = 'totp';
+  if (raw.otpType !== undefined && raw.otpType !== null) {
+    if (typeof raw.otpType !== 'string' || OTP_TYPES.indexOf(raw.otpType.toLowerCase()) < 0) {
+      return { ok: false, reason: 'otpType 不是 totp/steam' };
     }
-    algorithm = raw.algorithm.toUpperCase();
+    otpType = raw.otpType.toLowerCase();
   }
 
-  let digits = 6;
-  if (raw.digits !== undefined && raw.digits !== null) {
-    if (!isInteger(raw.digits) || raw.digits < 6 || raw.digits > 10) {
-      return { ok: false, reason: 'digits 不是 6-10 的整数' };
+  let algorithm;
+  let digits;
+  let period;
+  if (otpType === 'steam') {
+    // Steam Guard：固定 SHA1 / 5 位字母数字 / 30s；显式给出其它值视为非法
+    if (raw.algorithm !== undefined && raw.algorithm !== null) {
+      if (typeof raw.algorithm !== 'string' || raw.algorithm.toUpperCase() !== 'SHA1') {
+        return { ok: false, reason: 'steam 账号 algorithm 固定 SHA1' };
+      }
     }
-    digits = raw.digits;
-  }
+    if (raw.digits !== undefined && raw.digits !== null && raw.digits !== STEAM_DIGITS) {
+      return { ok: false, reason: 'steam 账号 digits 固定 5' };
+    }
+    if (raw.period !== undefined && raw.period !== null && raw.period !== STEAM_PERIOD) {
+      return { ok: false, reason: 'steam 账号 period 固定 30' };
+    }
+    algorithm = 'SHA1';
+    digits = STEAM_DIGITS;
+    period = STEAM_PERIOD;
+  } else {
+    algorithm = 'SHA1';
+    if (raw.algorithm !== undefined && raw.algorithm !== null) {
+      if (typeof raw.algorithm !== 'string' || ALGORITHM_NAMES.indexOf(raw.algorithm.toUpperCase()) < 0) {
+        return { ok: false, reason: 'algorithm 不是 SHA1/SHA256/SHA512' };
+      }
+      algorithm = raw.algorithm.toUpperCase();
+    }
 
-  let period = 30;
-  if (raw.period !== undefined && raw.period !== null) {
-    if (!isInteger(raw.period) || raw.period < 5 || raw.period > 300) {
-      return { ok: false, reason: 'period 不是 5-300 的整数' };
+    digits = 6;
+    if (raw.digits !== undefined && raw.digits !== null) {
+      if (!isInteger(raw.digits) || raw.digits < 6 || raw.digits > 10) {
+        return { ok: false, reason: 'digits 不是 6-10 的整数' };
+      }
+      digits = raw.digits;
     }
-    period = raw.period;
+
+    period = 30;
+    if (raw.period !== undefined && raw.period !== null) {
+      if (!isInteger(raw.period) || raw.period < 5 || raw.period > 300) {
+        return { ok: false, reason: 'period 不是 5-300 的整数' };
+      }
+      period = raw.period;
+    }
   }
 
   const account = {
@@ -123,7 +160,8 @@ export function validateAccount(raw, index) {
     secret,
     algorithm,
     digits,
-    period
+    period,
+    otpType
   };
   if (raw.updatedAt !== undefined && raw.updatedAt !== null) {
     if (typeof raw.updatedAt !== 'number' || !Number.isFinite(raw.updatedAt)) {
@@ -216,15 +254,17 @@ export class BandSyncReceiver {
     if (!isNonEmptyString(message.syncId) || message.syncId.length > 128) {
       return { status: 'ignored', reason: 'begin: syncId 缺失/非法' };
     }
-    if (!isInteger(message.accountCount) || message.accountCount < 0) {
-      return { status: 'ignored', reason: 'begin: accountCount 不是非负整数' };
+    if (!isInteger(message.accountCount) || message.accountCount < 0 || message.accountCount > MAX_ACCOUNT_COUNT) {
+      // docs/protocol.md：非法 begin 忽略，保留当前 staging 与已存快照
+      return { status: 'ignored', reason: 'begin: accountCount 不是 0-' + MAX_ACCOUNT_COUNT + ' 的整数' };
     }
     this.staging = {
       syncId: message.syncId,
       accountCount: message.accountCount,
+      byIndex: new Map(),
       byId: new Map(),
-      order: [],
       errors: 0,
+      duplicates: 0,
       startedAt: now,
       lastAt: now
     };
@@ -235,26 +275,52 @@ export class BandSyncReceiver {
     if (!this.staging) {
       return { status: 'dropped', reason: '没有进行中的 staging，丢弃 account' };
     }
-    this.staging.lastAt = now;
-    if (message.syncId !== this.staging.syncId) {
-      this.staging.errors += 1;
+    const staging = this.staging;
+    staging.lastAt = now;
+    if (message.syncId !== staging.syncId) {
+      staging.errors += 1;
       return { status: 'dropped', reason: 'syncId 与当前 staging 不一致' };
+    }
+    if (!isInteger(message.index) || message.index < 0) {
+      staging.errors += 1;
+      return { status: 'dropped', reason: 'index 不是非负整数' };
     }
     const result = validateAccount(message.account, message.index);
     if (!result.ok) {
-      this.staging.errors += 1;
-      return { status: 'dropped', reason: result.reason, errors: this.staging.errors };
+      staging.errors += 1;
+      return { status: 'dropped', reason: result.reason, errors: staging.errors };
     }
-    if (this.staging.byId.has(result.account.id)) {
-      return { status: 'deduped', id: result.account.id, reason: '同一次同步内 id 重复，保留首条' };
+    const incoming = result.account;
+    const existingIndex = staging.byId.get(incoming.id);
+    if (existingIndex !== undefined && existingIndex !== message.index) {
+      // docs/protocol.md：同一 account.id 出现在不同 index → 丢弃后到者
+      staging.errors += 1;
+      return { status: 'dropped', reason: '同一 account.id 出现在不同 index，丢弃后到者', errors: staging.errors };
     }
-    this.staging.byId.set(result.account.id, result.account);
-    this.staging.order.push(result.account.id);
+    const replaced = staging.byIndex.get(message.index);
+    if (replaced !== undefined) {
+      staging.duplicates += 1;
+      if (replaced.id !== incoming.id) {
+        staging.byId.delete(replaced.id);
+      }
+      staging.byIndex.set(message.index, incoming);
+      staging.byId.set(incoming.id, message.index);
+      return {
+        status: 'replaced',
+        kind: 'account',
+        id: incoming.id,
+        index: message.index,
+        duplicateIndex: staging.duplicates,
+        received: staging.byIndex.size
+      };
+    }
+    staging.byIndex.set(message.index, incoming);
+    staging.byId.set(incoming.id, message.index);
     return {
       status: 'accepted',
       kind: 'account',
-      id: result.account.id,
-      received: this.staging.byId.size
+      id: incoming.id,
+      received: staging.byIndex.size
     };
   }
 
@@ -265,21 +331,21 @@ export class BandSyncReceiver {
         ok: false,
         received: 0,
         committed: 0,
-        error: '没有进行中的 staging',
+        error: 'no_active_begin',
         now
       });
-      return { status: 'failed', reason: '没有进行中的 staging', ack: this.lastAck };
+      return { status: 'failed', reason: 'no_active_begin: 没有进行中的 staging', ack: this.lastAck };
     }
     const staging = this.staging;
     staging.lastAt = now;
 
     let error = null;
     if (message.syncId !== staging.syncId) {
-      error = 'syncId 与 staging 不一致';
+      error = 'sync_id_mismatch';
     } else if (message.accountCount !== staging.accountCount) {
-      error = 'accountCount 与 begin 不一致（begin=' + staging.accountCount + ', commit=' + String(message.accountCount) + '）';
-    } else if (staging.byId.size !== staging.accountCount) {
-      error = '合法且去重后的条数 ' + staging.byId.size + ' != accountCount ' + staging.accountCount;
+      error = 'account_count_mismatch';
+    } else if (staging.byIndex.size !== staging.accountCount) {
+      error = 'incomplete_sync';
     }
 
     if (error) {
@@ -287,7 +353,7 @@ export class BandSyncReceiver {
       this.lastAck = buildAck({
         syncId: staging.syncId,
         ok: false,
-        received: staging.byId.size,
+        received: staging.byIndex.size,
         committed: 0,
         error,
         now
@@ -295,7 +361,10 @@ export class BandSyncReceiver {
       return { status: 'failed', reason: error, ack: this.lastAck };
     }
 
-    const accounts = staging.order.map((id) => staging.byId.get(id));
+    const indices = Array.from(staging.byIndex.keys()).sort(function (left, right) {
+      return left - right;
+    });
+    const accounts = indices.map((index) => staging.byIndex.get(index));
     this.snapshot = {
       version: PROTOCOL_VERSION,
       updatedAt: now,
@@ -404,7 +473,8 @@ export function buildSyncSession(accounts, options) {
       secret: account.secret,
       algorithm: account.algorithm,
       digits: account.digits,
-      period: account.period
+      period: account.period,
+      otpType: account.otpType === 'steam' ? 'steam' : 'totp'
     };
     if (account.updatedAt !== undefined) {
       payload.updatedAt = account.updatedAt;

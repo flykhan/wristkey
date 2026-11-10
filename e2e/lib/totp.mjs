@@ -29,6 +29,30 @@ export const RFC6238_VECTORS = [
   { time: 20000000000, SHA1: '65353130', SHA256: '77737706', SHA512: '47863826' }
 ];
 
+// Steam Guard：5 位字母数字码，字母表固定（不是 10 的幂 / 不补零）。
+export const STEAM_ALPHABET = '23456789BCDFGHJKMNPQRTVWXY';
+export const STEAM_DIGITS = 5;
+export const STEAM_PERIOD = 30;
+
+export function steamTotp(secret, timeMs) {
+  const seconds = Math.floor(Number(timeMs) / 1000);
+  const counter = BigInt(Math.floor(seconds / STEAM_PERIOD));
+  const key = typeof secret === 'string' ? base32Decode(secret) : Uint8Array.from(secret);
+  const mac = createHmac('sha1', key).update(counterToBuffer(counter)).digest();
+  const offset = mac[mac.length - 1] & 0x0f;
+  let material =
+    ((mac[offset] & 0x7f) << 24) |
+    ((mac[offset + 1] & 0xff) << 16) |
+    ((mac[offset + 2] & 0xff) << 8) |
+    (mac[offset + 3] & 0xff);
+  let code = '';
+  for (let index = 0; index < STEAM_DIGITS; index++) {
+    code += STEAM_ALPHABET[material % 26];
+    material = Math.floor(material / 26);
+  }
+  return code;
+}
+
 export function counterToBuffer(counter) {
   const value = typeof counter === 'bigint' ? counter : BigInt(counter);
   const buffer = Buffer.alloc(8);

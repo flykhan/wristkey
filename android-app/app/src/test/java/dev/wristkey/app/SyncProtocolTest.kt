@@ -66,6 +66,7 @@ class SyncProtocolTest {
         assertEquals("SHA1", payload.getString("algorithm"))
         assertEquals(6, payload.getInt("digits"))
         assertEquals(30, payload.getInt("period"))
+        assertEquals("totp", payload.getString("otpType"))
         assertEquals(now, payload.getLong("updatedAt"))
         assertNull(SyncProtocol.validateAccountPayload(payload, 0))
 
@@ -180,6 +181,51 @@ class SyncProtocolTest {
         )
         assertTrue(parsed is SyncProtocol.Incoming.Request)
         assertEquals("req-1", (parsed as SyncProtocol.Incoming.Request).request.requestId)
+    }
+
+    @Test
+    fun steamAccountEncodesFixedFieldsAndOtpType() {
+        val steam = WristKeyAccount(
+            id = "s_steam",
+            issuer = "Steam",
+            accountName = "alice",
+            secret = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU",
+            otpType = OTP_TYPE_STEAM,
+        )
+        val session = SyncProtocol.buildSession(listOf(steam), sentAt = now, syncId = "sync-steam")
+        val payload = JSONObject(session.messages[1]).getJSONObject("account")
+        assertEquals("steam", payload.getString("otpType"))
+        assertEquals(5, payload.getInt("digits"))
+        assertEquals(30, payload.getInt("period"))
+        assertEquals("SHA1", payload.getString("algorithm"))
+        assertNull(SyncProtocol.validateAccountPayload(payload, 0))
+        assertTrue(SyncProtocol.isWithinSizeLimit(session.messages[1]))
+    }
+
+    @Test
+    fun steamAccountValidationRejectsWrongCombinations() {
+        fun steamPayload(vararg pairs: Pair<String, Any?>): JSONObject {
+            val json = JSONObject()
+                .put("issuer", "Steam")
+                .put("accountName", "alice")
+                .put("secret", "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU")
+                .put("otpType", "steam")
+            pairs.forEach { (key, value) -> json.put(key, value) }
+            return json
+        }
+        assertNull(SyncProtocol.validateAccountPayload(steamPayload(), 0))
+        assertTrue(SyncProtocol.validateAccountPayload(steamPayload("digits" to 6), 0) != null)
+        assertTrue(SyncProtocol.validateAccountPayload(steamPayload("period" to 60), 0) != null)
+        assertTrue(SyncProtocol.validateAccountPayload(steamPayload("algorithm" to "SHA256"), 0) != null)
+        assertTrue(SyncProtocol.validateAccountPayload(steamPayload("otpType" to "hotp"), 0) != null)
+
+        // digits=5 对普通 TOTP 仍然非法。
+        val totp = JSONObject()
+            .put("issuer", "GitHub")
+            .put("accountName", "u")
+            .put("secret", TestFixtures.SHA1_SEED)
+            .put("digits", 5)
+        assertTrue(SyncProtocol.validateAccountPayload(totp, 0) != null)
     }
 
     @Test

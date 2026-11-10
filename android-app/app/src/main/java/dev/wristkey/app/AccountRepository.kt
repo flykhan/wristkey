@@ -23,6 +23,9 @@ class AccountRepository(
                     if (id.isBlank() || secret.isEmpty()) {
                         continue
                     }
+                    // 旧版本没有 otpType 字段：缺省 totp，保证向后兼容。
+                    val otpType = normalizeOtpType(item.optString("otpType", OTP_TYPE_TOTP))
+                    val isSteam = otpType == OTP_TYPE_STEAM
                     add(
                         WristKeyAccount(
                             id = id,
@@ -30,11 +33,16 @@ class AccountRepository(
                             accountName = item.optString("accountName"),
                             category = item.optString("category").ifBlank { DEFAULT_CATEGORY },
                             secret = secret,
-                            algorithm = item.optString("algorithm", DEFAULT_ALGORITHM)
-                                .takeIf { it in SUPPORTED_ALGORITHMS } ?: DEFAULT_ALGORITHM,
-                            digits = item.optInt("digits", DEFAULT_DIGITS).coerceIn(6, 10),
-                            period = item.optInt("period", DEFAULT_PERIOD).coerceIn(5, 300),
+                            algorithm = if (isSteam) {
+                                SteamOtp.ALGORITHM
+                            } else {
+                                item.optString("algorithm", DEFAULT_ALGORITHM)
+                                    .takeIf { it in SUPPORTED_ALGORITHMS } ?: DEFAULT_ALGORITHM
+                            },
+                            digits = if (isSteam) SteamOtp.DIGITS else item.optInt("digits", DEFAULT_DIGITS).coerceIn(6, 10),
+                            period = if (isSteam) SteamOtp.PERIOD else item.optInt("period", DEFAULT_PERIOD).coerceIn(5, 300),
                             updatedAt = item.optLong("updatedAt", System.currentTimeMillis()),
+                            otpType = otpType,
                         ),
                     )
                 }
@@ -58,6 +66,7 @@ class AccountRepository(
         .put("algorithm", algorithm)
         .put("digits", digits)
         .put("period", period)
+        .put("otpType", normalizedOtpType)
         .put("updatedAt", updatedAt)
 
     companion object {

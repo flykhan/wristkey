@@ -363,12 +363,19 @@ private fun AccountItem(account: WristKeyAccount, nowMillis: Long, actions: AppA
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(account.displayTitle, style = MaterialTheme.typography.titleMedium)
-            Text("分类：${account.categoryLabel} · ${account.algorithm} · ${account.digits} 位 · ${account.period}s")
+            Text(
+                "分类：${account.categoryLabel} · " + if (account.isSteam) {
+                    "Steam Guard（5 位字母数字 · 30s）"
+                } else {
+                    "${account.algorithm} · ${account.digits} 位 · ${account.period}s"
+                },
+            )
             Text("Secret：${account.maskedSecret}")
             val code = runCatching { account.currentCode(nowMillis) }.getOrNull()
             if (code != null) {
-                val remaining = Totp.remainingSeconds(nowMillis, account.period)
-                Text("当前验证码：$code（剩余 ${remaining}s）", style = MaterialTheme.typography.titleLarge)
+                val remaining = account.remainingSeconds(nowMillis)
+                val codeLabel = if (account.isSteam) "Steam Guard 验证码" else "当前验证码"
+                Text("$codeLabel：$code（剩余 ${remaining}s）", style = MaterialTheme.typography.titleLarge)
             }
             Text("更新：${account.updatedAtLabel}", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -455,10 +462,14 @@ private fun AccountEditorCard(state: AppUiState, actions: AppActions) {
                 SUPPORTED_ALGORITHMS.forEach { algorithm ->
                     FilterChip(
                         selected = draft.algorithm.equals(algorithm, ignoreCase = true),
+                        enabled = !draft.isSteam,
                         onClick = { actions.onDraftChange(draft.copy(algorithm = algorithm)) },
                         label = { Text(algorithm) },
                     )
                 }
+            }
+            if (draft.isSteam) {
+                Text("Steam Guard：固定 5 位字母数字、30 秒、SHA1（位数/周期/算法输入会被忽略）。")
             }
             state.editorError?.let { error ->
                 Text(error, color = MaterialTheme.colorScheme.error)

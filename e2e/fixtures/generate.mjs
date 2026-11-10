@@ -4,7 +4,7 @@
 //   node fixtures/generate.mjs          # 在 e2e/ 下执行：npm run fixtures
 //
 // 产物（e2e/fixtures/）：
-//   plain-backup.json            明文 Stratum 备份（覆盖算法/digits/period/分类/排序/跳过项/边界）
+//   plain-backup.json            明文 Stratum 备份（覆盖算法/digits/period/分类/排序/跳过项/边界/Steam）
 //   expected-import.json         参考映射结果（协议 account + 跳过报告），供跨端对拍
 //   strong.stratum               Strong 加密（Argon2id + AES-256-GCM），密码 test-password
 //   legacy.stratum               Legacy 加密（PBKDF2-SHA1 + AES-256-CBC/PKCS7），密码 test-password
@@ -130,8 +130,10 @@ function buildBackup() {
     authenticator({ Issuer: 'NoUsername', Username: null, Secret: makeSecret('no-username', 20), Algorithm: 0, Digits: 6, Period: 30, Ranking: 10 }),
     // ---- 应跳过：Type=1 HOTP ----
     authenticator({ Type: 1, Issuer: 'LegacyHOTP', Username: 'hotp-user', Secret: makeSecret('hotp', 20), Digits: 6, Period: 30, Counter: 7, Ranking: 11 }),
-    // ---- 应跳过：Type=4 Steam ----
+    // ---- 可导入：Type=4 Steam（issuer 为 Steam；SteamOtp 固定 5 位/30s/SHA1）----
     authenticator({ Type: 4, Issuer: 'Steam', Username: 'steamuser', Secret: makeSecret('steam', 20), Digits: 5, Period: 30, Ranking: 12 }),
+    // ---- 可导入：Type=4 Steam 但 issuer≠Steam（如 Valve）----
+    authenticator({ Type: 4, Issuer: 'Valve', Username: 'valveuser', Secret: makeSecret('valve-steam', 20), Digits: 5, Period: 30, Ranking: 13 }),
     // ---- 应跳过：Type=3 Mobile-OTP ----
     authenticator({ Type: 3, Issuer: 'MobileOTP', Username: 'mobile', Secret: makeSecret('mobile-otp', 20), Pin: '1234', Ranking: 13 }),
     // ---- 应跳过：非法 Base32 ----
@@ -161,7 +163,9 @@ function buildBackup() {
     { CategoryId: cat.云服务, AuthenticatorSecret: makeSecret('vpn', 60), Ranking: 0 },
     { CategoryId: cat.个人, AuthenticatorSecret: b32('padsecret', true), Ranking: 0 },
     { CategoryId: cat.个人, AuthenticatorSecret: makeSecret('email', 20), Ranking: 2 },
-    { CategoryId: cat.个人, AuthenticatorSecret: makeSecret('no-username', 20), Ranking: 3 }
+    { CategoryId: cat.个人, AuthenticatorSecret: makeSecret('no-username', 20), Ranking: 3 },
+    { CategoryId: cat.社交, AuthenticatorSecret: makeSecret('steam', 20), Ranking: 3 },
+    { CategoryId: cat.云服务, AuthenticatorSecret: makeSecret('valve-steam', 20), Ranking: 2 }
   ];
 
   return {
@@ -188,7 +192,7 @@ async function main() {
   // 1) 明文备份 + 参考映射
   writeFileSync(join(HERE, 'plain-backup.json'), plainBuffer);
   const mapped = mapBackupToAccounts(backup, { updatedAt: FIXTURE_UPDATED_AT });
-  if (mapped.stats.total !== 22 || mapped.stats.imported !== 11 || mapped.stats.skipped !== 11) {
+  if (mapped.stats.total !== 23 || mapped.stats.imported !== 13 || mapped.stats.skipped !== 10) {
     throw new Error('夹具条目数不符合预期：' + JSON.stringify(mapped.stats));
   }
   const expected = {
@@ -230,6 +234,15 @@ async function main() {
   const uriLines = uriAccounts.map(function (account) {
     return buildOtpAuthUri(account);
   });
+  const steamSecret = makeSecret('steam', 20);
+  const valveSteamSecret = makeSecret('valve-steam', 20);
+  const aegisSteamSecret = makeSecret('aegis-steam', 20);
+  // Steam 形式 1：issuer=Steam，无额外标记
+  uriLines.push('otpauth://totp/Steam:steamuser?secret=' + steamSecret + '&issuer=Steam');
+  // Steam 形式 2：非 Steam issuer + 裸 &steam 标记（Stratum 对 issuer≠Steam 的导出约定）
+  uriLines.push('otpauth://totp/Valve:valveuser?secret=' + valveSteamSecret + '&issuer=Valve&steam');
+  // Steam 形式 3：encoder=steam（Aegis 等实现约定），issuer 前缀不是 Steam
+  uriLines.push('otpauth://totp/AegisSteamRepo:aegisuser?secret=' + aegisSteamSecret + '&issuer=AegisSteamRepo&encoder=steam');
   uriLines.push('otpauth://hotp/LegacyHOTP:hotp-user?secret=' + b32('hotp-uri-skip') + '&counter=7');
   uriLines.push('otpauth://totp/BadUri:bad?secret=NOT-BASE32!');
   writeFileSync(join(HERE, 'uri-list.txt'), uriLines.join('\n') + '\n', 'utf8');
@@ -253,6 +266,7 @@ async function main() {
     digits: Array.from(new Set(mapped.accounts.map(function (account) { return account.digits; }))).sort(function (a, b) { return a - b; }),
     periods: Array.from(new Set(mapped.accounts.map(function (account) { return account.period; }))).sort(function (a, b) { return a - b; }),
     categories: Array.from(new Set(mapped.accounts.map(function (account) { return account.category; }))),
+    otpTypes: Array.from(new Set(mapped.accounts.map(function (account) { return account.otpType; }))).sort(),
     skippedCodes: mapped.skipped.map(function (item) { return item.code; })
   };
   writeJson(join(HERE, 'manifest.json'), {

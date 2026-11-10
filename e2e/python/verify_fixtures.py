@@ -11,6 +11,7 @@
   2. tools/fixtures（Python 生成）可被本脚本解密 → 与其明文一致；
   3. 用 Stratum 官方 extra/decrypt_backup.py（如可用）解密 e2e 夹具，做第三方工具验证；
   4. 明文夹具中的 3 个 RFC 6238 账号在 T=59/1111111109/1111111111/1234567890 的 TOTP 与 RFC 表一致；
+     并独立实现 Steam Guard 5 位字母数字码，对 6 组公开向量验证；
   5. 加密参数与 docs/stratum-format.md 的常量一致（头部/长度/迭代次数）。
 
 用法（建议 venv）：
@@ -159,6 +160,28 @@ def totp(secret, seconds, period, digits, algorithm):
     return str(binary % (10 ** digits)).zfill(digits)
 
 
+STEAM_ALPHABET = "23456789BCDFGHJKMNPQRTVWXY"
+
+
+def steam_totp(secret, seconds):
+    """Steam Guard：HMAC-SHA1 + 5 位字母数字码（独立于 Node 实现）。"""
+    key = base32_decode(secret)
+    counter = int(seconds // 30)
+    digest = hmac.new(key, counter.to_bytes(8, "big"), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    material = (
+        ((digest[offset] & 0x7F) << 24)
+        | ((digest[offset + 1] & 0xFF) << 16)
+        | ((digest[offset + 2] & 0xFF) << 8)
+        | (digest[offset + 3] & 0xFF)
+    )
+    code = ""
+    for _ in range(5):
+        code += STEAM_ALPHABET[material % 26]
+        material //= 26
+    return code
+
+
 def normalize_secret(secret):
     return "".join(str(secret).upper().split()).replace("=", "")
 
@@ -247,6 +270,41 @@ def main():
     for seconds, expected_codes in RFC6238_VECTORS:
         check("RFC 6238 T=" + str(seconds) + "（夹具 secret 复算）", vector_case(seconds, expected_codes))
 
+    print("\n## 4b. Steam Guard 向量（Python 独立实现，docs/protocol.md SteamOtp）")
+    steam_secret = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU"
+    steam_vectors = [
+        (59, "3DP36"),
+        (1111111109, "GX57J"),
+        (1111111111, "TCJ4Y"),
+        (1234567890, "VYNVB"),
+        (1640846388, "2Y4TM"),
+        (1735689600, "DQ5KF"),
+    ]
+
+    def steam_vector_case(seconds, expected_code):
+        def verify():
+            code = steam_totp(steam_secret, seconds)
+            if code != expected_code:
+                raise AssertionError("T=" + str(seconds) + ": " + code + " != " + expected_code)
+            if len(code) != 5:
+                raise AssertionError("Steam 码应固定 5 位")
+            return "code=" + code
+        return verify
+
+    for seconds, expected_code in steam_vectors:
+        check("Steam Guard T=" + str(seconds), steam_vector_case(seconds, expected_code))
+
+    def check_steam_fixture_accounts():
+        steam_accounts = [a for a in plain["Authenticators"] if a["Type"] == 4]
+        if len(steam_accounts) != 2:
+            raise AssertionError("夹具应含 2 个 Type=4 Steam 账号，实际 " + str(len(steam_accounts)))
+        issuers = sorted(a["Issuer"] for a in steam_accounts)
+        if issuers != ["Steam", "Valve"]:
+            raise AssertionError("Steam 账号 issuer 应覆盖 Steam/Valve，实际 " + str(issuers))
+        return "2 个（Steam/Valve）"
+
+    check("夹具 Steam(Type=4) 条目：2 个，issuer 覆盖 Steam/Valve", check_steam_fixture_accounts)
+
     print("\n## 5. 加密参数与 docs/stratum-format.md 常量一致性")
     strong = read_bytes(os.path.join(FIXTURES, "strong.stratum"))
     legacy = read_bytes(os.path.join(FIXTURES, "legacy.stratum"))
@@ -255,7 +313,7 @@ def main():
 
     manifest = load_json(os.path.join(FIXTURES, "manifest.json"))
     check("manifest 与规范常量一致", lambda: _manifest_params(manifest))
-    check("expected-import.json 统计 11 导入 / 11 跳过", lambda: _assert_expected_stats(expected))
+    check("expected-import.json 统计 13 导入 / 10 跳过", lambda: _assert_expected_stats(expected))
 
     passed = sum(1 for item in RESULTS if item[1])
     failed = len(RESULTS) - passed
@@ -335,9 +393,9 @@ def _manifest_params(manifest):
 
 def _assert_expected_stats(expected):
     stats = expected["stats"]
-    if stats.get("imported") != 11 or stats.get("skipped") != 11 or stats.get("total") != 22:
+    if stats.get("imported") != 13 or stats.get("skipped") != 10 or stats.get("total") != 23:
         raise AssertionError("统计不符: " + json.dumps(stats))
-    return "11/11/22"
+    return "13/10/23"
 
 
 if __name__ == "__main__":

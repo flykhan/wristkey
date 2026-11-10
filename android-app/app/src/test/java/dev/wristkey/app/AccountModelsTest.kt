@@ -3,6 +3,7 @@ package dev.wristkey.app
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AccountModelsTest {
@@ -71,6 +72,49 @@ class AccountModelsTest {
     fun validateRejectsInvalidSecretAndAlgorithm() {
         assertEquals("Secret 必须是 Base32（A-Z、2-7）", AccountDraft(issuer = "A", secret = "NOT-BASE32!").validate().errorMessage)
         assertEquals("算法必须是 SHA1 / SHA256 / SHA512", AccountDraft(issuer = "A", secret = TestFixtures.SHA1_SEED, algorithm = "MD5").validate().errorMessage)
+    }
+
+    @Test
+    fun validateSteamDraftForcesSteamParameters() {
+        val result = AccountDraft(
+            issuer = "Steam",
+            accountName = "alice",
+            secret = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU",
+            digits = "6",
+            period = "60",
+            algorithm = "SHA256",
+            otpType = OTP_TYPE_STEAM,
+        ).validate()
+
+        assertNull(result.errorMessage)
+        val account = result.account!!
+        assertEquals(OTP_TYPE_STEAM, account.otpType)
+        assertEquals(5, account.digits)
+        assertEquals(30, account.period)
+        assertEquals("SHA1", account.algorithm)
+        assertEquals("3DP36", account.currentCode(59_000L))
+    }
+
+    @Test
+    fun normalizeOtpTypeAndDraftRoundTrip() {
+        assertEquals(OTP_TYPE_TOTP, normalizeOtpType(null))
+        assertEquals(OTP_TYPE_TOTP, normalizeOtpType("unknown"))
+        assertEquals(OTP_TYPE_STEAM, normalizeOtpType("STEAM"))
+
+        val steam = WristKeyAccount(
+            id = "s_x",
+            issuer = "Steam",
+            accountName = "alice",
+            secret = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU",
+            digits = 5,
+            otpType = OTP_TYPE_STEAM,
+        )
+        val draft = steam.toDraft()
+        assertEquals(OTP_TYPE_STEAM, draft.otpType)
+        assertTrue(draft.isSteam)
+        assertEquals("5", draft.digits)
+        assertEquals("30", draft.period)
+        assertEquals("SHA1", draft.algorithm)
     }
 
     @Test

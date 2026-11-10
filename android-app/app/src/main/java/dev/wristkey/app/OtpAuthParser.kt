@@ -57,15 +57,26 @@ object OtpAuthParser {
             throw OtpAuthParseException("INVALID_BASE32", "secret 不是合法 Base32（A-Z、2-7）")
         }
 
-        val algorithm = (parsed.query["algorithm"] ?: DEFAULT_ALGORITHM).trim().uppercase(Locale.US)
-        if (algorithm !in SUPPORTED_ALGORITHMS) {
-            throw OtpAuthParseException("INVALID_ALGORITHM", "algorithm=$algorithm 不受支持")
-        }
+        val isSteam = detectSteam(parsed, issuer)
 
-        val digits = parseBoundedInt(parsed.query["digits"], DEFAULT_DIGITS) { it in 6..10 }
-            ?: throw OtpAuthParseException("DIGITS_OUT_OF_RANGE", "digits 必须是 6-10 的整数")
-        val period = parseBoundedInt(parsed.query["period"], DEFAULT_PERIOD) { it in 5..300 }
-            ?: throw OtpAuthParseException("PERIOD_OUT_OF_RANGE", "period 必须是 5-300 的整数")
+        val algorithm: String
+        val digits: Int
+        val period: Int
+        if (isSteam) {
+            // Steam Guard 固定 5 位字母数字 / 30 秒 / SHA1。
+            algorithm = SteamOtp.ALGORITHM
+            digits = SteamOtp.DIGITS
+            period = SteamOtp.PERIOD
+        } else {
+            algorithm = (parsed.query["algorithm"] ?: DEFAULT_ALGORITHM).trim().uppercase(Locale.US)
+            if (algorithm !in SUPPORTED_ALGORITHMS) {
+                throw OtpAuthParseException("INVALID_ALGORITHM", "algorithm=$algorithm 不受支持")
+            }
+            digits = parseBoundedInt(parsed.query["digits"], DEFAULT_DIGITS) { it in 6..10 }
+                ?: throw OtpAuthParseException("DIGITS_OUT_OF_RANGE", "digits 必须是 6-10 的整数")
+            period = parseBoundedInt(parsed.query["period"], DEFAULT_PERIOD) { it in 5..300 }
+                ?: throw OtpAuthParseException("PERIOD_OUT_OF_RANGE", "period 必须是 5-300 的整数")
+        }
 
         return WristKeyAccount(
             id = Secret.accountIdForSecret(secret),
@@ -77,6 +88,7 @@ object OtpAuthParser {
             digits = digits,
             period = period,
             updatedAt = updatedAt,
+            otpType = if (isSteam) OTP_TYPE_STEAM else OTP_TYPE_TOTP,
         )
     }
 
@@ -99,6 +111,29 @@ object OtpAuthParser {
             }
         }
         return UriImportResult(accounts, skipped)
+    }
+
+    /**
+     * Steam 账号识别（docs/stratum-format.md）：
+     * - 查询参数含裸 `steam` 标记（Stratum 在 issuer ≠ "Steam" 时追加 `&steam`）；
+     * - 或 `encoder=steam`（Aegis 等实现约定）；
+     * - 或 issuer / label 前缀为 `Steam`（大小写不敏感）；
+     * - 或 `digits=5` 且 issuer 为 `Steam`。
+     */
+    private fun detectSteam(parsed: RawOtpAuth, issuer: String): Boolean {
+        if (parsed.query.containsKey("steam")) {
+            return true
+        }
+        if (parsed.query["encoder"]?.trim()?.equals("steam", ignoreCase = true) == true) {
+            return true
+        }
+        if (issuer.trim().startsWith("Steam", ignoreCase = true)) {
+            return true
+        }
+        if (parsed.label.trim().startsWith("Steam", ignoreCase = true)) {
+            return true
+        }
+        return parsed.query["digits"]?.trim() == "5" && issuer.trim().equals("Steam", ignoreCase = true)
     }
 
     private data class RawOtpAuth(

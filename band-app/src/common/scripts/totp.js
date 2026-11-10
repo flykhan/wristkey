@@ -29,6 +29,15 @@ export const MAX_DIGITS = 10
 export const MIN_PERIOD = 5
 export const MAX_PERIOD = 300
 
+// Steam Guard codes are not numeric TOTP: 5 characters from a custom alphabet,
+// fixed 30 s period and HMAC-SHA1 (docs/protocol.md, "Steam Guard").
+export const OTP_TYPE_TOTP = "totp"
+export const OTP_TYPE_STEAM = "steam"
+export const OTP_TYPES = [OTP_TYPE_TOTP, OTP_TYPE_STEAM]
+export const STEAM_ALPHABET = "23456789BCDFGHJKMNPQRTVWXY"
+export const STEAM_DIGITS = 5
+export const STEAM_PERIOD = 30
+
 const BLOCK_SIZES = { SHA1: 64, SHA256: 64, SHA512: 128 }
 const HASH_FUNCTIONS = { SHA1: sha1, SHA256: sha256, SHA512: sha512 }
 
@@ -128,6 +137,24 @@ export function decodeBase32(input) {
 /* --------------------------------------------------------------------------
  * Algorithms
  * ------------------------------------------------------------------------ */
+
+/**
+ * Normalise the OTP type. Missing/empty means "totp" (old snapshots and older
+ * phone apps do not send otpType). Returns null for unknown values.
+ */
+export function normalizeOtpType(value) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return OTP_TYPE_TOTP
+  }
+  const name = String(value).trim().toLowerCase()
+  if (name === OTP_TYPE_TOTP) {
+    return OTP_TYPE_TOTP
+  }
+  if (name === OTP_TYPE_STEAM) {
+    return OTP_TYPE_STEAM
+  }
+  return null
+}
 
 /** Normalise an algorithm name; returns null when unsupported. */
 export function normalizeAlgorithm(value) {
@@ -267,20 +294,53 @@ export function generateTotp(secret, timestamp, period, digits, algorithm) {
   return hotp(secret, counter, digits, algorithm)
 }
 
+/**
+ * Steam Guard code: HMAC-SHA1 + RFC 4226 31-bit dynamic truncation, then five
+ * divmod-26 steps emitting the least significant character first (this is the
+ * order Steam clients display). Fixed 5 characters, 30 s period, SHA1.
+ * @param {string|number[]} secret Base32 string or raw key bytes
+ * @param {number} timestamp Unix time in milliseconds
+ * @returns {string} 5 characters from STEAM_ALPHABET
+ */
+export function generateSteam(secret, timestamp) {
+  const time = typeof timestamp === "number" ? timestamp : Date.now()
+  const counter = Math.floor(Math.floor(time / 1000) / STEAM_PERIOD)
+  const keyBytes = typeof secret === "string" ? decodeBase32(secret) : secret
+  const digestBytes = hmac("SHA1", keyBytes, counterToBytes(counter))
+  const offset = digestBytes[digestBytes.length - 1] & 0x0f
+  let material =
+    (digestBytes[offset] & 0x7f) * 0x1000000 +
+    (digestBytes[offset + 1] & 0xff) * 0x10000 +
+    (digestBytes[offset + 2] & 0xff) * 0x100 +
+    (digestBytes[offset + 3] & 0xff)
+  let code = ""
+  for (let index = 0; index < STEAM_DIGITS; index++) {
+    code += STEAM_ALPHABET.charAt(material % 26)
+    material = Math.floor(material / 26)
+  }
+  return code
+}
+
 /* --------------------------------------------------------------------------
  * View model helpers (used by pages, safe to unit-test)
  * ------------------------------------------------------------------------ */
 
 /**
  * Build the display state for one account at a given time.
+ * Dispatches on account.otpType: "totp" (default, unchanged behaviour) or
+ * "steam" (5 character Steam Guard code, never zero padded / digit grouped).
  * Never throws: an unusable secret results in a placeholder code and status.
  */
 export function buildTokenState(account, now) {
   const timestamp = typeof now === "number" ? now : Date.now()
   const source = account || {}
-  const period = normalizePeriod(source.period) || DEFAULT_PERIOD
-  const digits = normalizeDigits(source.digits) || DEFAULT_DIGITS
-  const algorithm = normalizeAlgorithm(source.algorithm) || DEFAULT_ALGORITHM
+  const otpType = normalizeOtpType(source.otpType) || OTP_TYPE_TOTP
+  const isSteam = otpType === OTP_TYPE_STEAM
+  const period = isSteam ? STEAM_PERIOD : (normalizePeriod(source.period) || DEFAULT_PERIOD)
+  const digits = isSteam ? STEAM_DIGITS : (normalizeDigits(source.digits) || DEFAULT_DIGITS)
+  const algorithm = isSteam
+    ? "SHA1"
+    : (normalizeAlgorithm(source.algorithm) || DEFAULT_ALGORITHM)
   const periodMilliseconds = period * 1000
   const elapsedMilliseconds = timestamp % periodMilliseconds
   const remainingMilliseconds = periodMilliseconds - elapsedMilliseconds
@@ -291,6 +351,8 @@ export function buildTokenState(account, now) {
     issuer: source.issuer || "",
     accountName: source.accountName || "",
     category: source.category || "",
+    otpType: otpType,
+    isSteam: isSteam,
     algorithm: algorithm,
     digits: digits,
     period: period,
@@ -303,9 +365,11 @@ export function buildTokenState(account, now) {
   }
 
   try {
-    const code = generateTotp(source.secret, timestamp, period, digits, algorithm)
+    const code = isSteam
+      ? generateSteam(source.secret, timestamp)
+      : generateTotp(source.secret, timestamp, period, digits, algorithm)
     token.code = code
-    token.groupedCode = groupCode(code)
+    token.groupedCode = isSteam ? code : groupCode(code)
     token.valid = true
   } catch (error) {
     token.status = "密钥异常"

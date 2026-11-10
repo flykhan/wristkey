@@ -29,6 +29,7 @@ function validAccount(overrides) {
       accountName: "me@example.com",
       category: "开发",
       secret: "JBSWY3DPEHPK3PXP",
+      otpType: "totp",
       algorithm: "SHA1",
       digits: 6,
       period: 30,
@@ -56,6 +57,7 @@ test("normalizeAccount applies defaults for missing optional fields", () => {
   )
   assert.equal(result.ok, true)
   assert.equal(result.account.category, DEFAULT_CATEGORY)
+  assert.equal(result.account.otpType, "totp")
   assert.equal(result.account.algorithm, "SHA1")
   assert.equal(result.account.digits, 6)
   assert.equal(result.account.period, 30)
@@ -299,4 +301,144 @@ test("maskSecret never exposes the full secret", () => {
   assert.equal(maskSecret(""), "——")
   assert.equal(maskSecret("SHORT"), "********")
   assert.equal(maskSecret(null), "——")
+})
+
+/* --------------------------------------------------------------------------
+ * Steam Guard accounts (otpType = "steam")
+ * ------------------------------------------------------------------------ */
+
+const STEAM_SECRET = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU"
+
+function steamAccount(overrides) {
+  return validAccount(
+    Object.assign(
+      {
+        id: "s_steam",
+        issuer: "Steam",
+        accountName: "me",
+        secret: STEAM_SECRET,
+        otpType: "steam",
+        algorithm: "SHA1",
+        digits: 5,
+        period: 30
+      },
+      overrides || {}
+    )
+  )
+}
+
+test("normalizeAccount accepts Steam Guard and forces 5/30/SHA1", () => {
+  for (const otpType of ["steam", "Steam", " STEAM "]) {
+    const result = normalizeAccount(steamAccount({ otpType: otpType }), { timestamp: NOW })
+    assert.equal(result.ok, true, "otpType " + otpType)
+    assert.equal(result.account.otpType, "steam")
+    assert.equal(result.account.digits, 5)
+    assert.equal(result.account.period, 30)
+    assert.equal(result.account.algorithm, "SHA1")
+    assert.equal(result.account.secret, STEAM_SECRET)
+  }
+
+  // digits/period/algorithm are optional for steam: forced values fill in.
+  const minimal = normalizeAccount(
+    {
+      id: "steam-minimal",
+      issuer: "Steam",
+      accountName: "me",
+      secret: STEAM_SECRET,
+      otpType: "steam"
+    },
+    { timestamp: NOW }
+  )
+  assert.equal(minimal.ok, true)
+  assert.equal(minimal.account.digits, 5)
+  assert.equal(minimal.account.period, 30)
+  assert.equal(minimal.account.algorithm, "SHA1")
+})
+
+test("normalizeAccount rejects conflicting Steam field combinations", () => {
+  const cases = [
+    [{ digits: 6 }, "steam_digits_invalid", "digits"],
+    [{ digits: 10 }, "steam_digits_invalid", "digits"],
+    [{ period: 60 }, "steam_period_invalid", "period"],
+    [{ algorithm: "SHA256" }, "steam_algorithm_invalid", "algorithm"],
+    [{ algorithm: "SHA512" }, "steam_algorithm_invalid", "algorithm"],
+    [{ algorithm: "md5" }, "algorithm_invalid", "algorithm"]
+  ]
+  for (const [overrides, error, field] of cases) {
+    const result = normalizeAccount(steamAccount(overrides), { timestamp: NOW })
+    assert.equal(result.ok, false, JSON.stringify(overrides))
+    assert.equal(result.error, error)
+    assert.equal(result.field, field)
+  }
+})
+
+test("digits=5 is only legal for Steam; unknown otpType is rejected", () => {
+  const totpWithFive = normalizeAccount(
+    validAccount({ otpType: "totp", digits: 5 }),
+    { timestamp: NOW }
+  )
+  assert.equal(totpWithFive.ok, false)
+  assert.equal(totpWithFive.error, "digits_out_of_range")
+
+  const totpWithoutType = normalizeAccount(validAccount({ otpType: undefined, digits: 5 }), {
+    timestamp: NOW
+  })
+  assert.equal(totpWithoutType.ok, false)
+
+  for (const otpType of ["hotp", "steam_guard", 42]) {
+    const result = normalizeAccount(steamAccount({ otpType: otpType }), { timestamp: NOW })
+    assert.equal(result.ok, false, "otpType " + otpType)
+    assert.equal(result.error, "otp_type_invalid")
+  }
+})
+
+test("snapshots keep Steam accounts and default old data to totp", () => {
+  const snapshot = createSnapshot(
+    [steamAccount(), validAccount({ id: "totp-1" })],
+    NOW
+  )
+  assert.equal(snapshot.accounts.length, 2)
+  const steam = snapshot.accounts.find(account => account.id === "s_steam")
+  assert.equal(steam.otpType, "steam")
+  assert.equal(steam.digits, 5)
+  assert.equal(steam.period, 30)
+  const totp = snapshot.accounts.find(account => account.id === "totp-1")
+  assert.equal(totp.otpType, "totp")
+
+  // Old snapshots (before otpType existed) must load as normal TOTP.
+  const legacyV2 = parseSnapshotPayload({
+    version: 2,
+    updatedAt: NOW,
+    accounts: [
+      {
+        id: "old",
+        issuer: "GitHub",
+        accountName: "me",
+        category: "开发",
+        secret: "JBSWY3DPEHPK3PXP",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30
+      }
+    ]
+  })
+  assert.equal(legacyV2.accounts.length, 1)
+  assert.equal(legacyV2.accounts[0].otpType, "totp")
+
+  // BandOTP v1 configs also default to totp.
+  const legacyV1 = parseSnapshotPayload({
+    version: 1,
+    configs: [
+      {
+        id: "old-v1",
+        issuer: "GitHub",
+        accountName: "me",
+        secret: "JBSWY3DPEHPK3PXP",
+        digits: 6,
+        period: 30
+      }
+    ]
+  })
+  assert.equal(legacyV1.accounts.length, 1)
+  assert.equal(legacyV1.accounts[0].otpType, "totp")
 })

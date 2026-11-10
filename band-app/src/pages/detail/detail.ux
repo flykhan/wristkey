@@ -143,10 +143,16 @@ export default {
     const token = buildTokenState(this.account, Date.now())
     this.token = token
     this.progressColor = progressColor(token.remaining, this.theme)
-    this.countdownText = "剩余 " + token.remaining + "s · " + token.status
+    const isSteam = token.otpType === "steam"
+    this.countdownText =
+      "剩余 " + token.remaining + "s · " + (isSteam ? "Steam Guard" : token.status)
     this.rows = [
+      { label: "类型", value: isSteam ? "Steam Guard" : "TOTP" },
       { label: "分类", value: this.account.category || DEFAULT_CATEGORY },
-      { label: "算法", value: token.algorithm + " · " + token.digits + " 位" },
+      {
+        label: "算法",
+        value: isSteam ? "SHA1 · 5 位字母数字" : token.algorithm + " · " + token.digits + " 位"
+      },
       { label: "周期", value: token.period + " 秒" },
       { label: "密钥", value: maskSecret(this.account.secret) },
       { label: "状态", value: "本地离线计算" }
@@ -293,7 +299,7 @@ export default {
 
 .row {
   width: 100%;
-  height: 26px;
+  height: 24px;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;

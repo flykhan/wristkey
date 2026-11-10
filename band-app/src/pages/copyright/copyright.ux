@@ -2,10 +2,11 @@
   <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
     <div class="card" style="background-color: {{ theme.cardBackground }}">
       <text class="title" style="color: {{ theme.title }}">腕证 · WristKey</text>
-      <text class="version" style="color: {{ theme.accent }}">版本 1.0.0</text>
+      <text class="version" style="color: {{ theme.accent }}">版本 1.0.2</text>
 
-      <text class="line" style="color: {{ theme.body }}">手环端离线 TOTP · 同步协议 v2</text>
+      <text class="line" style="color: {{ theme.body }}">手环端离线 TOTP / Steam Guard · 协议 v2</text>
       <text class="line" style="color: {{ theme.body }}">TOTP 依据 RFC 4226 / RFC 6238 独立实现</text>
+      <text class="line" style="color: {{ theme.body }}">Steam Guard 按 Steam 字母表独立实现</text>
 
       <text class="small" style="color: {{ theme.secondary }}">思路参考 BandOTP（lin945/mi_band_mfa），</text>
       <text class="small" style="color: {{ theme.secondary }}">遵循 Apache License 2.0，详见 LICENSE 与 NOTICE.md。</text>

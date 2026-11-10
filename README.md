@@ -19,7 +19,8 @@
 
 1. **导入 Stratum 备份**：支持 Strong（Argon2id + AES-256-GCM）、Legacy（PBKDF2-SHA1 + AES-256-CBC）、
    明文 JSON 备份、`otpauth://` 文本列表；
-2. **把快照分片传输**：手环端做 staging + commit，避免消息大小/丢包问题，并返回 ack。
+2. **支持 TOTP 与 Steam Guard**：TOTP SHA1/256/512、6–10 位；Steam Guard 5 位字母数字（`otpType: "steam"`）；
+3. **把快照分片传输**：手环端做 staging + commit，避免消息大小/丢包问题，并返回 ack。
 
 ## 架构
 
@@ -67,18 +68,19 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 
 | 检查 | 结果 |
 | --- | --- |
-| 手环端 `npm test`（TOTP RFC 6238/4226、协议状态机、模型边界、ux 结构回归） | **51/51** |
-| 手机端 `./gradlew testDebugUnitTest`（Stratum 解密/映射、TOTP、协议） | **58/58** |
-| e2e Node 验证（跨实现加解密、协议回放、非法用例、band 模块对拍） | **121/121** |
-| e2e Python 独立验证（第三方实现解密 + RFC 向量） | **17/17** |
-| 构建 / 包名 / 签名检查 | **25/25 PASS** |
+| 手环端 `npm test`（TOTP/Steam 向量、协议状态机、模型边界、ux 结构回归） | **69/69** |
+| 手机端 `./gradlew testDebugUnitTest`（Stratum 解密/映射、TOTP/Steam、协议、合并） | **72/72** |
+| e2e Node 验证（跨实现加解密、协议回放、非法用例、band 模块对拍、Steam 向量） | **145/145** |
+| e2e Python 独立验证（第三方实现解密 + RFC/Steam 向量） | **24/24** |
+| 构建 / 包名 / 签名检查 | **29/29 PASS** |
+| CLI 工具测试（`tools/`） | **12/12** |
 | APK 与 .rpk 同证书 | ✅ `SHA-256 b7cfba…85c4`（= `signing/rpk-sign/certificate.pem`） |
-| 真机（安装、interconnect 握手、xms 投递、480×336 UI） | **未验证**，按 [docs/build-install.md](docs/build-install.md) 验收 |
+| 真机（安装、interconnect 握手、xms 投递、480×336 UI、Steam 显示） | **部分验证**：启动闪退已由真机日志定位修复；Steam 显示待复测 |
 
 产物：
 
-- 手环：`band-app/dist/dev.wristkey.app.release.1.0.1.rpk`（约 53 KB）
-- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（约 25 MB）
+- 手环：`band-app/dist/dev.wristkey.app.release.1.0.2.rpk`（约 55 KB，versionCode 3）
+- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（约 25 MB，v1.1 / versionCode 2）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
 ## 参考与许可
@@ -96,7 +98,12 @@ TOTP Secret 等同于账号凭证。请仅在自己信任的设备上使用；�
 
 ## 真机回归记录
 
-2026-11-10：v1.0.0 在小米手环 10 Pro 上打开闪退。日志显示
-`TypeError: cannot set property 'style' of null` + `appData is undefined`，根因是 `app.ux` 缺少
-`<script>` 包裹导致默认导出为 null。已修复并发布 **v1.0.1（versionCode 2）**，
-新增 `band-app/tests/uxStructure.test.mjs` 回归测试；详见 [reports/e2e-report.md](reports/e2e-report.md) 第 10 节。
+1. **2026-11-10 启动闪退**（v1.0.0）：真机日志显示 `TypeError: cannot set property 'style' of null`
+   + `appData is undefined`，根因是 `app.ux` 缺少 `<script>` 包裹导致默认导出为 null。
+   已修复并发布 **v1.0.1（versionCode 2）**，新增 `band-app/tests/uxStructure.test.mjs` 回归测试。
+2. **2026-11-10 Steam 验证码错误**：旧版把 Stratum 的 Steam 账号当普通 TOTP，显示错误的 6 位数字
+   （备份 `Type=4` 被跳过；URI 列表里 `otpauth://totp/Steam:...` 无标记时被当作 TOTP）。
+   已按 `otpType="steam"` 实现 5 位字母数字码（固定 SHA1/30s/字母表），修复并发布
+   **手环 v1.0.2（versionCode 3） + 手机 APK v1.1（versionCode 2）**；Steam 6 组向量两端均验证通过。
+
+详见 [reports/e2e-report.md](reports/e2e-report.md) 第 10/11 节。

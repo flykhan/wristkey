@@ -3,8 +3,11 @@ package dev.wristkey.app.stratum
 import dev.wristkey.app.DEFAULT_CATEGORY
 import dev.wristkey.app.DEFAULT_DIGITS
 import dev.wristkey.app.DEFAULT_PERIOD
+import dev.wristkey.app.OTP_TYPE_STEAM
+import dev.wristkey.app.OTP_TYPE_TOTP
 import dev.wristkey.app.OtpAuthParser
 import dev.wristkey.app.Secret
+import dev.wristkey.app.SteamOtp
 import dev.wristkey.app.WristKeyAccount
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator
 import org.bouncycastle.crypto.params.Argon2Parameters
@@ -104,6 +107,7 @@ object StratumImporter {
     private const val PBKDF2_OUTPUT_BITS = 256
 
     private const val STRATUM_TYPE_TOTP = 2.0
+    private const val STRATUM_TYPE_STEAM = 4.0
     private val ALGORITHM_NAMES = listOf("SHA1", "SHA256", "SHA512")
 
     /** 按内容嗅探格式：加密魔数 → HTML → JSON → URI 列表。 */
@@ -127,7 +131,10 @@ object StratumImporter {
         if (isHtml(text)) {
             return StratumFormat.HTML
         }
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        // URI 列表允许空行与 # 注释行（OtpAuthParser.parseList 会跳过）。
+        val lines = text.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
         if (lines.isNotEmpty() && lines.all { it.startsWith("otpauth://", ignoreCase = true) }) {
             return StratumFormat.URI_LIST
         }
@@ -342,8 +349,9 @@ object StratumImporter {
 
             val typeValue = readField(authenticator, "type")
             val type = toNumber(typeValue)
-            if (type == null || type != STRATUM_TYPE_TOTP) {
-                skip("TYPE_NOT_TOTP", "Type=${typeValue ?: "null"} 不是 TOTP（2）")
+            val isSteam = type == STRATUM_TYPE_STEAM
+            if (type == null || (!isSteam && type != STRATUM_TYPE_TOTP)) {
+                skip("TYPE_NOT_SUPPORTED", "Type=${typeValue ?: "null"} 不是 TOTP（2）或 Steam（4）")
                 return@forEach
             }
             if (secret.isEmpty()) {
@@ -360,25 +368,35 @@ object StratumImporter {
                 return@forEach
             }
 
-            val algorithmValue = readField(authenticator, "algorithm")
-            val algorithmNumber = if (algorithmValue == null) 0.0 else toNumber(algorithmValue)
-            if (algorithmNumber == null || algorithmNumber !in 0.0..2.0) {
-                skip("INVALID_ALGORITHM", "Algorithm=${algorithmValue ?: "null"} 不是 0/1/2")
-                return@forEach
-            }
+            val algorithmNumber: Double
+            val digitsNumber: Double
+            val periodNumber: Double
+            if (isSteam) {
+                // Steam 固定 5 位 / 30 秒 / SHA1，忽略备份里存储的 Digits/Period/Algorithm。
+                algorithmNumber = 0.0
+                digitsNumber = SteamOtp.DIGITS.toDouble()
+                periodNumber = SteamOtp.PERIOD.toDouble()
+            } else {
+                val algorithmValue = readField(authenticator, "algorithm")
+                algorithmNumber = if (algorithmValue == null) 0.0 else toNumber(algorithmValue) ?: Double.NaN
+                if (algorithmNumber.isNaN() || algorithmNumber !in 0.0..2.0) {
+                    skip("INVALID_ALGORITHM", "Algorithm=${algorithmValue ?: "null"} 不是 0/1/2")
+                    return@forEach
+                }
 
-            val digitsValue = readField(authenticator, "digits")
-            val digitsNumber = if (digitsValue == null) DEFAULT_DIGITS.toDouble() else toNumber(digitsValue)
-            if (digitsNumber == null || digitsNumber % 1.0 != 0.0 || digitsNumber < 6.0 || digitsNumber > 10.0) {
-                skip("DIGITS_OUT_OF_RANGE", "Digits=${digitsValue ?: "null"} 不在 6-10")
-                return@forEach
-            }
+                val digitsValue = readField(authenticator, "digits")
+                digitsNumber = if (digitsValue == null) DEFAULT_DIGITS.toDouble() else toNumber(digitsValue) ?: Double.NaN
+                if (digitsNumber.isNaN() || digitsNumber % 1.0 != 0.0 || digitsNumber < 6.0 || digitsNumber > 10.0) {
+                    skip("DIGITS_OUT_OF_RANGE", "Digits=${digitsValue ?: "null"} 不在 6-10")
+                    return@forEach
+                }
 
-            val periodValue = readField(authenticator, "period")
-            val periodNumber = if (periodValue == null) DEFAULT_PERIOD.toDouble() else toNumber(periodValue)
-            if (periodNumber == null || periodNumber % 1.0 != 0.0 || periodNumber < 5.0 || periodNumber > 300.0) {
-                skip("PERIOD_OUT_OF_RANGE", "Period=${periodValue ?: "null"} 不在 5-300")
-                return@forEach
+                val periodValue = readField(authenticator, "period")
+                periodNumber = if (periodValue == null) DEFAULT_PERIOD.toDouble() else toNumber(periodValue) ?: Double.NaN
+                if (periodNumber.isNaN() || periodNumber % 1.0 != 0.0 || periodNumber < 5.0 || periodNumber > 300.0) {
+                    skip("PERIOD_OUT_OF_RANGE", "Period=${periodValue ?: "null"} 不在 5-300")
+                    return@forEach
+                }
             }
 
             if (issuer.trim().isEmpty() && username.trim().isEmpty()) {
@@ -399,6 +417,7 @@ object StratumImporter {
                 digits = digitsNumber.toInt(),
                 period = periodNumber.toInt(),
                 updatedAt = updatedAt,
+                otpType = if (isSteam) OTP_TYPE_STEAM else OTP_TYPE_TOTP,
             )
             entries += MappedEntry(
                 account = account,

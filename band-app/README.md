@@ -1,10 +1,11 @@
 # 腕证 · WristKey — 手环端（Vela 快应用）
 
-小米手环 10 Pro（Vela / HyperOS 3，480×336）上的离线 TOTP 展示端：
+小米手环 10 Pro（Vela / HyperOS 3，480×336）上的离线 TOTP / Steam Guard 展示端：
 
 - 接收手机 App 经小米穿戴服务（xms）发来的协议 v2 快照（begin / account × N / commit）；
 - 校验后**原子写入**本机快应用 storage（key: mfa_snapshot_v2），commit 成功后回复 ack；
-- 本地计算 TOTP（SHA1 / SHA256 / SHA512，6–10 位，周期 5–300 s），断连也可查看；
+- 本地计算 TOTP（SHA1 / SHA256 / SHA512，6–10 位，周期 5–300 s）与 Steam Guard
+  （5 位字母数字，固定 30 s / SHA1），断连也可查看；
 - 分类浏览、分页（每页 3 个）、详情、同步状态/空状态、"请求手机同步"。
 
 包名 **dev.wristkey.app**，应用名「腕证」。**必须与手机 APK 同包名、同签名证书**，否则
@@ -19,7 +20,7 @@ band-app/
     app.ux                        # 应用生命周期（不打印任何敏感信息）
     common/logo.png               # 应用图标（本项目生成）
     common/scripts/
-      totp.js                     # 纯 JS Base32 + SHA1/256/512 + HMAC + TOTP（无 @system 依赖）
+      totp.js                     # 纯 JS Base32 + SHA1/256/512 + HMAC + TOTP + Steam Guard（无 @system 依赖）
       accountModel.js             # account 归一化/校验、快照构建/解析、分类、排序（纯函数）
       syncProtocol.js             # 协议 v2 状态机：begin/account/commit -> snapshot + ack（纯函数）
       mfaConfig.js                # @system.storage 持久化（单 key 原子写、legacy 迁移）
@@ -76,6 +77,8 @@ aiot-toolkit 2.0.5 的证书查找顺序：
 - begin{accountCount:0} + commit{accountCount:0} 合法，写入空快照（清空账号）。
 - staging 超过 120 s 无新消息自动丢弃，不计入错误。
 - 快照数组顺序无协议含义；UI 按分类分组、分类内按 id 排序展示。
+- otpType 缺省为 totp（旧快照/旧手机端兼容）；otpType=steam 时强制 digits=5、period=30、
+  algorithm=SHA1，码为 5 位字母数字（不补零、不按数字分组）；冲突组合丢弃该账号并计入错误。
 - 兼容读取 BandOTP v1 的 mfa_config_snapshot（只读兼容，不参与 v2 同步）。
 
 ## 安全

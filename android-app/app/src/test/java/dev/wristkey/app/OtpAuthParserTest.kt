@@ -115,6 +115,45 @@ class OtpAuthParserTest {
     }
 
     @Test
+    fun detectsSteamFromIssuerPrefixBareMarkerAndEncoder() {
+        val byIssuer = OtpAuthParser.parse(
+            "otpauth://totp/Steam:alice?secret=OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU&issuer=Steam",
+        )
+        assertEquals(OTP_TYPE_STEAM, byIssuer.otpType)
+        assertEquals(5, byIssuer.digits)
+        assertEquals(30, byIssuer.period)
+        assertEquals("SHA1", byIssuer.algorithm)
+        assertEquals("Steam", byIssuer.issuer)
+        assertEquals("alice", byIssuer.accountName)
+        assertEquals("3DP36", byIssuer.currentCode(59_000L))
+
+        val byBareMarker = OtpAuthParser.parse(
+            "otpauth://totp/Game:bob?secret=${TestFixtures.SHA256_SEED}&issuer=Game&steam",
+        )
+        assertEquals(OTP_TYPE_STEAM, byBareMarker.otpType)
+        assertEquals("Game", byBareMarker.issuer)
+
+        val byEncoder = OtpAuthParser.parse(
+            "otpauth://totp/Other:carol?secret=${TestFixtures.SHA1_SEED}&issuer=Other&encoder=steam",
+        )
+        assertEquals(OTP_TYPE_STEAM, byEncoder.otpType)
+
+        val normal = OtpAuthParser.parse(
+            "otpauth://totp/GitHub:dave?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&digits=6&period=30",
+        )
+        assertEquals(OTP_TYPE_TOTP, normal.otpType)
+        assertEquals(6, normal.digits)
+    }
+
+    @Test
+    fun totpUriWithDigitsFiveWithoutSteamMarkerIsStillRejected() {
+        val error = assertThrows(OtpAuthParseException::class.java) {
+            OtpAuthParser.parse("otpauth://totp/GitHub:dave?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&digits=5")
+        }
+        assertEquals("DIGITS_OUT_OF_RANGE", error.code)
+    }
+
+    @Test
     fun ignoresBlankLinesAndComments() {
         val text = "# comment\n\notpauth://totp/A:b?secret=${TestFixtures.SHA1_SEED}\n"
         val result = OtpAuthParser.parseList(text)

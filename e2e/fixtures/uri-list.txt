@@ -3,5 +3,8 @@ otpauth://totp/%E4%BC%81%E4%B8%9AVPN%3Aadmin?secret=3VEAS64Y6EOI6J4LVYCFHGUB37JB
 otpauth://totp/Cloudflare%3Auser%40example.com?secret=MFRGGZDFMZTWQ2LK&issuer=Cloudflare&period=15
 otpauth://totp/RFC6238%3Asha1%40test.invalid?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=RFC6238&digits=8
 otpauth://totp/RFC6238%3Asha256%40test.invalid?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA&issuer=RFC6238&algorithm=SHA256&digits=8
+otpauth://totp/Steam:steamuser?secret=OJ7I2APOUGXV5ZPCEFAUK2GBICSKW2H4&issuer=Steam
+otpauth://totp/Valve:valveuser?secret=DB2F7GGXX2QCR3OPIJATZ6TFLKLZ5NAA&issuer=Valve&steam
+otpauth://totp/AegisSteamRepo:aegisuser?secret=WGIDWQFEPZMQQFVSTVWM65MUWDXUS4PM&issuer=AegisSteamRepo&encoder=steam
 otpauth://hotp/LegacyHOTP:hotp-user?secret=NBXXI4BNOVZGSLLTNNUXA&counter=7
 otpauth://totp/BadUri:bad?secret=NOT-BASE32!

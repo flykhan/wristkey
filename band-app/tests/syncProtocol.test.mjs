@@ -359,3 +359,90 @@ test("buildAck and buildSyncRequest shapes", () => {
   assert.equal(typeof serialised, "string")
   assert.deepEqual(JSON.parse(serialised), request)
 })
+
+/* --------------------------------------------------------------------------
+ * Steam Guard through the v2 sync state machine
+ * ------------------------------------------------------------------------ */
+
+const STEAM_SECRET = "OJZ2BP7STWSLUD7I23Q5AYZELZB5OAFU"
+
+function steamAccountObject(id) {
+  return accountObject(id, {
+    issuer: "Steam",
+    accountName: "me",
+    secret: STEAM_SECRET,
+    otpType: "steam",
+    algorithm: "SHA1",
+    digits: 5,
+    period: 30
+  })
+}
+
+test("a Steam account is accepted and committed with otpType=steam", () => {
+  let state = createSyncState()
+  state = feed(state, beginMessage(SYNC_ID, 1)).state
+  const staged = feed(state, accountMessage(SYNC_ID, 0, steamAccountObject("s_steam")), T0 + 1)
+  assert.equal(staged.ignored, false)
+  assert.equal(staged.errors.length, 0)
+  assert.equal(staged.state.slots[0].otpType, "steam")
+  assert.equal(staged.state.slots[0].digits, 5)
+
+  const result = feed(staged.state, commitMessage(SYNC_ID, 1), T0 + 2)
+  assert.equal(result.ack.ok, true)
+  assert.equal(result.committed.accounts.length, 1)
+  assert.equal(result.committed.accounts[0].otpType, "steam")
+  assert.equal(result.committed.accounts[0].digits, 5)
+  assert.equal(result.committed.accounts[0].period, 30)
+  assert.equal(result.committed.accounts[0].algorithm, "SHA1")
+})
+
+test("Steam/TOTP mixed sync commits both account kinds", () => {
+  let state = createSyncState()
+  state = feed(state, beginMessage(SYNC_ID, 2)).state
+  state = feed(state, accountMessage(SYNC_ID, 0, steamAccountObject("s_steam")), T0 + 1).state
+  state = feed(state, accountMessage(SYNC_ID, 1, accountObject("s_totp")), T0 + 2).state
+  const result = feed(state, commitMessage(SYNC_ID, 2), T0 + 3)
+  assert.equal(result.ack.ok, true)
+  assert.deepEqual(
+    result.committed.accounts.map(account => account.otpType),
+    ["steam", "totp"]
+  )
+})
+
+test("invalid Steam field combinations are dropped and fail the commit", () => {
+  let state = createSyncState()
+  state = feed(state, beginMessage(SYNC_ID, 2)).state
+  state = feed(state, accountMessage(SYNC_ID, 0, steamAccountObject("s_steam")), T0 + 1).state
+
+  for (const [overrides, error] of [
+    [{ digits: 6 }, "account_invalid:steam_digits_invalid"],
+    [{ period: 60 }, "account_invalid:steam_period_invalid"],
+    [{ algorithm: "SHA256" }, "account_invalid:steam_algorithm_invalid"],
+    [{ otpType: "hotp" }, "account_invalid:otp_type_invalid"]
+  ]) {
+    const invalid = feed(
+      state,
+      accountMessage(SYNC_ID, 1, Object.assign(steamAccountObject("s_bad"), overrides)),
+      T0 + 2
+    )
+    assert.equal(invalid.ignored, true)
+    assert.ok(invalid.errors.includes(error), "expected " + error + " got " + invalid.errors)
+  }
+
+  // The valid Steam account is staged, but the second one never is.
+  const result = feed(state, commitMessage(SYNC_ID, 2), T0 + 3)
+  assert.equal(result.ack.ok, false)
+  assert.equal(result.ack.error, "incomplete_sync")
+})
+
+test("plain TOTP still rejects digits=5", () => {
+  let state = createSyncState()
+  state = feed(state, beginMessage(SYNC_ID, 1)).state
+  const invalid = feed(
+    state,
+    accountMessage(SYNC_ID, 0, accountObject("s_bad", { digits: 5 })),
+    T0 + 1
+  )
+  assert.equal(invalid.ignored, true)
+  assert.ok(invalid.errors.includes("account_invalid:digits_out_of_range"))
+})
