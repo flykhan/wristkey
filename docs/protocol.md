@@ -108,6 +108,25 @@
   但不参与新同步。
 - 版本升级：新增字段必须可选；破坏性变更提升 `version` 并在手环端保留旧版本解析分支。
 
+## 确定性约定（实现对齐）
+
+以下细节用于消除跨端歧义，手环端/手机端/测试必须一致：
+
+- **account.id**：手机端生成为 `"s_" + sha1(normalizedSecret) 十六进制前 12 位`，其中
+  `normalizedSecret` = 去空格、`-`、`=` 后转大写（与 Stratum 主键一致）。手环端只校验非空、≤64、
+  同轮唯一，不重新计算。
+- **快照顺序**：协议不保证账号顺序；跨端对拍用 **id 集合 + 字段值**，不比较数组下标。手环端 UI 自行
+  分组/排序（分类 → id）。
+- **空同步**：`begin{accountCount:0}` + `commit{accountCount:0}` 合法，手环写入空快照（清空全部账号）。
+- **重复 index**：同一轮内重复发送同一 index，后到者覆盖先到者（计入 `duplicate_index`，不视为失败）；
+  同一 `account.id` 出现在不同 index → 丢弃后到者。
+- **非法 begin**：`syncId` 为空/超长或 `accountCount` 非法（非 0–500 整数）→ 忽略该 begin，**保留**当前
+  staging 与已存快照；只有合法 begin 才重置 staging。
+- **失败 ack 原因码**：`no_active_begin` / `sync_id_mismatch` / `account_count_mismatch` /
+  `incomplete_sync`（均为提交后丢弃 staging、旧快照不变）。
+- **超时**：staging 超过 120 s 无新消息自动丢弃，不计入错误。
+
 ## 测试夹具
 
-`tools/fixtures/` 提供合法/非法消息样例与完整同步脚本，手环端/手机端/CLI 三端复用同一套 JSON。
+`tools/fixtures/` 与 `e2e/fixtures/` 提供合法/非法消息样例、加密备份与完整同步序列，
+手环端/手机端/CLI/QA 四端复用同一套 JSON。
