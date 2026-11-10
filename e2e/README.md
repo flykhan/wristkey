@@ -213,7 +213,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - band-app/dist/*.rpk 存在，manifest.package == com.flykhan.wristkey、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
 - Android APK 存在，包名 com.flykhan.wristkey、应用名 腕证；
-- 版本号：rpk 2.1.0 / versionCode 9（UI v4 + 协议 v3 + 持久化解锁会话 + 页面栈修复 + 包名迁移），APK 2.1.0 / versionCode 5（Android v2 重设计 + 入口图案）；
+- 版本号：rpk 2.1.1 / versionCode 10（v2.1.1 暂时关闭启动图案门禁，页面/协议代码保留），APK 2.1.1 / versionCode 6（同版号，便于两端配套）；
 - APK 无 INTERNET；权限列表仅允许 *DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
@@ -224,11 +224,12 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
   pages/picker/picker.ux 存在（标题“首字母筛选”、字母桶/全部/#）且 manifest 注册路由；
   band-app/tests 覆盖字母桶/筛选与分页（ACCOUNTS_PER_PAGE/paginate）；
 - **band UI v4 静态检查**（docs/design/ui-v4-analysis.md）：
-  入口 index push 锁屏、非入口页重锁、pages/lock/pages/pin 存在、5 位 TSC 图案与三色 #6EE7C7/#7AA2F7/#F2B880、
-  PBKDF2-SHA256 1200 次/16 B salt、失败 5 次锁 30 s 递增、只存派生值 + 锁计数持久化、
+  **v2.1.1 启动不强制图案**：app.ux 不含 /pages/lock、router.push、shouldRelock、loadPin；index 不含 ensureUnlocked；
+  pages/lock/pages/pin 与 5 位 TSC 图案、三色 #6EE7C7/#7AA2F7/#F2B880、PBKDF2-SHA256 1200 次/16 B salt、
+  失败 5 次锁 30 s 递增、只存派生值 + 锁计数持久化均保留（待后续恢复）、
   主界面 56px rail + 菜单 + 3 条/页、picker 4×4×3 分页、详情 username/password/code、
-  密码遮罩 10 s、菜单 4 项、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
-  **页面栈回归**：入口 push 锁屏、锁屏解锁 back，index/app.ux/所有页面均不含 router.replace；
+  密码遮罩 10 s、菜单 3 项（立即同步/关于/退出，入口密码暂时移除）、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
+  **页面栈回归**：所有页面不使用 router.replace；锁屏页保留 back 解锁；
 - **Android UI v4 静态检查**（docs/design/android-v2-spec.md）：
   PatternPin 5 位/TSC/PBKDF2 1200/16 B 随机 salt、入口图案设置页、set/clear/query pin、
   3 Tab、FAB + ModalBottomSheet、密码 10 s 遮罩、详情/入口图案卡、深色 token、

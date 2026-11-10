@@ -10,10 +10,10 @@ function read(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), "utf8")
 }
 
-test("manifest is 2.1.0 / versionCode 9 with lock and pin routes", () => {
+test("manifest is 2.1.1 / versionCode 10 and keeps lock and pin routes for later", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.1.0")
-  assert.equal(manifest.versionCode, 9)
+  assert.equal(manifest.versionName, "2.1.1")
+  assert.equal(manifest.versionCode, 10)
   assert.equal(manifest.package, "com.flykhan.wristkey")
   assert.equal(manifest.router.entry, "pages/index")
   for (const page of ["index", "lock", "pin", "detail", "picker", "menu", "copyright"]) {
@@ -27,18 +27,12 @@ test("manifest is 2.1.0 / versionCode 9 with lock and pin routes", () => {
   }
 })
 
-test("app.ux relocks on cold start / after idle without breaking the script wrapper", () => {
+test("app.ux no longer gates startup on the pattern lock (2.1.1)", () => {
   const source = read("src/app.ux")
   assert.match(source, /<script>/)
   assert.match(source, /export\s+default/)
-  assert.match(source, /pinSessionStore/)
-  assert.match(source, /clearSession\(/)
-  assert.doesNotMatch(source, /coldStartPending/)
-  assert.match(source, /shouldRelock\(Date\.now\(\)/)
-  assert.match(source, /loadPin\(/)
-  assert.match(source, /router\.push\(\{ uri: "\/pages\/lock" \}\)/)
-  assert.match(source, /\/pages\/lock/)
-  assert.match(source, /\/pages\/pin/)
+  assert.doesNotMatch(source, /pinSessionStore|shouldRelock|loadPin|router\.push/)
+  assert.doesNotMatch(source, /pages\/lock|pages\/pin/)
 })
 
 test("lock page renders T/S/C pattern and handles failures with persisted lock", () => {
@@ -80,8 +74,7 @@ test("index v4 rail exposes filter count, menu button and pin commands", () => {
   assert.match(source, /共 \{\{ filteredCount \}\} 个/)
   assert.match(source, /class="menu-button"/)
   assert.match(source, /onclick="openMenu"/)
-  assert.match(source, /pinSessionStore/)
-  assert.match(source, /ensureUnlocked/)
+  assert.doesNotMatch(source, /ensureUnlocked|shouldRelock/)
   assert.match(source, /applyPinCommand/)
   assert.match(source, /sendPinAck/)
   assert.match(source, /sendPinState/)
@@ -103,9 +96,9 @@ test("detail shows username and a 10s masked password row", () => {
   assert.match(source, /onHide\(\)/)
 })
 
-test("copyright page reports 2.1.0 with protocol v3", () => {
+test("copyright page reports 2.1.1 with protocol v3", () => {
   const source = read("src/pages/copyright/copyright.ux")
-  assert.match(source, /版本 2\.1\.0/)
+  assert.match(source, /版本 2\.1\.1/)
   assert.match(source, /协议 v3/)
   assert.match(source, /PBKDF2/)
 })

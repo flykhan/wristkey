@@ -67,7 +67,6 @@ import {
 } from "../../common/scripts/syncProtocol"
 import { loadPin, savePin, deletePin, saveLock } from "../../common/scripts/pinStore"
 import { resetLockState } from "../../common/scripts/pin"
-import { shouldRelock } from "../../common/scripts/pinSessionStore"
 import {
   ACCOUNTS_PER_PAGE,
   DARK_THEME,
@@ -112,16 +111,13 @@ export default {
   onShow() {
     this.loadTheme()
     this.loadLetterFilter()
-    // Only onShow decides whether to lock. Deciding in onInit as well would
-    // push two lock pages on a cold start and leave the page stack broken.
-    this.ensureUnlocked(() => {
-      if (!this.channelReady) {
-        this.channelReady = true
-        this.setupChannel()
-      }
-      this.loadSnapshot()
-      this.startTicker()
-    })
+    // The startup pattern gate is disabled in v2.1.1: show accounts directly.
+    if (!this.channelReady) {
+      this.channelReady = true
+      this.setupChannel()
+    }
+    this.loadSnapshot()
+    this.startTicker()
   },
 
   onHide() {
@@ -131,27 +127,6 @@ export default {
   onDestroy() {
     this.stopTicker()
     disconnect()
-  },
-
-  /* ---------------------------------------------------------------- lock */
-
-  ensureUnlocked(callback) {
-    loadPin(pin => {
-      if (!pin) {
-        callback()
-        return
-      }
-      shouldRelock(Date.now(), relock => {
-        if (relock) {
-          this.stopTicker()
-          // Push, never replace: index is the entry page, so unlocking can
-          // simply go back to the live index instance.
-          router.push({ uri: "/pages/lock" })
-          return
-        }
-        callback()
-      })
-    })
   },
 
   /* ---------------------------------------------------------------- data */

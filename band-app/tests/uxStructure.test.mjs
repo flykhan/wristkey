@@ -79,17 +79,20 @@ test("index is the v3 layout: no top bar, 3 rows, right letter rail", () => {
   assert.ok(source.includes("this.$app.exit"), "左滑应退出应用")
 })
 
-// Regression guard for the 2026-11-10 "pattern accepted but no next screen":
-// index used to replace itself with the lock page from BOTH onInit and onShow,
-// and the lock page replaced the stack with index. Vela ends up with an empty
-// page stack, so the app exits. Entry -> lock must be a push, unlock a back.
-test("entry page pushes the lock and the lock page goes back", () => {
-  const index = read("src/pages/index/index.ux")
-  assert.match(index, /router\.push\(\{ uri: "\/pages\/lock" \}\)/)
-  assert.doesNotMatch(index, /router\.replace\(\{ uri: "\/pages\/lock" \}\)/)
-  const onInitBlock = index.slice(index.indexOf("onInit()"), index.indexOf("onShow()"))
-  assert.doesNotMatch(onInitBlock, /ensureUnlocked|pages\/lock/, "onInit 不应再次触发锁屏")
+// 2.1.1 hotfix: the real device still failed to enter the app after the
+// pattern, so the startup gate is temporarily removed. The lock/pin pages and
+// protocol-v3 pin messages stay in the tree for a later release, but neither
+// app.ux nor index may push the lock page on launch.
+test("startup does not gate on the lock screen (2.1.1 hotfix)", () => {
+  const app = read("src/app.ux")
+  assert.doesNotMatch(app, /pinSessionStore|shouldRelock|loadPin|router\.push/)
+  assert.doesNotMatch(app, /pages\/lock|pages\/pin/)
 
+  const index = read("src/pages/index/index.ux")
+  assert.doesNotMatch(index, /ensureUnlocked|shouldRelock|pages\/lock/)
+
+  // The page stays reachable only through explicit navigation and still returns
+  // with back() when it is used again.
   const lock = read("src/pages/lock/lock.ux")
   assert.match(lock, /markUnlocked\([\s\S]*router\.back\(\)/)
   assert.doesNotMatch(lock, /router\.replace\(\{ uri: "\/pages\/index" \}\)/)
@@ -99,20 +102,19 @@ test("entry page pushes the lock and the lock page goes back", () => {
   }
 })
 
-test("menu exposes pin, sync, about and exit only", () => {
+test("menu exposes sync, about and exit only while the lock is disabled", () => {
   const source = read("src/pages/menu/menu.ux")
   assert.doesNotMatch(source, /openCategory|分类|toggleTheme|显示模式/)
-  assert.match(source, /入口密码/)
+  assert.doesNotMatch(source, /入口密码|openPin/)
   assert.match(source, /立即同步/)
   assert.match(source, /关于/)
-  assert.match(source, /openPin/)
   assert.match(source, /exitApp/)
 })
 
 test("picker page is registered and renders the 3-page 4x4 grid", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.1.0")
-  assert.equal(manifest.versionCode, 9)
+  assert.equal(manifest.versionName, "2.1.1")
+  assert.equal(manifest.versionCode, 10)
   assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
   assert.equal(manifest.router.pages["pages/picker"].component, "picker")
 

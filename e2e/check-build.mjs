@@ -30,11 +30,11 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'com.flykhan.wristkey';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 2.1.0（v2.0.2：入口页 push 锁屏、解锁 back，修复页面栈为空/退出）/ APK 2.1.0（v2 重设计 + 入口图案）
-const EXPECTED_BAND_VERSION = '2.1.0';
-const EXPECTED_BAND_VERSION_CODE = 9;
-const EXPECTED_APK_VERSION = '2.1.0';
-const EXPECTED_APK_VERSION_CODE = 5;
+// 版本：band .rpk 2.1.1（暂时移除启动图案门禁，页面与协议代码保留）/ APK 2.1.1（同步版号）
+const EXPECTED_BAND_VERSION = '2.1.1';
+const EXPECTED_BAND_VERSION_CODE = 10;
+const EXPECTED_APK_VERSION = '2.1.1';
+const EXPECTED_APK_VERSION_CODE = 6;
 const EXPECTED_BAND_RPK_NAME = 'com.flykhan.wristkey.release.' + EXPECTED_BAND_VERSION + '.rpk';
 
 const argv = process.argv.slice(2);
@@ -515,10 +515,16 @@ function checkBandUiV4() {
     }
   }
 
-  // 1) 冷启动锁屏：入口页 push /pages/lock，解锁 back；禁止 replace（会清空页面栈）
-  checkMarkers('UI v4 app.ux 冷启动锁屏跳转', appUx, [
-    '/pages/lock', 'router.push', 'shouldRelock', 'loadPin'
-  ]);
+  // 1) 2.1.1：启动不再强制图案。入口页不得 push 锁屏；锁屏/设置页保留待后续恢复。
+  const gateMarkers = ['/pages/lock', 'router.push', 'shouldRelock', 'loadPin'];
+  const gateLeft = gateMarkers.filter(function (marker) { return appUx.indexOf(marker) >= 0; });
+  if (gateLeft.length > 0) {
+    fail('UI v4 启动不强制图案（2.1.1）', 'app.ux 仍包含: ' + gateLeft.join(' / '));
+  } else if (indexUx.indexOf('ensureUnlocked') >= 0 || indexUx.indexOf('pages/lock') >= 0) {
+    fail('UI v4 启动不强制图案（2.1.1）', 'index.ux 仍在启动时跳转锁屏');
+  } else {
+    pass('UI v4 启动不强制图案（2.1.1）');
+  }
   if (appUx.indexOf('router.replace(') >= 0 || indexUx.indexOf('router.replace(') >= 0 || lockUx.indexOf('router.replace(') >= 0) {
     fail('UI v4 锁屏页面栈', '入口页/锁屏页不应使用 router.replace');
   } else {
@@ -582,10 +588,15 @@ function checkBandUiV4() {
     'PASSWORD_REVEAL_MS = 10000', '••••••••', '未导入密码'
   ]);
 
-  // 6) 菜单 4 项，分类入口彻底移除
-  checkMarkers('UI v4 菜单 4 项（入口密码/立即同步/关于/退出）', menuUx, [
-    '入口密码', '立即同步', '关于', '退出应用'
+  // 6) 2.1.1 菜单 3 项（入口密码暂时移除），分类入口彻底移除
+  checkMarkers('UI v4 菜单 3 项（立即同步/关于/退出）', menuUx, [
+    '立即同步', '关于', '退出应用'
   ]);
+  if (menuUx.indexOf('入口密码') >= 0 || menuUx.indexOf('openPin') >= 0) {
+    fail('UI v4 菜单不显示入口密码（2.1.1）', 'menu.ux 仍包含入口密码/openPin');
+  } else {
+    pass('UI v4 菜单不显示入口密码（2.1.1）');
+  }
 
   // 7) 协议 v3：password + pin 消息；存储键 mfa_snapshot_v3
   checkMarkers('UI v4 协议 v3 password 字段', protocolJs, [

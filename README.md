@@ -2,11 +2,12 @@
 
 在 **小米手环 10 Pro** 上离线查看 TOTP / Steam 验证码。手机端从 **Stratum**（stratum-auth，Aegis 分支）
 或 **Bitwarden** 未加密导出中导入 OTP，再通过小米穿戴服务同步到手环；手环端本地计算验证码，
-不依赖手机在线。v2.0 起支持 **5 位图形入口锁屏**、账号详情中的 **用户名/密码**、全屏字母网格筛选，
-手机 App 的界面与交互也做了完整重设计。
+不依赖手机在线。v2.0 起支持账号详情中的 **用户名/密码**、全屏字母网格筛选与手机 App 重设计；
+**v2.1.1 暂时关闭了启动时的 5 位图形图案门禁**（页面与协议代码保留，后续版本恢复）。
 
-> 状态：**v2.1.0** 已构建并通过全量自动化验收。包名统一为 **`com.flykhan.wristkey`**（域名 flykhan.com）。
-> 从 2.0.x 升级需**先卸载旧包名 `dev.wristkey.app` 的两端应用**，再安装 2.1.0；旧数据不会自动迁移。
+> 状态：**v2.1.1** 已构建并通过全量自动化验收。包名统一为 **`com.flykhan.wristkey`**（域名 flykhan.com）。
+> 从 2.0.x 升级需**先卸载旧包名 `dev.wristkey.app` 的两端应用**；从 2.1.0 升级可直接覆盖安装。
+> 2.1.1 的关键变化：**启动不再要求输入图案**（真机反馈输入后无法进入主界面），入口图案功能暂时下线。
 > 仓库：[github.com/flykhan/wristkey](https://github.com/flykhan/wristkey)；
 > 安装与同步流程见 [docs/build-install.md](docs/build-install.md)，日常使用见 [docs/usage.md](docs/usage.md)。
 
@@ -27,10 +28,10 @@
    同时导入用户名与密码；忽略文件夹/分类；
 3. **支持 TOTP 与 Steam Guard**：TOTP SHA1/256/512、6–10 位；Steam Guard 5 位字母数字（`otpType: "steam"`）；
 4. **协议 v3 分片同步**：begin/account×N/commit + ack/request，staging + 原子提交；密码字段、图案下发/查询；
-5. **手环 UI v4**：5 位图形锁屏（三角/方形/圆形）、每页 3 个大号验证码、右侧 A-Z 筛选 + 页码 + 菜单、
-   全屏 4×4×3 字母数字网格、详情页用户名/密码（10 秒遮罩显示）；
+5. **手环 UI v4**：每页 3 个大号验证码、右侧 A-Z 筛选 + 页码 + 菜单、全屏 4×4×3 字母数字网格、
+   详情页用户名/密码（10 秒遮罩显示）；5 位图形锁屏与设置页代码保留，2.1.1 起不拦截启动；
 6. **手机 App v2.0**：深色薄荷绿 3 Tab（账号/同步/设置）、大号验证码卡、导入预览、底部弹层详情、
-   全屏编辑器、入口图案双端设置。
+   全屏编辑器；入口图案设置页保留（2.1.1 暂不下发/不启用）。
 
 ## 架构
 
@@ -87,15 +88,15 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 | 手机端 `./gradlew testDebugUnitTest`（Stratum/Bitwarden、密码、TOTP/Steam、协议 v3、图案、合并） | **106/106** |
 | e2e Node 验证（跨实现加解密、协议回放、Bitwarden 映射、band 模块对拍、协议 v3/pin） | **171/171** |
 | e2e Python 独立验证（第三方实现解密 + RFC/Steam/Bitwarden/pin 向量） | **40/40** |
-| 构建 / 包名 / 版本 / 权限 / 签名 / UI v4 静态检查（`--build --with-tests`） | **82 PASS / 0 FAIL** |
+| 构建 / 包名 / 版本 / 权限 / 签名 / UI v4 静态检查（`--with-tests`） | **83 PASS / 0 FAIL** |
 | APK 与 .rpk 同证书 | ✅ `SHA-256 b7cfba…85c4`（= `signing/rpk-sign/certificate.pem` = rpk 内嵌 DER） |
-| 真机（安装、interconnect、xms、480×336 UI、锁屏/图案/详情密码） | **待验证**：v1.0 启动闪退与 Steam 问题已由真机反馈定位修复；v2.0 UI 待实拍 |
+| 真机（安装、interconnect、xms、480×336 UI、详情密码） | **待验证**：v1.0 启动闪退、Steam、入口图案问题均由真机反馈定位；2.1.1 已去掉启动门禁，待确认能直接进入主界面 |
 
 产物：
 
-- 手环：`band-app/dist/com.flykhan.wristkey.release.2.1.0.rpk`（114,661 B，sha256 `34e1fcd0fed80ffd1551bd749d93d4bffed30840bcc508ef3efd3302949aa2f0`，2.1.0 / versionCode 9）
-- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（26,492,673 B，sha256 `4c1647243fcd96aaebe474eb22ec6124936eb32c69d6c6d45d4fc344198f2676`，2.1.0 / versionCode 5，无 INTERNET 权限）
-- 发布归档：`releases/v2.1.0/` 与根目录 `成功/`（规范命名 + `SHA256SUMS`）
+- 手环：`band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk`（106,788 B，sha256 `d12d6615109b61b76d132b988299ab19ef6e6b4b419c76239ea1bb2c05b8ef95`，2.1.1 / versionCode 10）
+- 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（26,492,669 B，sha256 `87afa9d49ffa87cabd54fc36e688d0d7815c966073118c278da20b51f7741b0f`，2.1.1 / versionCode 6，无 INTERNET 权限）
+- 发布归档：`releases/v2.1.1/` 与根目录 `成功/`（规范命名 + `SHA256SUMS`）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
 ## 发布命名规范
@@ -103,7 +104,7 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 - **包名**：`com.flykhan.wristkey`（对应域名 flykhan.com；两端必须完全一致）；
 - **语义化版本**：`MAJOR.MINOR.PATCH`，三处同步修改：`band-app/package.json`、
   `band-app/src/manifest.json`、`android-app/app/build.gradle.kts`；
-- **Git 标签**：`v<version>`，例如 `v2.1.0`；
+- **Git 标签**：`v<version>`，例如 `v2.1.1`；
 - **GitHub Release 标题**：`WristKey v<version>`；
 - **Release 资产**（固定小写 kebab-case，带端与版本）：
   - `wristkey-band-v<version>.rpk`
@@ -113,7 +114,7 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 - **一键发布**：
 
 ```bash
-bash scripts/release.sh 2.1.0
+bash scripts/release.sh 2.1.1
 ```
 
 脚本会校验三处版本一致、跑两端测试、构建、重命名归档并生成 `SHA256SUMS`；
@@ -161,5 +162,9 @@ TOTP Secret 与账号密码等同于账号凭证。请仅在自己信任的设�
    两端版本升到 **2.1.0**（手环 versionCode 9 / 手机 versionCode 5），新增统一发布脚本与
    `wristkey-band-v<version>.rpk` / `wristkey-android-v<version>.apk` 命名规范。因包名变更，
    从 2.0.x 升级需卸载旧包后重装。
+9. **2026-11-10 v2.1.1：暂时去掉启动图案门禁**：用户真机反馈“输了密码还是打不开”。为避免继续阻塞
+   使用，`app.ux` 与入口页不再在启动时 push 锁屏，菜单移除“入口密码”；`pages/lock`、`pages/pin`、
+   pin 存储与协议 v3 pin 消息全部保留，待定位根因后恢复。手环 2.1.1 / versionCode 10，
+   手机 2.1.1 / versionCode 6；两端同包名同签名，可直接覆盖 2.1.0。
 
 详见 [reports/e2e-report.md](reports/e2e-report.md)。
