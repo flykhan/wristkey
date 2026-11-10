@@ -7,7 +7,9 @@ import {
   LIGHT_THEME,
   cyclePage,
   describeSync,
+  detailCodeFontSize,
   formatClock,
+  listCodeFontSize,
   paginate,
   parseDarkMode,
   progressColor,
@@ -25,23 +27,23 @@ test("parseDarkMode accepts the stored forms", () => {
   assert.equal(themeFor(false), LIGHT_THEME)
 })
 
-test("paginate returns three accounts per page and clamps the page", () => {
+test("paginate returns two accounts per page and clamps the page", () => {
   const items = Array.from({ length: 7 }, (_, index) => ({ id: String(index) }))
-  assert.equal(ACCOUNTS_PER_PAGE, 3)
+  assert.equal(ACCOUNTS_PER_PAGE, 2)
 
   const first = paginate(items, 0)
-  assert.deepEqual(first.items.map(item => item.id), ["0", "1", "2"])
-  assert.equal(first.pageCount, 3)
+  assert.deepEqual(first.items.map(item => item.id), ["0", "1"])
+  assert.equal(first.pageCount, 4)
   assert.equal(first.total, 7)
 
   const second = paginate(items, 1)
-  assert.deepEqual(second.items.map(item => item.id), ["3", "4", "5"])
+  assert.deepEqual(second.items.map(item => item.id), ["2", "3"])
 
-  const third = paginate(items, 2)
-  assert.deepEqual(third.items.map(item => item.id), ["6"])
-  assert.equal(third.page, 2)
+  const fourth = paginate(items, 3)
+  assert.deepEqual(fourth.items.map(item => item.id), ["6"])
+  assert.equal(fourth.page, 3)
 
-  assert.equal(paginate(items, 99).page, 2)
+  assert.equal(paginate(items, 99).page, 3)
   assert.equal(paginate(items, -5).page, 0)
 
   const empty = paginate([], 0)
@@ -50,6 +52,18 @@ test("paginate returns three accounts per page and clamps the page", () => {
   assert.equal(empty.total, 0)
 
   assert.equal(paginate(null, 0).total, 0)
+})
+
+test("code font sizes shrink for longer codes (no clipping)", () => {
+  assert.equal(listCodeFontSize("3DP36"), 44) // Steam 5 chars
+  assert.equal(listCodeFontSize("123 456"), 44)
+  assert.equal(listCodeFontSize("123 45678"), 38)
+  assert.equal(listCodeFontSize("123 4567890"), 32)
+  assert.equal(listCodeFontSize(""), 44)
+  assert.equal(detailCodeFontSize("3DP36"), 70)
+  assert.equal(detailCodeFontSize("123 456"), 70)
+  assert.equal(detailCodeFontSize("123 45678"), 58)
+  assert.equal(detailCodeFontSize("123 4567890"), 46)
 })
 
 test("cyclePage wraps in both directions", () => {

@@ -7,7 +7,9 @@
 
 export const THEME_STORAGE_KEY = "wristkey_dark_mode"
 export const CATEGORY_STORAGE_KEY = "wristkey_category"
-export const ACCOUNTS_PER_PAGE = 3
+// Two large cards per page: the 480x336 band screen is small, so prefer bigger
+// type and no clipped codes over showing three cramped rows.
+export const ACCOUNTS_PER_PAGE = 2
 export const DEFAULT_DARK_MODE = true
 
 export const LIGHT_THEME = {
@@ -44,6 +46,31 @@ export const DARK_THEME = {
   progressWarn: "#FFB74D",
   progressDanger: "#FF8A65",
   divider: "#22302C"
+}
+
+/**
+ * Pick a list-card code font size that fits the 480px-wide band screen without
+ * clipping. 6-digit TOTP / 5-char Steam get the largest size, 10-digit TOTP
+ * gets the smallest (still much larger than the old 30px).
+ */
+export function listCodeFontSize(groupedCode) {
+  return codeFontSizeFor(groupedCode, 44, 38, 32)
+}
+
+/** Detail screen code size (single large code, no neighbour cards). */
+export function detailCodeFontSize(groupedCode) {
+  return codeFontSizeFor(groupedCode, 70, 58, 46)
+}
+
+function codeFontSizeFor(groupedCode, short, medium, long) {
+  const length = String(groupedCode || "").replace(/\s/g, "").length
+  if (length <= 6) {
+    return short
+  }
+  if (length <= 8) {
+    return medium
+  }
+  return long
 }
 
 /** Interpret a stored dark-mode flag ("true"/"dark"/"1" mean dark). */

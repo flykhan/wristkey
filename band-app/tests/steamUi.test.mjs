@@ -32,11 +32,11 @@ test("detail page labels Steam Guard and its algorithm", () => {
   assert.match(source, /otpType === "steam"/)
 })
 
-test("manifest is 1.0.2 / versionCode 3 and keeps the required features", () => {
+test("manifest is 1.0.3 / versionCode 4 and keeps the required features", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
   assert.equal(manifest.package, "dev.wristkey.app")
-  assert.equal(manifest.versionName, "1.0.2")
-  assert.equal(manifest.versionCode, 3)
+  assert.equal(manifest.versionName, "1.0.3")
+  assert.equal(manifest.versionCode, 4)
   const features = (manifest.features || []).map(item => item.name)
   for (const required of ["system.router", "system.storage", "system.interconnect"]) {
     assert.ok(features.includes(required))

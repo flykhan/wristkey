@@ -30,9 +30,9 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'dev.wristkey.app';
 const TARGET_APP_NAME = '腕证';
-// Steam 修复版本（2026-11-10）：band .rpk 1.0.2 / APK 1.1
-const EXPECTED_BAND_VERSION = '1.0.2';
-const EXPECTED_BAND_VERSION_CODE = 3;
+// 版本：band .rpk 1.0.3（大字体 2 码/页）/ APK 1.1（Steam 修复）
+const EXPECTED_BAND_VERSION = '1.0.3';
+const EXPECTED_BAND_VERSION_CODE = 4;
 const EXPECTED_APK_VERSION = '1.1';
 const EXPECTED_APK_VERSION_CODE = 2;
 

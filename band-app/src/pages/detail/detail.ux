@@ -12,7 +12,7 @@
       </div>
 
       <div class="hero">
-        <text class="code" style="color: {{ theme.codeColor }}">{{ token.groupedCode }}</text>
+        <text class="code" style="color: {{ theme.codeColor }}; font-size: {{ token.codeFontSize }}px">{{ token.groupedCode }}</text>
         <div class="progress-track" style="background-color: {{ theme.progressTrack }}">
           <div class="progress-fill" style="width: {{ token.progress }}%; background-color: {{ progressColor }}"></div>
         </div>
@@ -43,6 +43,7 @@ import {
   DARK_THEME,
   DEFAULT_DARK_MODE,
   THEME_STORAGE_KEY,
+  detailCodeFontSize,
   parseDarkMode,
   progressColor,
   themeFor
@@ -126,6 +127,7 @@ export default {
         issuer: "未找到账号",
         accountName: "可能已被新的同步替换",
         groupedCode: "-- --",
+        codeFontSize: detailCodeFontSize("-- --"),
         code: "--",
         remaining: 0,
         progress: 0,
@@ -141,6 +143,7 @@ export default {
     }
 
     const token = buildTokenState(this.account, Date.now())
+    token.codeFontSize = detailCodeFontSize(token.groupedCode)
     this.token = token
     this.progressColor = progressColor(token.remaining, this.theme)
     const isSteam = token.otpType === "steam"
@@ -154,8 +157,7 @@ export default {
         value: isSteam ? "SHA1 · 5 位字母数字" : token.algorithm + " · " + token.digits + " 位"
       },
       { label: "周期", value: token.period + " 秒" },
-      { label: "密钥", value: maskSecret(this.account.secret) },
-      { label: "状态", value: "本地离线计算" }
+      { label: "密钥", value: maskSecret(this.account.secret) }
     ]
   },
 
@@ -192,10 +194,11 @@ export default {
 </script>
 
 <style>
+/* 480 x 336 detail screen: bigger issuer / code / labels, no clipped content. */
 .page {
   width: 100%;
   height: 100%;
-  padding: 8px;
+  padding: 6px;
   flex-direction: column;
   background-color: #000000;
 }
@@ -203,7 +206,7 @@ export default {
 .card {
   width: 100%;
   height: 100%;
-  padding: 10px 16px 8px;
+  padding: 8px 16px 8px;
   flex-direction: column;
   border-radius: 22px;
   background-color: #0b0f0e;
@@ -211,7 +214,7 @@ export default {
 
 .header {
   width: 100%;
-  height: 42px;
+  height: 52px;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
@@ -224,30 +227,30 @@ export default {
 }
 
 .issuer {
-  font-size: 21px;
+  font-size: 26px;
   font-weight: bold;
   lines: 1;
   text-overflow: ellipsis;
 }
 
 .account {
-  margin-top: 1px;
-  font-size: 13px;
+  margin-top: 2px;
+  font-size: 16px;
   lines: 1;
   text-overflow: ellipsis;
 }
 
 .back-button {
-  width: 56px;
-  height: 30px;
+  width: 60px;
+  height: 32px;
   margin-left: 8px;
-  border-radius: 11px;
+  border-radius: 12px;
   align-items: center;
   justify-content: center;
 }
 
 .back-text {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: bold;
 }
 
@@ -260,7 +263,6 @@ export default {
 
 .code {
   width: 100%;
-  font-size: 56px;
   font-weight: bold;
   text-align: center;
   lines: 1;
@@ -268,14 +270,14 @@ export default {
 }
 
 .progress-track {
-  width: 70%;
-  height: 3px;
-  margin-top: 2px;
+  width: 80%;
+  height: 4px;
+  margin-top: 4px;
   border-radius: 2px;
 }
 
 .progress-fill {
-  height: 3px;
+  height: 4px;
   border-radius: 2px;
   transition-property: width, background-color;
   transition-duration: 1000ms;
@@ -284,36 +286,36 @@ export default {
 
 .countdown {
   margin-top: 4px;
-  font-size: 15px;
+  font-size: 18px;
   text-align: center;
 }
 
 .rows {
   flex: 1;
   width: 100%;
-  margin-top: 6px;
-  padding-top: 4px;
+  margin-top: 8px;
   flex-direction: column;
   justify-content: center;
 }
 
 .row {
   width: 100%;
-  height: 24px;
+  height: 22px;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
 }
 
 .label {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .value {
   width: 64%;
-  font-size: 14px;
+  font-size: 15px;
   text-align: right;
   lines: 1;
   text-overflow: ellipsis;
 }
 </style>
+

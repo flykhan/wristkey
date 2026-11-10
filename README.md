@@ -20,7 +20,9 @@
 1. **导入 Stratum 备份**：支持 Strong（Argon2id + AES-256-GCM）、Legacy（PBKDF2-SHA1 + AES-256-CBC）、
    明文 JSON 备份、`otpauth://` 文本列表；
 2. **支持 TOTP 与 Steam Guard**：TOTP SHA1/256/512、6–10 位；Steam Guard 5 位字母数字（`otpType: "steam"`）；
-3. **把快照分片传输**：手环端做 staging + commit，避免消息大小/丢包问题，并返回 ack。
+3. **把快照分片传输**：手环端做 staging + commit，避免消息大小/丢包问题，并返回 ack；
+4. **按 480×336 手环屏优化显示**：每页 2 个账号、大号 issuer/账号/验证码，长码自动缩小字号，
+   码与信息各占固定区域，不遮挡、不裁切。
 
 ## 架构
 
@@ -68,7 +70,7 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 
 | 检查 | 结果 |
 | --- | --- |
-| 手环端 `npm test`（TOTP/Steam 向量、协议状态机、模型边界、ux 结构回归） | **69/69** |
+| 手环端 `npm test`（TOTP/Steam 向量、协议状态机、模型边界、ux 结构、分页/字号回归） | **70/70** |
 | 手机端 `./gradlew testDebugUnitTest`（Stratum 解密/映射、TOTP/Steam、协议、合并） | **72/72** |
 | e2e Node 验证（跨实现加解密、协议回放、非法用例、band 模块对拍、Steam 向量） | **145/145** |
 | e2e Python 独立验证（第三方实现解密 + RFC/Steam 向量） | **24/24** |
@@ -79,7 +81,7 @@ cd android-app && ./gradlew assembleDebug                      # 产物 app/buil
 
 产物：
 
-- 手环：`band-app/dist/dev.wristkey.app.release.1.0.2.rpk`（约 55 KB，versionCode 3）
+- 手环：`band-app/dist/dev.wristkey.app.release.1.0.3.rpk`（约 56 KB，versionCode 4，大字体 2 码/页）
 - 手机：`android-app/app/build/outputs/apk/release/app-release.apk`（约 25 MB，v1.1 / versionCode 2）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
@@ -105,5 +107,8 @@ TOTP Secret 等同于账号凭证。请仅在自己信任的设备上使用；�
    （备份 `Type=4` 被跳过；URI 列表里 `otpauth://totp/Steam:...` 无标记时被当作 TOTP）。
    已按 `otpType="steam"` 实现 5 位字母数字码（固定 SHA1/30s/字母表），修复并发布
    **手环 v1.0.2（versionCode 3） + 手机 APK v1.1（versionCode 2）**；Steam 6 组向量两端均验证通过。
+3. **2026-11-10 手环字体过小 / 一页放不下**：真机反馈字体偏小、3 行拥挤。改为 **每页 2 个大卡片**，
+   issuer 26px、验证码 44px（8 位 38px / 10 位 32px）、账号 16px，验证码列固定 236px 宽并随长度缩字号，
+   header/status/footer 固定高度，主要信息不被遮挡或裁切；发布 **手环 v1.0.3（versionCode 4）**。
 
-详见 [reports/e2e-report.md](reports/e2e-report.md) 第 10/11 节。
+详见 [reports/e2e-report.md](reports/e2e-report.md) 第 10/11/12 节。

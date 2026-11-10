@@ -241,3 +241,25 @@ e2e verify 145 项、Python 24 项、check-signing）。关键退出码均为 0�
 - e2e/README.md：夹具/框架用法、Steam 规则、覆盖矩阵、确定性约定；
 - e2e/verify-result.json：Node 145 项逐条结果；
 - reports/e2e-build-result.json：构建检查 29 项逐条结果。
+
+---
+
+## 12. 手环 UI 可读性改版（v1.0.3，真机反馈）
+
+真机反馈「字体太小、一页三个太挤」，按 480×336 屏重排：
+
+- 每页账号数 3 → **2**（`ACCOUNTS_PER_PAGE=2`，`tests/settings.test.mjs` 同步更新）；
+- 字号：标题 28px、issuer **26px**、账号 **16px**、验证码 **44px**（8 位 38px / 10 位 32px）、剩余时间 15px；
+- 验证码列固定 **236px** 宽并右对齐，按码长自动缩字号（`listCodeFontSize`），6/8/10 位与 Steam 5 位均不裁切；
+- header 56px / status 24px / footer 20px 固定高度，list 用 flex 平分，信息区与码区同行但各占固定宽度，
+  长 issuer/账号单行省略号，**不遮挡、不溢出**；
+- 详情页同步放大：issuer 26px、验证码 70px（8 位 58 / 10 位 46）、标签 15px；行数 6 → 5 避免溢出；
+- 新增回归测试：`listCodeFontSize`/`detailCodeFontSize` 阈值、分页 2/页、manifest 版本；
+- 版本 **1.0.3 / versionCode 4**；`npm test` **70/70**；Lead 复跑 `node e2e/check-build.mjs --build --with-tests`
+  **29 PASS / 0 FAIL / 0 SKIP**（重建 rpk 1.0.3 + APK 1.1，双端测试、包名、版本、签名全绿）；
+  `scripts/check-signing.sh` PASS。
+
+产物：`band-app/dist/dev.wristkey.app.release.1.0.3.rpk`，57,068 B，
+sha256 `0aad432d2130ac17b7eed2f3c230454872fd4e12e319332318fb137de0964725`。
+
+> 行高/字号按 Vela CSS 常见 1.2 倍行高估算并通过构建；实际观感需真机确认（无渲染单测）。
