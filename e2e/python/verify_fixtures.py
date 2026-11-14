@@ -576,7 +576,7 @@ PROTOCOL_V3 = 3
 PROTOCOL_V2 = 2
 MAX_MESSAGE_BYTES = 1024
 PIN_ALGORITHM = "PBKDF2-SHA256"
-PIN_ITERATIONS = 1200
+PIN_ITERATIONS = 10
 PIN_PATTERN = "TSCCT"
 
 
@@ -672,7 +672,7 @@ def _protocol_v3_pin(document):
         raise AssertionError("pin_set.pin 载荷与 expected 不一致")
     if not (len(PIN_PATTERN) == 5 and all(ch in "TSC" for ch in PIN_PATTERN)):
         raise AssertionError("图案应为 5 位 T/S/C")
-    return "PBKDF2-SHA256 1200 次复算一致"
+    return "PBKDF2-SHA256 10 次复算一致"
 
 
 def _protocol_v3_pin_messages(document):

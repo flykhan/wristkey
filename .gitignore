@@ -31,3 +31,6 @@ android-app/captures/
 .idea/
 .vscode/
 .DS_Store
+
+# local VVD debug helpers
+band-app/.tmp-*

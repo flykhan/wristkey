@@ -19,7 +19,7 @@ class PinProtocolTest {
 
     @Test
     fun pinSetCarriesDerivedPayloadOnly() {
-        val message = SyncProtocol.buildPinSet(saltHex, hashHex, 1200, sentAt = now)
+        val message = SyncProtocol.buildPinSet(saltHex, hashHex, 10, sentAt = now)
         val json = JSONObject(message)
 
         assertEquals(SyncProtocol.TYPE_PIN_SET, json.getString("type"))
@@ -29,7 +29,7 @@ class PinProtocolTest {
         assertEquals("PBKDF2-SHA256", pin.getString("algorithm"))
         assertEquals(saltHex, pin.getString("salt"))
         assertEquals(hashHex, pin.getString("hash"))
-        assertEquals(1200, pin.getInt("iterations"))
+        assertEquals(10, pin.getInt("iterations"))
         // 消息里绝不能出现图案明文。
         assertFalse(message.contains("TSCSC"))
         assertTrue(SyncProtocol.messageBytes(message) <= SyncProtocol.MAX_MESSAGE_BYTES)
@@ -38,13 +38,13 @@ class PinProtocolTest {
     @Test
     fun pinSetRejectsInvalidPayloads() {
         assertThrows(IllegalArgumentException::class.java) {
-            SyncProtocol.buildPinSet("bad-salt", hashHex, 1200, sentAt = now)
+            SyncProtocol.buildPinSet("bad-salt", hashHex, 10, sentAt = now)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            SyncProtocol.buildPinSet(saltHex, "bad-hash", 1200, sentAt = now)
+            SyncProtocol.buildPinSet(saltHex, "bad-hash", 10, sentAt = now)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            SyncProtocol.buildPinSet(saltHex, hashHex, 999, sentAt = now)
+            SyncProtocol.buildPinSet(saltHex, hashHex, 0, sentAt = now)
         }
     }
 

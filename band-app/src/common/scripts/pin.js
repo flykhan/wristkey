@@ -5,7 +5,7 @@
  * C circle). Only a PBKDF2-HMAC-SHA256 derived value is ever persisted:
  *
  *   wristkey_pin_v1      {"salt":"<32 hex>","hash":"<64 hex>",
- *                         "iterations":1200,"updatedAt":<ms>}
+ *                         "iterations":10,"updatedAt":<ms>}
  *   wristkey_pin_lock_v1 {"failures":<n>,"lockedUntil":<ms>,"updatedAt":<ms>}
  *
  * The lock counters are persisted too, otherwise killing the app would reset
@@ -28,8 +28,13 @@ export const PATTERN_SYMBOLS = [
 export const PATTERN_SYMBOL_KEYS = ["T", "S", "C"]
 
 export const PBKDF2_ALGORITHM = "PBKDF2-SHA256"
-export const DEFAULT_PBKDF2_ITERATIONS = 1200
-export const MIN_PBKDF2_ITERATIONS = 1000
+// Vela's JS engine has no JIT and PBKDF2-SHA256 costs roughly 25 ms per
+// iteration on the band (1200 iterations blocked the UI for > 30 s). The
+// pattern space is only 3^5 = 243 and the real defence against guessing is the
+// persisted 5-attempt lockout below, so keep the derivation deliberately cheap
+// (10 iterations) and document the trade-off in docs/security.md.
+export const DEFAULT_PBKDF2_ITERATIONS = 10
+export const MIN_PBKDF2_ITERATIONS = 1
 export const MAX_PBKDF2_ITERATIONS = 20000
 export const SALT_BYTES = 16
 export const HASH_BYTES = 32

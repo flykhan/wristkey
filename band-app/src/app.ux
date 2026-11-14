@@ -1,7 +1,9 @@
 <script>
-// v2.1.1: the startup pattern gate is temporarily disabled. The lock/pin
-// pages and protocol v3 pin messages are kept for a later release, but the
-// app entry never pushes the lock page and never re-locks on resume.
+// v2.1.2: the startup gate lives inside pages/index as a conditionally
+// rendered lock view, not as a pushed route. Pushing/backing a separate lock
+// page left an empty page stack on Vela ("PageNavigator getState error: empty
+// stack!"), which killed the app right after the pattern was accepted. app.ux
+// intentionally does nothing: index owns cold-start lock and 2 minute relock.
 export default {
   onCreate() {},
   onShow() {},

@@ -118,12 +118,12 @@ Stratum 的 `SteamOtp` 一致：
 ```json
 { "type": "mfa_pin_set", "version": 3, "sentAt": 1760000000020,
   "pin": { "algorithm": "PBKDF2-SHA256", "salt": "0123456789abcdef0123456789abcdef",
-           "hash": "64 位小写十六进制", "iterations": 1200 } }
+           "hash": "64 位小写十六进制", "iterations": 10 } }
 ```
 
 - `salt`：16 字节随机盐，32 位小写十六进制。
 - `hash`：PBKDF2-HMAC-SHA256(图案规范串, salt, iterations) 的 32 字节结果，64 位小写十六进制。
-- `iterations`：1000–20000 的整数，当前两端默认 `1200`（手环端纯 JS 计算需保持 < 1 s）。
+- `iterations`：1–20000 的整数，当前两端默认 `10`。手环端是纯 JS 且 Vela 引擎无 JIT，实测 1200 轮会让 UI 阻塞 30 s 以上；图案空间仅 3^5=243，真正防护是 5 次失败锁定与递增，因此派生保持廉价（见 `docs/security.md` 威胁模型）。
 - 手环端校验失败（格式/范围不对）→ 回复 `mfa_pin_ack{ok:false,error:"invalid_pin_payload"}`，旧图案不变。
 - 成功 → 原子写入 `wristkey_pin_v1`，回复 `mfa_pin_ack{ok:true,enabled:true}`，并向手机广播 `mfa_pin_state`。
 

@@ -10,9 +10,13 @@
         <text class="option-title" style="color: {{ theme.title }}">立即同步</text>
         <text class="option-value" style="color: {{ theme.secondary }}">{{ requestLabel }}</text>
       </div>
+      <div class="option" onclick="openPin" style="background-color: {{ theme.cardBackground }}">
+        <text class="option-title" style="color: {{ theme.title }}">入口密码</text>
+        <text class="option-value" style="color: {{ theme.secondary }}">{{ pinLabel }}</text>
+      </div>
       <div class="option" onclick="openCopyright" style="background-color: {{ theme.cardBackground }}">
         <text class="option-title" style="color: {{ theme.title }}">关于</text>
-        <text class="option-value" style="color: {{ theme.secondary }}">版本 2.1.1 · Apache-2.0</text>
+        <text class="option-value" style="color: {{ theme.secondary }}">版本 2.1.2 · Apache-2.0</text>
       </div>
       <div class="option" onclick="exitApp" style="background-color: {{ theme.cardBackground }}">
         <text class="option-title exit-text" style="color: {{ theme.progressDanger }}">退出应用</text>
@@ -28,6 +32,7 @@
 import router from "@system.router"
 import storage from "@system.storage"
 import { requestSync as requestPhoneSync } from "../../common/scripts/interconnect"
+import { loadPin } from "../../common/scripts/pinStore"
 import {
   DARK_THEME,
   DEFAULT_DARK_MODE,
@@ -40,15 +45,18 @@ export default {
   private: {
     theme: DARK_THEME,
     requestLabel: "推送到手环",
+    pinLabel: "未开启",
     requestTimer: null
   },
 
   onInit() {
     this.loadSettings()
+    this.loadPinState()
   },
 
   onShow() {
     this.loadSettings()
+    this.loadPinState()
   },
 
   onHide() {
@@ -97,6 +105,16 @@ export default {
       clearTimeout(this.requestTimer)
       this.requestTimer = null
     }
+  },
+
+  loadPinState() {
+    loadPin(record => {
+      this.pinLabel = record ? "已开启 · 点击修改" : "未开启 · 点击设置"
+    })
+  },
+
+  openPin() {
+    router.push({ uri: "/pages/pin" })
   },
 
   openCopyright() {

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-10T14:56:15.390Z",
+  "generatedAt": "2026-11-14T03:47:26.935Z",
   "node": "v22.22.2",
   "platform": "linux x64",
   "flags": {
@@ -7,14 +7,14 @@
     "withTests": true
   },
   "artifacts": {
-    "rpk": "band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk",
+    "rpk": "band-app/dist/com.flykhan.wristkey.release.2.1.2.rpk",
     "apk": "android-app/app/build/outputs/apk/release/app-release.apk"
   },
   "summary": {
-    "passed": 83,
+    "passed": 82,
     "failed": 0,
     "skipped": 0,
-    "total": 83
+    "total": 82
   },
   "checks": [
     {
@@ -74,13 +74,13 @@
     {
       "name": "band-app dist/*.rpk 存在",
       "status": "PASS",
-      "detail": "band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk (106788B)",
+      "detail": "band-app/dist/com.flykhan.wristkey.release.2.1.2.rpk (109130B)",
       "command": ""
     },
     {
       "name": "band-app release rpk 文件名",
       "status": "PASS",
-      "detail": "com.flykhan.wristkey.release.2.1.1.rpk",
+      "detail": "com.flykhan.wristkey.release.2.1.2.rpk",
       "command": ""
     },
     {
@@ -98,13 +98,13 @@
     {
       "name": "rpk versionName",
       "status": "PASS",
-      "detail": "2.1.1",
+      "detail": "2.1.2",
       "command": ""
     },
     {
       "name": "rpk versionCode",
       "status": "PASS",
-      "detail": "10",
+      "detail": "11",
       "command": ""
     },
     {
@@ -210,19 +210,13 @@
       "command": ""
     },
     {
-      "name": "UI v4 启动不强制图案（2.1.1）",
+      "name": "UI v4 入口图案内联在 index（2.1.2）",
       "status": "PASS",
       "detail": "",
       "command": ""
     },
     {
-      "name": "UI v4 锁屏页面栈",
-      "status": "PASS",
-      "detail": "",
-      "command": ""
-    },
-    {
-      "name": "UI v4 锁屏页 pages/lock",
+      "name": "UI v4 锁屏不破坏页面栈",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -246,7 +240,7 @@
       "command": ""
     },
     {
-      "name": "UI v4 PBKDF2-SHA256 1200 次 + 16 字节 salt",
+      "name": "UI v4 PBKDF2-SHA256 10 次（Vela 无 JIT）+ 16 字节 salt",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -300,13 +294,13 @@
       "command": ""
     },
     {
-      "name": "UI v4 菜单 3 项（立即同步/关于/退出）",
+      "name": "UI v4 菜单 4 项（入口密码/立即同步/关于/退出）",
       "status": "PASS",
       "detail": "",
       "command": ""
     },
     {
-      "name": "UI v4 菜单不显示入口密码（2.1.1）",
+      "name": "UI v4 菜单无分类入口",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -380,13 +374,13 @@
     {
       "name": "APK versionName",
       "status": "PASS",
-      "detail": "2.1.1",
+      "detail": "2.1.2",
       "command": ""
     },
     {
       "name": "APK versionCode",
       "status": "PASS",
-      "detail": "6",
+      "detail": "7",
       "command": ""
     },
     {
@@ -408,7 +402,7 @@
       "command": ""
     },
     {
-      "name": "Android v4 PatternPin PBKDF2 1200 次 + 16 字节 salt",
+      "name": "Android v4 PatternPin PBKDF2 10 次 + 16 字节 salt",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -474,7 +468,7 @@
       "command": ""
     },
     {
-      "name": "Android v4 单测覆盖 derive/1200/mfa_pin",
+      "name": "Android v4 单测覆盖 derive/10/mfa_pin",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -500,14 +494,14 @@
     {
       "name": "RPK 内嵌证书 DER",
       "status": "PASS",
-      "detail": "命中 offset 102762",
+      "detail": "命中 offset 105104",
       "command": ""
     },
     {
       "name": "scripts/check-signing.sh",
       "status": "PASS",
       "detail": "PASS: 包名 com.flykhan.wristkey，APK 与 RPK 使用同一证书（SHA-256 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4）",
-      "command": "bash scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.apk band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk"
+      "command": "bash scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.apk band-app/dist/com.flykhan.wristkey.release.2.1.2.rpk"
     },
     {
       "name": "APK 与 RPK 包名一致",

@@ -535,7 +535,7 @@ async function main() {
 
   const pinMessages = buildPinMessages();
   writeJson(join(v3Dir, 'pin-set.json'), {
-    description: '合法 mfa_pin_set：PBKDF2-SHA256、salt 32 hex、hash 64 hex、iterations 1200；手环 ack 成功并广播 enabled=true',
+    description: '合法 mfa_pin_set：PBKDF2-SHA256、salt 32 hex、hash 64 hex、iterations 10；手环 ack 成功并广播 enabled=true',
     pattern: PIN_PATTERN,
     pin: {
       algorithm: PIN_ALGORITHM,
@@ -635,12 +635,12 @@ async function main() {
       Object.assign({}, validPinPayload, { hash: PIN_HASH.toUpperCase() })) },
     { name: 'hash-non-hex', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
       Object.assign({}, validPinPayload, { hash: 'g'.repeat(64) })) },
-    { name: 'iterations-999', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
-      Object.assign({}, validPinPayload, { iterations: 999 })) },
+    { name: 'iterations-0', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
+      Object.assign({}, validPinPayload, { iterations: 0 })) },
     { name: 'iterations-20001', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
       Object.assign({}, validPinPayload, { iterations: 20001 })) },
     { name: 'iterations-fraction', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
-      Object.assign({}, validPinPayload, { iterations: 1200.5 })) },
+      Object.assign({}, validPinPayload, { iterations: 10.5 })) },
     { name: 'version-2-set', expected: { status: 'rejected', error: 'invalid_version' }, message: rawPinSet(validPinPayload, 2) },
     { name: 'version-2-query', expected: { status: 'rejected', error: 'invalid_version' }, message: {
       type: 'mfa_pin_query', version: 2, sentAt: PIN_NOW, requestId: 'legacy-query'

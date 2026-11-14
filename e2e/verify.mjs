@@ -1525,12 +1525,12 @@ async function main() {
   const invalidPinFixture = readJson(join(v3Dir, 'invalid-pin.json'));
   const pinNow = pinSetFixture.expected.stored.updatedAt;
 
-  r.test('pin_set 夹具：pattern/SHA-256 hash/32+64 hex/iterations 1200，消息 <1KB', function () {
+  r.test('pin_set 夹具：pattern/SHA-256 hash/32+64 hex/iterations 10，消息 <1KB', function () {
     const pin = pinSetFixture.pin;
     assertEqual(pin.algorithm, 'PBKDF2-SHA256');
     assertEqual(pin.salt.length, 32);
     assertEqual(pin.hash.length, 64);
-    assertEqual(pin.iterations, 1200);
+    assertEqual(pin.iterations, 10);
     assert(protocol.validatePinPattern(pinSetFixture.pattern).ok);
     assertEqual(
       protocol.derivePinHash(pinSetFixture.pattern, pin.salt, pin.iterations),

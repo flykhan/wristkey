@@ -79,33 +79,43 @@ test("index is the v3 layout: no top bar, 3 rows, right letter rail", () => {
   assert.ok(source.includes("this.$app.exit"), "左滑应退出应用")
 })
 
-// 2.1.1 hotfix: the real device still failed to enter the app after the
-// pattern, so the startup gate is temporarily removed. The lock/pin pages and
-// protocol-v3 pin messages stay in the tree for a later release, but neither
-// app.ux nor index may push the lock page on launch.
-test("startup does not gate on the lock screen (2.1.1 hotfix)", () => {
+// 2.1.2: the gate is an inline view inside pages/index. The previous design
+// pushed pages/lock and returned with router.back(); on Vela a cold start made
+// index push the lock twice and the resulting empty page stack crashed with
+// "PageNavigator getState error: empty stack!" right after the pattern was
+// accepted. The lock must never be a route again.
+test("index gates startup inline without touching the router page stack (2.1.2)", () => {
+  const index = read("src/pages/index/index.ux")
+  assert.match(index, /if="\{\{ locked \}\}"/, "index 应内联渲染锁屏视图")
+  assert.match(index, /if="\{\{ mainVisible \}\}"/, "主界面应与锁屏条件互斥")
+  assert.match(index, /coldStart/)
+  assert.match(index, /shouldRelock\(Date\.now\(\)/)
+  assert.match(index, /markUnlocked\(Date\.now\(\)/)
+  assert.match(index, /verifyPattern/)
+  assert.match(index, /nextLockAfterFailure/)
+  assert.match(index, /onclick="tapLockSymbol\(\$item\.key\)"/)
+  assert.doesNotMatch(index, /ensureUnlocked|pages\/lock/)
+
   const app = read("src/app.ux")
-  assert.doesNotMatch(app, /pinSessionStore|shouldRelock|loadPin|router\.push/)
+  assert.doesNotMatch(app, /pinSessionStore|shouldRelock|loadPin|router\./)
   assert.doesNotMatch(app, /pages\/lock|pages\/pin/)
 
-  const index = read("src/pages/index/index.ux")
-  assert.doesNotMatch(index, /ensureUnlocked|shouldRelock|pages\/lock/)
-
-  // The page stays reachable only through explicit navigation and still returns
-  // with back() when it is used again.
-  const lock = read("src/pages/lock/lock.ux")
-  assert.match(lock, /markUnlocked\([\s\S]*router\.back\(\)/)
-  assert.doesNotMatch(lock, /router\.replace\(\{ uri: "\/pages\/index" \}\)/)
+  // 2.1.1 bug: onShow set channelReady = true and then called setupChannel(),
+  // whose first line early-returns when channelReady is already true, so the
+  // xms channel was never connected.
+  assert.doesNotMatch(index, /this\.channelReady = true\s*\n\s*this\.setupChannel\(\)/)
 
   for (const file of ["src/app.ux", ...pageFiles()]) {
     assert.doesNotMatch(read(file), /router\.replace\(/, file + " 不应使用 router.replace")
   }
 })
 
-test("menu exposes sync, about and exit only while the lock is disabled", () => {
+test("menu exposes sync, entry password, about and exit", () => {
   const source = read("src/pages/menu/menu.ux")
   assert.doesNotMatch(source, /openCategory|分类|toggleTheme|显示模式/)
-  assert.doesNotMatch(source, /入口密码|openPin/)
+  assert.match(source, /入口密码/)
+  assert.match(source, /onclick="openPin"/)
+  assert.match(source, /pages\/pin/)
   assert.match(source, /立即同步/)
   assert.match(source, /关于/)
   assert.match(source, /exitApp/)
@@ -113,8 +123,8 @@ test("menu exposes sync, about and exit only while the lock is disabled", () => 
 
 test("picker page is registered and renders the 3-page 4x4 grid", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.1.1")
-  assert.equal(manifest.versionCode, 10)
+  assert.equal(manifest.versionName, "2.1.2")
+  assert.equal(manifest.versionCode, 11)
   assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
   assert.equal(manifest.router.pages["pages/picker"].component, "picker")
 

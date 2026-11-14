@@ -10,10 +10,10 @@ function read(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), "utf8")
 }
 
-test("manifest is 2.1.1 / versionCode 10 and keeps lock and pin routes for later", () => {
+test("manifest is 2.1.2 / versionCode 11 and keeps the pin route", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.1.1")
-  assert.equal(manifest.versionCode, 10)
+  assert.equal(manifest.versionName, "2.1.2")
+  assert.equal(manifest.versionCode, 11)
   assert.equal(manifest.package, "com.flykhan.wristkey")
   assert.equal(manifest.router.entry, "pages/index")
   for (const page of ["index", "lock", "pin", "detail", "picker", "menu", "copyright"]) {
@@ -27,7 +27,7 @@ test("manifest is 2.1.1 / versionCode 10 and keeps lock and pin routes for later
   }
 })
 
-test("app.ux no longer gates startup on the pattern lock (2.1.1)", () => {
+test("app.ux leaves the startup gate to index (2.1.2)", () => {
   const source = read("src/app.ux")
   assert.match(source, /<script>/)
   assert.match(source, /export\s+default/)
@@ -74,7 +74,9 @@ test("index v4 rail exposes filter count, menu button and pin commands", () => {
   assert.match(source, /共 \{\{ filteredCount \}\} 个/)
   assert.match(source, /class="menu-button"/)
   assert.match(source, /onclick="openMenu"/)
-  assert.doesNotMatch(source, /ensureUnlocked|shouldRelock/)
+  assert.doesNotMatch(source, /ensureUnlocked|pages\/lock/)
+  assert.match(source, /shouldRelock/)
+  assert.match(source, /if="\{\{ locked \}\}"/)
   assert.match(source, /applyPinCommand/)
   assert.match(source, /sendPinAck/)
   assert.match(source, /sendPinState/)
@@ -96,9 +98,9 @@ test("detail shows username and a 10s masked password row", () => {
   assert.match(source, /onHide\(\)/)
 })
 
-test("copyright page reports 2.1.1 with protocol v3", () => {
+test("copyright page reports 2.1.2 with protocol v3", () => {
   const source = read("src/pages/copyright/copyright.ux")
-  assert.match(source, /版本 2\.1\.1/)
+  assert.match(source, /版本 2\.1\.2/)
   assert.match(source, /协议 v3/)
   assert.match(source, /PBKDF2/)
 })

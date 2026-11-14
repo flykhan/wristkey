@@ -1,6 +1,31 @@
 <template>
   <div class="page" onswipe="handleSwipe" style="background-color: {{ theme.pageBackground }}">
-    <div class="card" style="background-color: {{ theme.cardBackground }}">
+    <div class="lock-page" if="{{ locked }}" onlongpress="clearLockInput" style="background-color: {{ theme.pageBackground }}">
+      <div class="lock-top" style="margin-left: {{ lockShakeOffset }}px">
+        <div class="lock-close" onclick="exitApp" style="background-color: {{ theme.buttonBackground }}">
+          <text class="lock-close-text" style="color: {{ theme.secondary }}">×</text>
+        </div>
+        <text class="lock-title" style="color: {{ theme.title }}">腕证已锁定</text>
+        <div class="lock-top-spacer"></div>
+      </div>
+
+      <div class="lock-slots" style="margin-left: {{ lockShakeOffset }}px">
+        <div class="lock-slot" for="{{ lockSlots }}" style="background-color: {{ theme.itemBackground }}; border-width: {{ $item.borderWidth }}px; border-color: {{ $item.borderColor }}">
+          <text class="lock-slot-glyph" if="{{ $item.filled }}" style="color: {{ $item.color }}">{{ $item.glyph }}</text>
+        </div>
+      </div>
+
+      <text class="lock-hint" style="color: {{ lockHintColor }}">{{ lockHintText }}</text>
+
+      <div class="lock-keys" style="opacity: {{ lockKeyOpacity }}; margin-left: {{ lockShakeOffset }}px">
+        <div class="lock-key" for="{{ lockSymbols }}" onclick="tapLockSymbol($item.key)" style="background-color: {{ theme.cardBackground }}; border-color: {{ theme.cardBorder }}">
+          <text class="lock-key-glyph" style="color: {{ $item.color }}">{{ $item.glyph }}</text>
+          <text class="lock-key-label" style="color: {{ theme.secondary }}">{{ $item.label }}</text>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" if="{{ mainVisible }}" style="background-color: {{ theme.cardBackground }}">
       <div class="list" if="{{ ready && pageAccounts.length > 0 }}">
         <div class="otp-item" for="{{ pageAccounts }}" onclick="openDetail($item.id)" style="background-color: {{ theme.itemBackground }}">
           <div class="otp-head">
@@ -65,8 +90,19 @@ import {
   handleMessage,
   parseLegacySnapshot
 } from "../../common/scripts/syncProtocol"
-import { loadPin, savePin, deletePin, saveLock } from "../../common/scripts/pinStore"
-import { resetLockState } from "../../common/scripts/pin"
+import { loadLock, loadPin, saveLock, savePin, deletePin } from "../../common/scripts/pinStore"
+import {
+  PATTERN_LENGTH,
+  PATTERN_SYMBOLS,
+  emptyLockState,
+  formatLockCountdown,
+  isLocked,
+  lockRemainingMs,
+  nextLockAfterFailure,
+  resetLockState,
+  verifyPattern
+} from "../../common/scripts/pin"
+import { markUnlocked, shouldRelock } from "../../common/scripts/pinSessionStore"
 import {
   ACCOUNTS_PER_PAGE,
   DARK_THEME,
@@ -98,26 +134,51 @@ export default {
     letterButtonBorderWidth: 0,
     emptyTitle: "还没有验证码",
     emptyCopy: "在手机 App 导入 Stratum 备份后同步",
-    timer: null
+    timer: null,
+
+    // Entry gate. The lock is rendered inside this page instead of being a
+    // pushed route: a pushed + backed lock page could leave an empty page stack
+    // on Vela (PageNavigator getState error: empty stack!), which killed the
+    // app right after the pattern was accepted.
+    locked: false,
+    mainVisible: false,
+    gateReady: false,
+    gateEvaluating: false,
+    coldStart: true,
+    pageShown: false,
+    pin: null,
+    lock: emptyLockState(),
+    lockSymbols: PATTERN_SYMBOLS,
+    lockInput: [],
+    lockSlots: [],
+    lockHintText: "按顺序点击 5 个图形",
+    lockHintColor: DARK_THEME.secondary,
+    lockKeyOpacity: 1,
+    lockShakeOffset: 0,
+    lockVerifying: false
   },
 
   onInit() {
     this.syncState = createSyncState()
     this.channelReady = false
+    this.locked = false
+    this.mainVisible = false
+    this.gateReady = false
+    this.gateEvaluating = false
+    this.coldStart = true
+    this.pageShown = false
     this.loadTheme()
     this.loadLetterFilter()
+    this.loadGate()
   },
 
   onShow() {
+    this.pageShown = true
     this.loadTheme()
     this.loadLetterFilter()
-    // The startup pattern gate is disabled in v2.1.1: show accounts directly.
-    if (!this.channelReady) {
-      this.channelReady = true
-      this.setupChannel()
+    if (this.gateReady) {
+      this.evaluateGate()
     }
-    this.loadSnapshot()
-    this.startTicker()
   },
 
   onHide() {
@@ -127,6 +188,204 @@ export default {
   onDestroy() {
     this.stopTicker()
     disconnect()
+  },
+
+  /* ---------------------------------------------------------------- gate */
+
+  loadGate() {
+    loadPin(record => {
+      this.pin = record
+      loadLock(lock => {
+        this.lock = lock
+        this.gateReady = true
+        if (this.pageShown) {
+          this.evaluateGate()
+        }
+      })
+    })
+  },
+
+  evaluateGate() {
+    if (!this.gateReady || this.gateEvaluating) {
+      return
+    }
+    if (!this.pin) {
+      // No pattern configured: the app is open by design.
+      this.unlockGate(false)
+      return
+    }
+    if (this.locked) {
+      // The lock screen is already up. Never auto-unlock here: only a
+      // verified pattern (verifyLock) may clear this.locked flag.
+      return
+    }
+    if (this.coldStart) {
+      this.coldStart = false
+      this.showLock()
+      return
+    }
+    this.gateEvaluating = true
+    shouldRelock(Date.now(), relock => {
+      this.gateEvaluating = false
+      if (relock) {
+        this.showLock()
+        return
+      }
+      this.enterMain()
+    })
+  },
+
+  showLock() {
+    this.locked = true
+    this.mainVisible = false
+    this.stopTicker()
+    this.refreshLockView()
+    this.startTicker()
+  },
+
+  unlockGate(persist) {
+    this.locked = false
+    this.mainVisible = true
+    this.lockInput = []
+    this.lockVerifying = false
+    this.lockHintText = "按顺序点击 5 个图形"
+    this.lockHintColor = this.theme.secondary
+    if (persist) {
+      markUnlocked(Date.now(), function () {})
+    }
+    this.enterMain()
+  },
+
+  enterMain() {
+    this.loadSnapshot()
+    if (!this.channelReady) {
+      this.setupChannel()
+    }
+    this.startTicker()
+  },
+
+  refreshLockView() {
+    if (!this.locked) {
+      return
+    }
+    const now = Date.now()
+    const lockedOut = isLocked(this.lock, now)
+    this.lockKeyOpacity = lockedOut ? 0.4 : 1
+    this.refreshLockSlots()
+    if (lockedOut) {
+      this.lockHintText = "错误次数过多 · " + formatLockCountdown(lockRemainingMs(this.lock, now))
+      this.lockHintColor = this.theme.progressDanger
+      return
+    }
+    if (this.lockVerifying) {
+      this.lockHintText = "正在校验…"
+      this.lockHintColor = this.theme.secondary
+      return
+    }
+    if (this.lockInput.length === 0) {
+      this.lockHintText = "按顺序点击 5 个图形"
+      this.lockHintColor = this.theme.secondary
+    }
+  },
+
+  refreshLockSlots() {
+    const chosen = []
+    for (let index = 0; index < this.lockInput.length; index++) {
+      const key = this.lockInput[index]
+      for (let symbol = 0; symbol < PATTERN_SYMBOLS.length; symbol++) {
+        if (PATTERN_SYMBOLS[symbol].key === key) {
+          chosen.push(PATTERN_SYMBOLS[symbol])
+          break
+        }
+      }
+    }
+    const slots = []
+    for (let index = 0; index < PATTERN_LENGTH; index++) {
+      const symbol = chosen[index]
+      const active = !symbol && index === this.lockInput.length && !isLocked(this.lock, Date.now())
+      slots.push({
+        filled: !!symbol,
+        glyph: symbol ? symbol.glyph : "",
+        color: symbol ? symbol.color : this.theme.secondary,
+        borderWidth: active ? 2 : 0,
+        borderColor: active ? this.theme.accent : "transparent"
+      })
+    }
+    this.lockSlots = slots
+  },
+
+  tapLockSymbol(key) {
+    if (!this.locked || this.lockVerifying || isLocked(this.lock, Date.now())) {
+      return
+    }
+    if (this.lockInput.length >= PATTERN_LENGTH) {
+      return
+    }
+    this.lockInput = this.lockInput.concat([key])
+    this.refreshLockSlots()
+    if (this.lockInput.length === PATTERN_LENGTH) {
+      this.lockVerifying = true
+      this.lockHintText = "正在校验…"
+      this.lockHintColor = this.theme.secondary
+      // Give the framework one frame to paint the progress hint before the
+      // pure-JS PBKDF2 derivation runs on the same thread.
+      setTimeout(() => {
+        this.verifyLock()
+      }, 40)
+    }
+  },
+
+  verifyLock() {
+    const pattern = this.lockInput.join("")
+    const result = verifyPattern(pattern, this.pin)
+    if (result.ok && result.matched) {
+      this.lock = resetLockState(Date.now())
+      saveLock(this.lock)
+      this.lockInput = []
+      this.lockVerifying = false
+      this.unlockGate(true)
+      return
+    }
+    this.handleLockFailure()
+  },
+
+  handleLockFailure() {
+    this.lock = nextLockAfterFailure(this.lock, Date.now())
+    saveLock(this.lock)
+    this.lockInput = []
+    this.lockVerifying = false
+    this.refreshLockSlots()
+    this.shakeLock()
+    if (isLocked(this.lock, Date.now())) {
+      this.refreshLockView()
+    } else {
+      this.lockHintText = "图案不正确，请重试"
+      this.lockHintColor = this.theme.progressDanger
+    }
+  },
+
+  shakeLock() {
+    const offsets = [7, -7, 5, -5, 0]
+    for (let index = 0; index < offsets.length; index++) {
+      setTimeout(() => {
+        this.lockShakeOffset = offsets[index]
+      }, index * 55)
+    }
+  },
+
+  clearLockInput() {
+    if (!this.locked || isLocked(this.lock, Date.now())) {
+      return
+    }
+    this.lockInput = []
+    this.lockVerifying = false
+    this.lockHintText = "已清空，请重新输入"
+    this.lockHintColor = this.theme.secondary
+    this.refreshLockSlots()
+  },
+
+  exitApp() {
+    this.$app.exit()
   },
 
   /* ---------------------------------------------------------------- data */
@@ -148,6 +407,9 @@ export default {
     this.theme = themeFor(isDark)
     this.refreshFilterState()
     this.refreshList()
+    if (this.locked) {
+      this.refreshLockView()
+    }
   },
 
   loadLetterFilter() {
@@ -290,9 +552,14 @@ export default {
           sendPinAck(buildPinAck({ ok: false, error: "storage_error", sentAt: sentAt }))
           return
         }
-        saveLock(resetLockState(sentAt))
+        this.pin = command.record
+        this.lock = resetLockState(sentAt)
+        saveLock(this.lock)
         sendPinAck(buildPinAck({ ok: true, enabled: true, sentAt: sentAt }))
         sendPinState(buildPinState(command.record, { sentAt: sentAt }))
+        if (this.gateReady) {
+          this.showLock()
+        }
       })
       return
     }
@@ -310,9 +577,14 @@ export default {
           sendPinAck(buildPinAck({ ok: false, error: "storage_error", sentAt: sentAt }))
           return
         }
-        saveLock(resetLockState(sentAt))
+        this.pin = null
+        this.lock = resetLockState(sentAt)
+        saveLock(this.lock)
         sendPinAck(buildPinAck({ ok: true, enabled: false, sentAt: sentAt }))
         sendPinState(buildPinState(null, { sentAt: sentAt }))
+        if (this.locked) {
+          this.unlockGate(false)
+        }
       })
     }
   },
@@ -328,7 +600,11 @@ export default {
       return
     }
     this.timer = setInterval(() => {
-      this.refreshList()
+      if (this.locked) {
+        this.refreshLockView()
+      } else {
+        this.refreshList()
+      }
     }, 1000)
   },
 
@@ -375,6 +651,12 @@ export default {
 
   handleSwipe(event) {
     if (!event || !event.direction) {
+      return
+    }
+    if (this.locked) {
+      if (event.direction === "left") {
+        this.exitApp()
+      }
       return
     }
     if (event.direction === "up") {
@@ -568,5 +850,112 @@ export default {
 .empty-button-text {
   font-size: 15px;
   font-weight: bold;
+}
+
+/* ------------------------------------------------------------ entry lock */
+
+.lock-page {
+  width: 100%;
+  height: 100%;
+  padding: 0 10px 2px;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+.lock-top {
+  width: 100%;
+  height: 42px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lock-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 17px;
+  align-items: center;
+  justify-content: center;
+}
+
+.lock-close-text {
+  font-size: 22px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.lock-title {
+  font-size: 19px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.lock-top-spacer {
+  width: 34px;
+  height: 34px;
+}
+
+.lock-slots {
+  width: 100%;
+  height: 56px;
+  margin-top: 2px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.lock-slot {
+  width: 46px;
+  height: 46px;
+  margin-left: 5px;
+  margin-right: 5px;
+  border-radius: 23px;
+  align-items: center;
+  justify-content: center;
+}
+
+.lock-slot-glyph {
+  font-size: 22px;
+  text-align: center;
+}
+
+.lock-hint {
+  height: 20px;
+  margin-top: 2px;
+  font-size: 13px;
+  text-align: center;
+  lines: 1;
+}
+
+.lock-keys {
+  flex: 1;
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.lock-key {
+  width: 112px;
+  height: 92px;
+  margin-left: 8px;
+  margin-right: 8px;
+  border-radius: 20px;
+  border-width: 1px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.lock-key-glyph {
+  font-size: 34px;
+  text-align: center;
+}
+
+.lock-key-label {
+  margin-top: 3px;
+  font-size: 12px;
+  text-align: center;
 }
 </style>
