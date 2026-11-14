@@ -49,8 +49,8 @@ object SyncProtocol {
 
     // ---------------------------------------------------------------- 入口图案（v3）
     const val PIN_ALGORITHM = "PBKDF2-SHA256"
-    const val PIN_ITERATIONS = 1200
-    const val PIN_MIN_ITERATIONS = 1000
+    const val PIN_ITERATIONS = 10
+    const val PIN_MIN_ITERATIONS = 1
     const val PIN_MAX_ITERATIONS = 20000
     const val PIN_SALT_HEX_LENGTH = 32
     const val PIN_HASH_HEX_LENGTH = 64
@@ -172,7 +172,7 @@ object SyncProtocol {
     // ---------------------------------------------------------------- 入口图案消息（v3）
 
     /**
-     * `mfa_pin_set`：只发送派生结果（salt 32 位 hex、hash 64 位 hex、iterations 1000-20000）。
+     * `mfa_pin_set`：只发送派生结果（salt 32 位 hex、hash 64 位 hex、iterations 1-20000）。
      * 参数非法时抛 [IllegalArgumentException]（调用方保证来自 [com.flykhan.wristkey.pattern.PatternPin]）。
      */
     fun pinSetJson(

@@ -78,12 +78,12 @@ test("PBKDF2-HMAC-SHA256 matches node:crypto for the pattern alphabet", () => {
   const other = derivePatternHash("TSSCC", SALT_HEX, DEFAULT_PBKDF2_ITERATIONS)
   assert.match(other, /^[0-9a-f]{64}$/)
   assert.notEqual(other, expected)
-  assert.equal(derivePatternHash("TSCCT", SALT_HEX, 1201) === expected, false)
+  assert.equal(derivePatternHash("TSCCT", SALT_HEX, 11) === expected, false)
   assert.equal(derivePatternHash("bad", SALT_HEX, 1200), "")
   assert.equal(derivePatternHash(PATTERN, "00", 1200), "")
   assert.equal(pbkdf2Sha256([], Array.from(salt), 1200, 32), null)
   assert.equal(pbkdf2Sha256(Array.from(password), [], 1200, 32), null)
-  assert.equal(pbkdf2Sha256(Array.from(password), Array.from(salt), 1, 32), null)
+  assert.equal(pbkdf2Sha256(Array.from(password), Array.from(salt), 0, 32), null)
 })
 
 test("createPinRecord stores only salt/hash/iterations/updatedAt", () => {
@@ -108,7 +108,7 @@ test("createPinRecord stores only salt/hash/iterations/updatedAt", () => {
   assert.equal(verifyPattern(PATTERN, { salt: "bad" }).matched, false)
   assert.equal(createPinRecord("TSC", { saltHex: SALT_HEX }).error, "pattern_invalid")
   assert.equal(createPinRecord(PATTERN, { saltHex: "zz" }).error, "salt_invalid")
-  assert.equal(createPinRecord(PATTERN, { saltHex: SALT_HEX, iterations: 999 }).error, "iterations_out_of_range")
+  assert.equal(createPinRecord(PATTERN, { saltHex: SALT_HEX, iterations: 0 }).error, "iterations_out_of_range")
 })
 
 test("normalizePinRecord rejects malformed phone payloads", () => {
@@ -129,7 +129,7 @@ test("normalizePinRecord rejects malformed phone payloads", () => {
     [{ ...base, salt: "abc" }, "pin_salt_invalid"],
     [{ ...base, salt: "g".repeat(32) }, "pin_salt_invalid"],
     [{ ...base, hash: "b".repeat(63) }, "pin_hash_invalid"],
-    [{ ...base, iterations: 999 }, "pin_iterations_invalid"],
+    [{ ...base, iterations: 0 }, "pin_iterations_invalid"],
     [{ ...base, iterations: 20001 }, "pin_iterations_invalid"],
     [null, "pin_not_object"],
     [[], "pin_not_object"]

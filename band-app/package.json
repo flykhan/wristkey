@@ -1,6 +1,6 @@
 {
   "name": "wristkey-band",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "WristKey band app - Vela quick app for Xiaomi Smart Band 10 Pro (TOTP + Steam Guard + credentials, sync protocol v3)",
   "license": "Apache-2.0",

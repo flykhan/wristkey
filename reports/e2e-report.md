@@ -1,12 +1,12 @@
-# WristKey 端到端验收报告 v6（v2.1.1：暂时移除启动图案门禁 + 同步版号；含 v2.0.1/v2.0.2/v2.1.0 回归）
+# WristKey 端到端验收报告 v7（v2.1.2：VVD 修复页面栈/门禁并恢复入口图案；含 v2.0.1/v2.0.2/v2.1.0/v2.1.1 回归）
 
 - 任务：task-14（QA：v2.0 全量验收）；v2.0.1 解锁回弹、v2.0.2 页面栈回归、v2.1.0 包名迁移、
-  v2.1.1 启动门禁移除均由 Lead 复验
-- 执行：qa，2026-11-10 20:00 (Asia/Shanghai)；v2.1.1 复验 2026-11-10 22:52
+  v2.1.1 启动门禁移除、v2.1.2 门禁恢复与 VVD 验证均由 Lead 复验
+- 执行：qa，2026-11-10 20:00 (Asia/Shanghai)；v2.1.1 复验 22:52；v2.1.2 复验 2026-11-14 11:48
 - 结论：**PASS** —— 协议 v3（password/pin）、手环 UI v4 与 Android 重设计均已实现并通过自动化验证；
-  2.1.1 起启动不再强制图案：
+  2.1.2 在 Vela 工具链模拟器（VVD）中复现并修复两个门禁根因，恢复入口图案：
   band-app **106/106**、android-app JVM **106/106（16 个测试类）**、Node e2e **171/171**、Python **40/40**；
-  构建/包名/版本/权限/UI/签名检查 **83 PASS / 0 FAIL / 0 SKIP**；APK 与 .rpk 同证书、包名一致。
+  构建/包名/版本/权限/UI/签名检查 **82 PASS / 0 FAIL / 0 SKIP**；APK 与 .rpk 同证书、包名一致。
 - 本轮未发现 band-app / android-app 实现 bug。唯一调整是 e2e 自身的 v3 picker 静态检查与新分页网格不匹配，
   已按 v4 架构更新检查逻辑（非产品缺陷，详见 6.2）。
 - **v2.0.1 回归修复（2026-11-10 20:56）**：真机反馈“输完图案没有进入下一屏”。根因是 Vela 每页独立打包，
@@ -27,22 +27,37 @@
   `app.ux` 与入口页不再在启动时 push `/pages/lock`，菜单移除“入口密码”；`pages/lock`、`pages/pin`、
   pin 存储与协议 v3 pin 消息全部保留。手环 **2.1.1 / versionCode 10**，手机 **2.1.1 / versionCode 6**。
   复验：band 106/106、Android 106/106、Node 171/171、Python 40/40、check-build 83 PASS / 0 FAIL、签名一致。
-- 未覆盖：小米手环 10 Pro 真机上的启动直达/详情密码/手势交互；入口图案恢复后的交互与 pin 状态同步，见第 8 节。
+- **v2.1.2 门禁恢复（2026-11-14 11:48）**：按用户要求“先在工具链开发，把之前的问题解决一下”，
+  在 VVD（Vela 5.0 watch，480×336）中复现并定位两个根因：
+  (a) 旧实现把锁屏作为独立路由页，入口与锁屏都用 `router.replace`，冷启动时页面栈被清空，
+  日志出现 `PageNavigator getState error: empty stack!` 与 `state_error`；
+  (b) `evaluateGate` 在 onShow 重入时执行 `unlockGate(false)`，把手动锁屏自动解除。
+  改为**锁屏内联在入口页 index**（`locked`/`mainVisible` 二选一，不触碰路由页面栈），
+  `evaluateGate` 在已锁时直接 return；菜单恢复“入口密码”。同时把 PBKDF2 迭代从 1200 降到 10：
+  VVD 实测单次派生 2.12 s（约 212 ms/轮），1200 轮会阻塞 2 分钟以上，这是“输完图案没反应”的
+  直接原因之一；图案空间仅 3^5=243，主防护是 5 次失败锁 30 s 递增。
+  VVD 验证通过：冷启动显示锁屏 → TSCTS 解锁进主界面 → 可打开菜单；错误 TTTTT 连续 5 次触发
+  5 条 `lock failure`，锁定期间点击被拦截，约 32 s 后可再次输入并解锁。
+  手环 **2.1.2 / versionCode 11**，手机 **2.1.2 / versionCode 7**；复验 band 106/106、Android 106/106、
+  Node 171/171、Python 40/40、check-build 82 PASS / 0 FAIL、签名三方一致。
+- 未覆盖：小米手环 10 Pro 真机上的门禁交互/xms 同步/详情密码/手势；VVD 已验证门禁逻辑，
+  但模拟器不是 HyperOS 3 真机，见第 8 节。
 
 ## 1. v2.0 交付范围与 UI v4 实现
 
-### 1.1 手环端（rpk 2.1.1 / versionCode 10；启动门禁暂时移除，锁屏/设置页代码保留）
+### 1.1 手环端（rpk 2.1.2 / versionCode 11；入口图案内联在 index，门禁已恢复）
 
 依据 docs/design/ui-v4-analysis.md：
 
-- **启动流程（2.1.1）**：`app.ux` 为空生命周期；入口 pages/index 的 onShow 直接 setupChannel/loadSnapshot/startTicker，
-  不再 `router.push('/pages/lock')`，因此打开即进入账号列表。2.1.0 及以前的门禁逻辑（index 一次门禁、
-  锁屏 back、非入口页 2 分钟重锁）保留在 `lock.ux`/`pin.ux` 与 pin 模块中，供后续恢复。
-- **锁屏 pages/lock**：5 个图案槽位、T/S/C 三个图形键、顶部 5 个进度圆点、左上角 X 退出、
-  输错抖动并清空；图案规范串为 5 位 /^[TSC]{5}$/（3^5 = 243 种组合）。
+- **启动流程（2.1.2）**：`app.ux` 为空生命周期；入口 pages/index 的 onInit 只建状态并 loadGate，
+  onShow 调 evaluateGate：无图案直接 unlockGate(false)；冷启动或闲置 2 分钟 showLock，否则 enterMain。
+  锁屏用 `if="{{ locked }}"`、主界面用 `if="{{ mainVisible }}"` 二选一渲染，**全程不改路由页面栈**；
+  `evaluateGate` 在 `this.locked` 时直接 return，只有校验成功的 verifyLock 能清 locked。
+- **锁屏（index 内联）**：5 个图案槽位、T/S/C 三个图形键、5 个进度圆点、输错抖动并清空；
+  图案规范串为 5 位 /^[TSC]{5}$/（3^5 = 243 种组合）。旧 `pages/lock/lock.ux` 保留但启动流程不再引用。
 - **三色固定**：三角形 = 薄荷绿 #6EE7C7、方形 = 雾蓝 #7AA2F7、圆形 = 暖橙 #F2B880。
 - **入口图案设置页 pages/pin**：设置/确认/管理模式；派生 **PBKDF2-HMAC-SHA256**，16 字节随机 salt、
-  1200 次迭代、32 字节输出；只保存派生值（wristkey_pin_v1），不保存图案本身。
+  10 次迭代（Vela 无 JIT，协议允许 1–20000）、32 字节输出；只保存派生值（wristkey_pin_v1），不保存图案本身。
 - **失败锁定**：连续错 5 次锁 30 s，之后每错一次 +30 s；锁计数持久化（wristkey_pin_lock_v1）。
 - **主界面 index**：无顶栏，账号 3 条/页；右侧 56px rail（A-Z 圆钮、筛选账号数、页码、菜单按钮）；
   手势保留（上下翻页、右滑菜单、左滑退出）。
@@ -50,12 +65,12 @@
   上下滑动翻页，底部 3 个圆点 + X/右滑关闭；每格右下显示账号数。
 - **详情页 pages/detail**：用户名 = accountName、密码 = 可选 password（遮罩 ••••••••，点按显示 10 s；
   Stratum 无密码显示“未导入密码”）、验证码大号 + 进度条。
-- **菜单 pages/menu（3 项）**：立即同步 / 关于 / 退出应用；入口密码已随 2.1.1 启动门禁移除，分类入口早已移除。
+- **菜单 pages/menu（4 项）**：入口密码 / 立即同步 / 关于 / 退出应用；入口密码指向 pages/pin，分类入口早已移除。
 - **协议 v3 手环侧**：syncProtocol.js PROTOCOL_VERSION=3、SUPPORTED_PROTOCOL_VERSIONS=[2,3]；
   account 支持 password，新增 mfa_pin_set/query/clear/ack/state；
   mfaConfig 活动存储键 mfa_snapshot_v3，保留 mfa_snapshot_v2 供回滚。
 
-### 1.2 手机端（APK 2.1.1 / versionCode 6；功能同 2.1.0，图案入口保留但当前不拦截手环）
+### 1.2 手机端（APK 2.1.2 / versionCode 7；图案设置/下发与手环门禁配套）
 
 依据 docs/design/android-v2-spec.md：
 
@@ -66,7 +81,7 @@
   （Stratum / Bitwarden / otpauth / 手动）。
 - **账号详情 ModalBottomSheet**：用户名、密码（默认遮罩，10 s 后自动隐藏，可复制）、验证码、编辑/删除。
 - **入口图案设置页**：PatternScreen / PatternDot / PatternButton，5 位图案 + 三图形、两次确认；
-  PatternPin.kt 使用 PBKDF2WithHmacSHA256、1200 次、16 字节 SecureRandom salt；
+  PatternPin.kt 使用 PBKDF2WithHmacSHA256、10 次、16 字节 SecureRandom salt；
   MainActivity 调用 PatternPin.newSaltHex()/derive() 并 controller.setPin()/clearPin()/queryPin()，
   设置后发送 mfa_pin_set 等 ack，关闭发送 mfa_pin_clear。
 - **同步页**：4 状态胶囊 + 立即同步 + 入口图案卡（mfa_pin_query，enabled true/false/unknown）。
@@ -100,14 +115,14 @@
 
 | 消息 | 方向 | 语义 |
 | --- | --- | --- |
-| mfa_pin_set | 手机 → 手环 | pin{algorithm:"PBKDF2-SHA256", salt 32 hex, hash 64 hex, iterations 1000–20000}；成功写 wristkey_pin_v1 并广播 mfa_pin_state |
+| mfa_pin_set | 手机 → 手环 | pin{algorithm:"PBKDF2-SHA256", salt 32 hex, hash 64 hex, iterations 1–20000}；成功写 wristkey_pin_v1 并广播 mfa_pin_state |
 | mfa_pin_query | 手机 → 手环 | 查询状态；手环回 mfa_pin_state（回填同一 requestId） |
 | mfa_pin_clear | 手机 → 手环 | 删除图案与失败计数；ack {ok:true, enabled:false} |
 | mfa_pin_ack | 手环 → 手机 | 成功 {ok:true, enabled} 不得带 error；失败 error ∈ invalid_pin_payload / invalid_version / storage_error |
 | mfa_pin_state | 手环 → 手机 | enabled、updatedAt、requestId（广播时省略） |
 
 - 非法 pin 载荷 → invalid_pin_payload，**旧图案不变**；pin 消息 version≠3 → invalid_version；
-- 图案格式 /^[TSC]{5}$/；PBKDF2-SHA256 / 16 B salt / 1200 次 / 32 B 输出为两端默认值。
+- 图案格式 /^[TSC]{5}$/；PBKDF2-SHA256 / 16 B salt / **10 次**（协议默认值，允许 1–20000）/ 32 B 输出为两端默认值。
 
 ### 2.4 其他确定性约定
 
@@ -127,22 +142,22 @@
 | Python | 3.14.8（e2e/.venv：argon2-cffi 25.1.0 + cryptography 50.0.2） |
 | JDK | /home/lsl/.jdks/jdk-21.0.13+9 |
 | Android SDK | ~/Android/Sdk（build-tools 34.0.0/36.1.0/37.0.0） |
-| 时间 | 2026-11-10 22:52 CST（v2.1.1 复验） |
+| 时间 | 2026-11-14 11:48 CST（v2.1.2 复验） |
 | 真机 | **无** |
 
 ## 4. 产物清单与校验值
 
 | 产物 | 路径 | 大小 | SHA-256 | 关键属性 |
 | --- | --- | --- | --- | --- |
-| band .rpk | band-app/dist/com.flykhan.wristkey.release.2.1.1.rpk | 106,788 B | d12d6615109b61b76d132b988299ab19ef6e6b4b419c76239ea1bb2c05b8ef95 | package=com.flykhan.wristkey，name=腕证，versionName=2.1.1，versionCode=10，deviceTypeList=[watch] |
-| android release APK | android-app/app/build/outputs/apk/release/app-release.apk | 26,492,669 B | 87afa9d49ffa87cabd54fc36e688d0d7815c966073118c278da20b51f7741b0f | package=com.flykhan.wristkey，label=腕证，versionName=2.1.1，versionCode=6，minSdk 28，targetSdk 36 |
-| 发布归档 | releases/v2.1.1/（及根目录 成功/） | — | 见 SHA256SUMS | wristkey-band-v2.1.1.rpk、wristkey-android-v2.1.1.apk、SHA256SUMS |
+| band .rpk | releases/v2.1.2/wristkey-band-v2.1.2.rpk（= band-app/dist/com.flykhan.wristkey.release.2.1.2.rpk） | 109,130 B | b52686a4abe23f63f9350b74b83a9b56d6e924b1b7e0aade31b06230d2295ca4 | package=com.flykhan.wristkey，name=腕证，versionName=2.1.2，versionCode=11，deviceTypeList=[watch] |
+| android release APK | releases/v2.1.2/wristkey-android-v2.1.2.apk（= android-app/app/build/outputs/apk/release/app-release.apk） | 26,492,669 B | 0f169b25e0ef8b50866b9f0aef2f869eef289dca6e97cc942ef7be4d6f9283b0 | package=com.flykhan.wristkey，label=腕证，versionName=2.1.2，versionCode=7，minSdk 28，targetSdk 36 |
+| 发布归档 | releases/v2.1.2/（及根目录 成功/） | — | 见 SHA256SUMS | wristkey-band-v2.1.2.rpk、wristkey-android-v2.1.2.apk、SHA256SUMS |
 | 签名证书 PEM | signing/rpk-sign/certificate.pem | — | SHA-256 指纹 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4 | CN=WristKey Dev, OU=WristKey, O=WristKey, C=CN |
 | 测试夹具 | e2e/fixtures/（含 protocol-v3/） | 见 10.1 | 见 10.1 | 确定性生成，密码 test-password |
 
-> 历史：v2.0.0 rpk 113,923 B、v2.0.1 114,700 B、v2.0.2 114,640 B、v2.1.0 114,661 B（构建含时间戳，非确定性）。
-> v2.1.1 移除启动门禁后锁屏入口代码不再被引用，rpk 降至 106,788 B、APK 为 26,492,669 B。
-> .rpk 内嵌证书 DER 命中 offset 102762；APK 证书 = PEM = b7cfba…85c4。
+> 历史：v2.0.0 rpk 113,923 B、v2.0.1 114,700 B、v2.0.2 114,640 B、v2.1.0 114,661 B、v2.1.1 106,788 B
+>（构建含时间戳，非确定性）。v2.1.2 恢复内联门禁后 rpk 为 109,130 B、APK 为 26,492,669 B。
+> .rpk 内嵌证书 DER 命中 offset 105104；APK 证书 = PEM = b7cfba…85c4。
 
 ## 5. 验收执行结果
 
@@ -150,28 +165,29 @@
 
 ~~~
 node e2e/check-build.mjs --build --with-tests   # 重建 rpk+APK、双端单测、全量检查
-构建检查: 83 PASS / 0 FAIL / 0 SKIP
+构建检查: 82 PASS / 0 FAIL / 0 SKIP
 ~~~
 
 覆盖：
 
 - band：manifest.package/name、deviceTypeList、features（router/storage/interconnect）、designWidth；
-- band npm test（106 用例）、npm run release；rpk 文件名 com.flykhan.wristkey.release.2.1.1.rpk、
-  versionName 2.1.1、versionCode 10；
+- band npm test（106 用例）、npm run release；rpk 文件名 com.flykhan.wristkey.release.2.1.2.rpk、
+  versionName 2.1.2、versionCode 11；
 - **手环 UI v3 回归检查 17 项**（无顶栏、56px rail、ACCOUNTS_PER_PAGE=3、picker 路由/字母桶、测试覆盖），
   其中 picker 的“全部/#”检查已兼容 v4 分页网格（由 settings.js PICKER_PAGE_KEYS 提供）；
-- **手环 UI v4 检查 20 项**：2.1.1 启动不强制图案（app.ux/index 无锁屏跳转）、pages/lock、pages/pin、5 位 TSC 正则、三色、
-  PBKDF2 1200/16 B、失败锁定 5 次/30 s、只存派生值与锁计数、rail 56px + 菜单 + 3 条/页、
-  picker 4×4×3/全部、详情 username/password/code、密码遮罩 10 s、菜单 3 项且无“入口密码”、
-  协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
-- android：gradle testDebugUnitTest assembleRelease（106 用例/16 类）、APK 包名/应用名/2.1.1/6、
+- **手环 UI v4 检查**：2.1.2 入口内联门禁（index 含 locked/mainVisible/coldStart/shouldRelock/
+  markUnlocked/verifyPattern/nextLockAfterFailure/tapLockSymbol，无 pages/lock 跳转与 router.replace，
+  app.ux 不承担门禁）、pages/pin、5 位 TSC 正则、三色、PBKDF2 10/16 B、失败锁定 5 次/30 s、
+  只存派生值与锁计数、rail 56px + 菜单 + 3 条/页、picker 4×4×3/全部、详情 username/password/code、
+  密码遮罩 10 s、菜单 4 项（含入口密码）、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
+- android：gradle testDebugUnitTest assembleRelease（106 用例/16 类）、APK 包名/应用名/2.1.2/7、
   **无 INTERNET**、权限仅 DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
-- **Android UI v4 检查 13 项**：PatternPin 5 位/TSC/PBKDF2 1200/16 B、随机 salt、设置页、
+- **Android UI v4 检查 13 项**：PatternPin 5 位/TSC/PBKDF2 10/16 B、随机 salt、设置页、
   set/clear/query pin、3 Tab、FAB + ModalBottomSheet、密码 10 s 遮罩、详情/入口图案卡、
   深色 token、协议 v3 password/pin、单测存在与覆盖；
 - 签名：PEM / APK 证书 / RPK 内嵌 DER 三方一致，scripts/check-signing.sh PASS，APK 与 RPK 包名一致。
 
-明细：reports/e2e-build-result.json（83 项）。
+明细：reports/e2e-build-result.json（82 项）。
 
 ### 5.2 e2e Node 验证
 
@@ -214,7 +230,7 @@ Python verify: 40 passed, 0 failed, 40 total
 
 ~~~
 cd band-app && npm test
-# tests 105 / # pass 105 / # fail 0
+# tests 106 / # pass 106 / # fail 0
 ~~~
 
 覆盖 TOTP/Steam、Stratum 映射与跳过、协议 v2/v3、password 合并、pin 派生/锁定、UI v4 结构等
@@ -229,7 +245,7 @@ JAVA_HOME=/home/lsl/.jdks/jdk-21.0.13+9 ANDROID_HOME=/home/lsl/Android/Sdk \
 # BUILD SUCCESSFUL；test-results: 16 个测试类 / 106 tests / 0 failures / 0 errors
 ~~~
 
-新增/相关：PatternPinTest（派生与 1200 次）、PinProtocolTest（mfa_pin_set 等）、
+新增/相关：PatternPinTest（派生与 10 次、0 次拒绝）、PinProtocolTest（mfa_pin_set 等）、
 MergePasswordTest（缺省保留/空串清空/覆盖）。
 
 ### 5.6 签名一致性（bash scripts/check-signing.sh，默认参数）
@@ -237,7 +253,7 @@ MergePasswordTest（缺省保留/空串清空/覆盖）。
 ~~~
 APK 证书 SHA-256: b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4
 签名 PEM SHA-256: b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4
-RPK 内嵌证书 DER: 是 (offset 110630)
+RPK 内嵌证书 DER: 是 (offset 105104)
 PASS: 包名 com.flykhan.wristkey，APK 与 RPK 使用同一证书
 ~~~
 
@@ -252,7 +268,7 @@ check-build 与 check-signing.sh 均优先选择 *.release.*.rpk。
 | valid-session.json | v3 合法同步 13 账号（前 3 个带 password：普通口令 / Unicode 口令 / 空串）；最大消息 430 B |
 | password-merge.json | 4 个密码合并场景（缺省保留 / 空串清空 / 覆盖 / 混合），含 initialSnapshot 与 expected.passwords |
 | v2-compat-session.json | v2 手机消息（version=2、无 password）→ v3 手环；预期快照 version=2、storageKey=mfa_snapshot_v3 |
-| pin-set.json | 合法 mfa_pin_set（PIN_PATTERN=TSCCT、PBKDF2-SHA256、salt 16 B、iterations 1200、hash 32 B） |
+| pin-set.json | 合法 mfa_pin_set（PIN_PATTERN=TSCCT、PBKDF2-SHA256、salt 16 B、iterations 10、hash 32 B） |
 | pin-ack.json | 10 个 ack 合法/非法用例（成功不带 error；失败原因码白名单） |
 | pin-query-state.json | pin_query → pin_state（requestId 回填；广播省略 requestId） |
 | pin-clear.json | pin_clear → ack/state enabled=false，失败计数归零 |
@@ -264,8 +280,8 @@ python/verify_fixtures.py 4d 节 10 项独立复算。
 
 ### 6.2 检查框架（e2e/check-build.mjs）
 
-- 版本期望更新：rpk **2.1.1 / versionCode 10**、APK **2.1.1 / versionCode 6**；
-  release rpk 文件名断言 com.flykhan.wristkey.release.2.1.1.rpk；
+- 版本期望更新：rpk **2.1.2 / versionCode 11**、APK **2.1.2 / versionCode 7**；
+  release rpk 文件名断言 com.flykhan.wristkey.release.2.1.2.rpk；
 - 新增 APK 权限检查：无 INTERNET；权限列表仅允许 *DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
 - 新增手环 UI v4 静态检查 20 项、Android UI v4 静态检查 13 项（第 5.1 节）；
 - 保留手环 UI v3 回归检查 17 项；picker 的“全部/#”检查改为同时接受
@@ -277,10 +293,10 @@ python/verify_fixtures.py 4d 节 10 项独立复算。
 
 | 约定 | 实现/验证 |
 | --- | --- |
-| 图案只存派生值 | 手环/手机均 PBKDF2-HMAC-SHA256、16 B salt、1200 次、32 B 输出；不保存图案本身 |
-| 图案当前不提供门禁 | **2.1.1 起启动不再要求图案**；代码/存储保留，文档已标注“暂时停用、勿依赖” |
+| 图案只存派生值 | 手环/手机均 PBKDF2-HMAC-SHA256、16 B salt、10 次、32 B 输出；不保存图案本身 |
+| 图案提供本地门禁 | **2.1.2 起冷启动/闲置 2 分钟显示内联锁屏**，正确图案才进主界面；VVD 已验证 |
 | 图案是界面门禁，不是数据加密密钥 | 文档明确；快照仍含明文 secret，报告不夸大防护 |
-| 失败锁定 | 连续 5 次错锁 30 s，之后每次 +30 s；手环锁计数持久化（当前无入口，待恢复后生效） |
+| 失败锁定 | 连续 5 次错锁 30 s，之后每次 +30 s；手环锁计数持久化；VVD 实测锁定期间点击被拦截 |
 | 密码遮罩 | 详情页默认 ••••••••，点按显示 10 s 后自动隐藏；Stratum 无密码显示“未导入密码” |
 | 权限最小化 | APK 无 INTERNET，仅 Android 自动生成的 DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION |
 | 调试日志 | 发布构建不打印 secret/验证码/密码/图案（check-build 未发现 UI 明文日志；真机日志未验证） |
@@ -291,12 +307,11 @@ python/verify_fixtures.py 4d 节 10 项独立复算。
 
 ## 8. 未验证项与残余风险
 
-1. **真机未验证（中）**：v2.1.1 的核心目标是“打开即进入账号列表”，需真机确认不再被锁屏拦截；
-   4×4×3 picker 滑动分页、详情页密码 10 s 遮罩、导入/同步链路仍待实机复验。
-   入口图案已停用，恢复后还需走“设置图案 → 冷启动/重锁 → 手环与手机改/关”全流程。
-2. **PBKDF2 纯 JS 性能（中/低）**：手环端图案派生为纯 JS PBKDF2-SHA256 1200 次，
-   低端设备解锁可能有可感知延迟；本轮未做真机耗时测量，建议真机确认并在必要时调低默认迭代
-   （协议下限 1000）。
+1. **真机未验证（中）**：v2.1.2 的门禁已在 VVD 验证（冷启动锁屏、TSCTS 解锁、错误 5 次锁定/解锁），
+   但 VVD 是通用 Vela 5.0 镜像，不是 HyperOS 3 真机；480×336 真机渲染、xms 同步、详情密码、
+   手势与功耗仍待实机复验。
+2. **PBKDF2 纯 JS 性能（已缓解）**：VVD 实测 10 轮约 2.12 s；1200 轮约 2 分钟以上，已从两端默认值移除。
+   真机（有 JIT/更快 CPU）预计更快，但仍建议真机确认解锁延迟。
 3. **pin 状态为 best effort（低）**：手环广播 pin_state 依赖 xms 消息回调；
    手机查询超时/未连接时显示 unknown，属预期降级；真机 BLE 回调未验证。
 4. **v3 旧手环不兼容（已知限制）**：1.0.x 手环忽略 v3 begin，无法同步 password/pin；
@@ -346,20 +361,20 @@ PATH="$JAVA_HOME/bin:$PATH" bash scripts/check-signing.sh
 | protocol-v3/valid-session.json | 12031 | 554b05a69058cc455adef82650e631b497faf6a7bff270ec319a4fab45f20c41 |
 | protocol-v3/password-merge.json | 9765 | 8a9d75e7720d7a6f69907601e5095e3edd0e428163fc1409b6258992d494ae93 |
 | protocol-v3/v2-compat-session.json | 3530 | b34727dd4542ce75d870f9ba53bce7e650642a93a4bf844f5d6bc7fce155a090 |
-| protocol-v3/pin-set.json | 1266 | 2e57d8f1c46f66143954d5b9a1977abf308c2179e1e9917a2e4d81e796fd4ec8 |
+| protocol-v3/pin-set.json | 1258 | b9f3f173a28219999e5175f1cf115707fa9b1288c2c49ddab78ae48c22d279ba |
 | protocol-v3/pin-ack.json | 2719 | 991201e262e98c5f858d4a2f2c7171b2e011fb7b4c0d5f67aa69d46070a57228 |
 | protocol-v3/pin-query-state.json | 1001 | 206c63fe81e7e5b215cfec8c7a19ac7331b9fdb98443b9432f97773b096f9784 |
 | protocol-v3/pin-clear.json | 562 | 7a13cada00a38540f6b968f4ff5f972409facdcfe0d93bb6ea6b0ec90371e392 |
-| protocol-v3/invalid-pin.json | 7171 | 44eabb80783f63d5518fe6d984474fd3b1b9f56c4cf760301fec244e5faacbbb |
+| protocol-v3/invalid-pin.json | 7149 | 689ec1d938c806d8243eec4a29146d2777897ba84754c1a61145c0038999d8b1 |
 | bitwarden-export.json | 3386 | 9fb083c28636361d5adf9eb01ba4a38590c45b92e568fbc9072df460650659dd |
 | bitwarden-encrypted-export.json | 266 | 9fc2c8da5355a55f382878308ac748ca8ee8b0ad6fad54406835c220aeaa29f2 |
 | bitwarden-expected-import.json | 2871 | b091607b0f270b6e1e7d245bf535b2e8308c12a5e5d93dca54cf77a186cda802 |
 
 ### 10.2 本次验收日志与结果
 
-- check-build 完整日志：/tmp/t14-check-build.log（历史 v2.0 验收 82 项；v2.1.1 为 83 项）；
+- check-build 完整日志：/tmp/t14-check-build.log（历史 v2.0 验收 82 项；v2.1.1 为 83 项；v2.1.2 为 82 项）；
 - Node verify：e2e/verify-result.json（171 项，171 passed）；
-- 构建检查：reports/e2e-build-result.json（v2.1.1 为 83 项）；
+- 构建检查：reports/e2e-build-result.json（v2.1.2 为 82 项）；
 - Python：40 项（命令输出见终端）。
 
 ### 10.3 相关文档

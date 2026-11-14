@@ -1,8 +1,8 @@
 {
   "package": "com.flykhan.wristkey",
   "name": "腕证",
-  "versionName": "2.1.1",
-  "versionCode": 10,
+  "versionName": "2.1.2",
+  "versionCode": 11,
   "minPlatformVersion": 1000,
   "icon": "/common/logo.png",
   "deviceTypeList": [

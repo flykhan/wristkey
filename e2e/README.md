@@ -165,13 +165,13 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - protocol-v3/v2-compat-session.json：v2 手机消息（version=2、无 password）→ v3 手环；
   旧密码按“缺省=保留”处理，快照 version=2，但写入活动存储键 `mfa_snapshot_v3`。
 - protocol-v3/pin-set.json：合法 mfa_pin_set（PBKDF2-SHA256、salt 32 hex、hash 64 hex、
-  iterations 1200、图案 TSCCT）；expected.ack={ok:true,enabled:true}，state enabled=true。
+  iterations 10、图案 TSCCT）；expected.ack={ok:true,enabled:true}，state enabled=true。
 - protocol-v3/pin-ack.json：成功不得带 error、失败原因码必须在
   invalid_pin_payload/invalid_version/storage_error 白名单内，共 10 例。
 - protocol-v3/pin-query-state.json / pin-clear.json：pin_query → pin_state（requestId 回填、
   广播无 requestId）；pin_clear 删除图案、失败计数归零、ack/state enabled=false。
 - protocol-v3/invalid-pin.json：17 个非法载荷（pin 缺失/非对象、algorithm 错、salt/hash
-  长度或大小写/非 hex、iterations 999/20001/小数、version=2 的 set/query/clear、缺 sentAt 等）；
+  长度或大小写/非 hex、iterations 0/20001/小数、version=2 的 set/query/clear、缺 sentAt 等）；
   失败 ack=invalid_pin_payload 且**旧图案不变**，envelope 非法则整体忽略。
 
 ## verify.mjs 覆盖（A–K）
@@ -213,7 +213,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - band-app/dist/*.rpk 存在，manifest.package == com.flykhan.wristkey、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
 - Android APK 存在，包名 com.flykhan.wristkey、应用名 腕证；
-- 版本号：rpk 2.1.1 / versionCode 10（v2.1.1 暂时关闭启动图案门禁，页面/协议代码保留），APK 2.1.1 / versionCode 6（同版号，便于两端配套）；
+- 版本号：rpk 2.1.2 / versionCode 11（入口图案内联在 index，门禁已恢复），APK 2.1.2 / versionCode 7（同版号，便于两端配套）；
 - APK 无 INTERNET；权限列表仅允许 *DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
@@ -224,14 +224,15 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
   pages/picker/picker.ux 存在（标题“首字母筛选”、字母桶/全部/#）且 manifest 注册路由；
   band-app/tests 覆盖字母桶/筛选与分页（ACCOUNTS_PER_PAGE/paginate）；
 - **band UI v4 静态检查**（docs/design/ui-v4-analysis.md）：
-  **v2.1.1 启动不强制图案**：app.ux 不含 /pages/lock、router.push、shouldRelock、loadPin；index 不含 ensureUnlocked；
-  pages/lock/pages/pin 与 5 位 TSC 图案、三色 #6EE7C7/#7AA2F7/#F2B880、PBKDF2-SHA256 1200 次/16 B salt、
-  失败 5 次锁 30 s 递增、只存派生值 + 锁计数持久化均保留（待后续恢复）、
+  **v2.1.2 入口内联门禁**：index 含 if="{{ locked }}"/if="{{ mainVisible }}"、coldStart、shouldRelock、
+  markUnlocked、verifyPattern、nextLockAfterFailure、tapLockSymbol；app.ux 不承担门禁；
+  pages/pin 与 5 位 TSC 图案、三色 #6EE7C7/#7AA2F7/#F2B880、PBKDF2-SHA256 10 次/16 B salt、
+  失败 5 次锁 30 s 递增、只存派生值 + 锁计数持久化；
   主界面 56px rail + 菜单 + 3 条/页、picker 4×4×3 分页、详情 username/password/code、
-  密码遮罩 10 s、菜单 3 项（立即同步/关于/退出，入口密码暂时移除）、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
-  **页面栈回归**：所有页面不使用 router.replace；锁屏页保留 back 解锁；
+  密码遮罩 10 s、菜单 4 项（入口密码/立即同步/关于/退出）、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
+  **页面栈回归**：所有页面不使用 router.replace，启动流程不 push/pages/lock；
 - **Android UI v4 静态检查**（docs/design/android-v2-spec.md）：
-  PatternPin 5 位/TSC/PBKDF2 1200/16 B 随机 salt、入口图案设置页、set/clear/query pin、
+  PatternPin 5 位/TSC/PBKDF2 10/16 B 随机 salt、入口图案设置页、set/clear/query pin、
   3 Tab、FAB + ModalBottomSheet、密码 10 s 遮罩、详情/入口图案卡、深色 token、
   协议 v3 password/pin、图案/协议/密码单测存在；
 - 结果写入 ../reports/e2e-build-result.json，退出码 0 = 无 FAIL（SKIP 可接受）。

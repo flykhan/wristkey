@@ -107,10 +107,10 @@
       "pin": {
         "pattern": "TSCCT",
         "algorithm": "PBKDF2-SHA256",
-        "iterations": 1200,
+        "iterations": 10,
         "saltHex": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
         "storageKey": "wristkey_pin_v1",
-        "setMessageBytes": 227,
+        "setMessageBytes": 225,
         "invalidCases": 17,
         "ackCases": 10
       }
@@ -164,8 +164,8 @@
     },
     {
       "name": "protocol-v3/pin-set.json",
-      "bytes": 1266,
-      "sha256": "2e57d8f1c46f66143954d5b9a1977abf308c2179e1e9917a2e4d81e796fd4ec8"
+      "bytes": 1258,
+      "sha256": "b9f3f173a28219999e5175f1cf115707fa9b1288c2c49ddab78ae48c22d279ba"
     },
     {
       "name": "protocol-v3/pin-ack.json",
@@ -174,8 +174,8 @@
     },
     {
       "name": "protocol-v3/pin-query-state.json",
-      "bytes": 1001,
-      "sha256": "206c63fe81e7e5b215cfec8c7a19ac7331b9fdb98443b9432f97773b096f9784"
+      "bytes": 999,
+      "sha256": "c5b5275d2f5473da6b237d74ed67adb45ec43bb7a95a8f8423fa4165db7ce42b"
     },
     {
       "name": "protocol-v3/pin-clear.json",
@@ -184,8 +184,8 @@
     },
     {
       "name": "protocol-v3/invalid-pin.json",
-      "bytes": 7171,
-      "sha256": "44eabb80783f63d5518fe6d984474fd3b1b9f56c4cf760301fec244e5faacbbb"
+      "bytes": 7149,
+      "sha256": "689ec1d938c806d8243eec4a29146d2777897ba84754c1a61145c0038999d8b1"
     },
     {
       "name": "bitwarden-export.json",

@@ -30,11 +30,11 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'com.flykhan.wristkey';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 2.1.1（暂时移除启动图案门禁，页面与协议代码保留）/ APK 2.1.1（同步版号）
-const EXPECTED_BAND_VERSION = '2.1.1';
-const EXPECTED_BAND_VERSION_CODE = 10;
-const EXPECTED_APK_VERSION = '2.1.1';
-const EXPECTED_APK_VERSION_CODE = 6;
+// 版本：band .rpk 2.1.2（入口图案内联 + PBKDF2 10 轮）/ APK 2.1.2（迭代次数对齐）
+const EXPECTED_BAND_VERSION = '2.1.2';
+const EXPECTED_BAND_VERSION_CODE = 11;
+const EXPECTED_APK_VERSION = '2.1.2';
+const EXPECTED_APK_VERSION_CODE = 7;
 const EXPECTED_BAND_RPK_NAME = 'com.flykhan.wristkey.release.' + EXPECTED_BAND_VERSION + '.rpk';
 
 const argv = process.argv.slice(2);
@@ -515,25 +515,24 @@ function checkBandUiV4() {
     }
   }
 
-  // 1) 2.1.1：启动不再强制图案。入口页不得 push 锁屏；锁屏/设置页保留待后续恢复。
+  // 1) 2.1.2：入口图案内联在 index 页（修复 2.1.0/2.1.1 空页面栈与自动解锁问题）。
   const gateMarkers = ['/pages/lock', 'router.push', 'shouldRelock', 'loadPin'];
   const gateLeft = gateMarkers.filter(function (marker) { return appUx.indexOf(marker) >= 0; });
   if (gateLeft.length > 0) {
-    fail('UI v4 启动不强制图案（2.1.1）', 'app.ux 仍包含: ' + gateLeft.join(' / '));
-  } else if (indexUx.indexOf('ensureUnlocked') >= 0 || indexUx.indexOf('pages/lock') >= 0) {
-    fail('UI v4 启动不强制图案（2.1.1）', 'index.ux 仍在启动时跳转锁屏');
+    fail('UI v4 入口图案内联在 index（2.1.2）', 'app.ux 仍包含: ' + gateLeft.join(' / '));
+  } else if (indexUx.indexOf('pages/lock') >= 0 || indexUx.indexOf('router.replace(') >= 0) {
+    fail('UI v4 入口图案内联在 index（2.1.2）', 'index.ux 仍在跳转/替换锁屏路由');
   } else {
-    pass('UI v4 启动不强制图案（2.1.1）');
+    checkMarkers('UI v4 入口图案内联在 index（2.1.2）', indexUx, [
+      'if="{{ locked }}"', 'if="{{ mainVisible }}"', 'coldStart', 'shouldRelock',
+      'markUnlocked', 'verifyPattern', 'nextLockAfterFailure', 'tapLockSymbol'
+    ]);
   }
   if (appUx.indexOf('router.replace(') >= 0 || indexUx.indexOf('router.replace(') >= 0 || lockUx.indexOf('router.replace(') >= 0) {
-    fail('UI v4 锁屏页面栈', '入口页/锁屏页不应使用 router.replace');
+    fail('UI v4 锁屏不破坏页面栈', '入口页/锁屏页不应使用 router.replace');
   } else {
-    pass('UI v4 锁屏页面栈');
+    pass('UI v4 锁屏不破坏页面栈');
   }
-  checkMarkers('UI v4 锁屏页 pages/lock', lockUx, [
-    'class="slots"', 'for="{{ slots }}"', 'PATTERN_SYMBOLS', 'verifyPattern',
-    'nextLockAfterFailure', '腕证已锁定', 'class="close"', 'router.back'
-  ]);
   checkMarkers('UI v4 入口图案设置页 pages/pin', pinUx, [
     'class="slots"', 'for="{{ slots }}"', '设置入口密码', 'verifyPattern', 'createPinRecord', 'mode'
   ]);
@@ -545,8 +544,8 @@ function checkBandUiV4() {
   checkMarkers('UI v4 图案三色（#6EE7C7/#7AA2F7/#F2B880）', pinJs, [
     '#6EE7C7', '#7AA2F7', '#F2B880', '三角', '方形', '圆形'
   ]);
-  checkMarkers('UI v4 PBKDF2-SHA256 1200 次 + 16 字节 salt', pinJs, [
-    'PBKDF2_ALGORITHM = "PBKDF2-SHA256"', 'DEFAULT_PBKDF2_ITERATIONS = 1200',
+  checkMarkers('UI v4 PBKDF2-SHA256 10 次（Vela 无 JIT）+ 16 字节 salt', pinJs, [
+    'PBKDF2_ALGORITHM = "PBKDF2-SHA256"', 'DEFAULT_PBKDF2_ITERATIONS = 10',
     'SALT_BYTES = 16', 'HASH_BYTES = 32', 'randomBytesHex'
   ]);
   checkMarkers('UI v4 失败锁定策略（5 次 / 30s 递增）', pinJs, [
@@ -588,14 +587,14 @@ function checkBandUiV4() {
     'PASSWORD_REVEAL_MS = 10000', '••••••••', '未导入密码'
   ]);
 
-  // 6) 2.1.1 菜单 3 项（入口密码暂时移除），分类入口彻底移除
-  checkMarkers('UI v4 菜单 3 项（立即同步/关于/退出）', menuUx, [
-    '立即同步', '关于', '退出应用'
+  // 6) 2.1.2 菜单 4 项（入口密码恢复），分类入口彻底移除
+  checkMarkers('UI v4 菜单 4 项（入口密码/立即同步/关于/退出）', menuUx, [
+    '入口密码', 'openPin', '立即同步', '关于', '退出应用'
   ]);
-  if (menuUx.indexOf('入口密码') >= 0 || menuUx.indexOf('openPin') >= 0) {
-    fail('UI v4 菜单不显示入口密码（2.1.1）', 'menu.ux 仍包含入口密码/openPin');
+  if (menuUx.indexOf('分类') >= 0 || menuUx.indexOf('category') >= 0) {
+    fail('UI v4 菜单无分类入口', 'menu.ux 仍包含分类入口');
   } else {
-    pass('UI v4 菜单不显示入口密码（2.1.1）');
+    pass('UI v4 菜单无分类入口');
   }
 
   // 7) 协议 v3：password + pin 消息；存储键 mfa_snapshot_v3
@@ -789,12 +788,12 @@ function checkAndroidUiV4() {
     }
   }
 
-  // 1) 图案派生：5 位 TSC、PBKDF2-HMAC-SHA256 1200 次、16 字节随机 salt
+  // 1) 图案派生：5 位 TSC、PBKDF2-HMAC-SHA256 10 次（Vela 无 JIT）、16 字节随机 salt
   checkMarkers('Android v4 PatternPin 5 位 + TSC 正则', patternPin, [
     'const val LENGTH = 5', 'PATTERN_REGEX = Regex("^[TSC]{5}$")'
   ]);
-  checkMarkers('Android v4 PatternPin PBKDF2 1200 次 + 16 字节 salt', patternPin, [
-    'const val ITERATIONS = 1200', 'const val SALT_BYTES = 16',
+  checkMarkers('Android v4 PatternPin PBKDF2 10 次 + 16 字节 salt', patternPin, [
+    'const val ITERATIONS = 10', 'const val SALT_BYTES = 16',
     'PBKDF2WithHmacSHA256', 'SALT_HEX_LENGTH'
   ]);
   checkMarkers('Android v4 PatternPin 随机 salt + 派生函数', patternPin, [
@@ -846,8 +845,8 @@ function checkAndroidUiV4() {
     fail('Android v4 图案/协议/密码单测存在', '缺少: ' + missing.join(', '));
   }
   const testSource = tests.map(function (name) { return readIfExists(join(testRoot, name)) || ''; }).join('\n');
-  checkMarkers('Android v4 单测覆盖 derive/1200/mfa_pin', testSource, [
-    'PatternPin.derive', '1200', 'mfa_pin_set'
+  checkMarkers('Android v4 单测覆盖 derive/10/mfa_pin', testSource, [
+    'PatternPin.derive', '08c17173f5834afbde11e3cae68ab75a4f7b2c244ea90926c3a62a3c5566d4a6', 'mfa_pin_set'
   ]);
 }
 

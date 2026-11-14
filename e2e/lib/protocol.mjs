@@ -45,9 +45,9 @@ export const PIN_STORAGE_KEY = 'wristkey_pin_v1';
 export const PIN_ALGORITHM = 'PBKDF2-SHA256';
 export const PIN_SALT_HEX_LENGTH = 32;
 export const PIN_HASH_HEX_LENGTH = 64;
-export const PIN_ITERATIONS_MIN = 1000;
+export const PIN_ITERATIONS_MIN = 1;
 export const PIN_ITERATIONS_MAX = 20000;
-export const PIN_ITERATIONS_DEFAULT = 1200;
+export const PIN_ITERATIONS_DEFAULT = 10;
 export const PIN_PATTERN_REGEX = /^[TSC]{5}$/;
 
 export const PIN_ACK_ERRORS = ['invalid_pin_payload', 'invalid_version', 'storage_error'];
