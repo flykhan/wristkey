@@ -30,11 +30,11 @@ const WORKSPACE = join(E2E_ROOT, '..');
 const REPORTS = join(WORKSPACE, 'reports');
 const TARGET_PACKAGE = 'com.flykhan.wristkey';
 const TARGET_APP_NAME = '腕证';
-// 版本：band .rpk 2.1.2（入口图案内联 + PBKDF2 10 轮）/ APK 2.1.2（迭代次数对齐）
-const EXPECTED_BAND_VERSION = '2.1.2';
-const EXPECTED_BAND_VERSION_CODE = 11;
-const EXPECTED_APK_VERSION = '2.1.2';
-const EXPECTED_APK_VERSION_CODE = 7;
+// 版本：band .rpk 2.2.0（真机反馈 UI 调整 + PBKDF2 1 轮）/ APK 2.2.0（迭代次数与重试对齐）
+const EXPECTED_BAND_VERSION = '2.2.0';
+const EXPECTED_BAND_VERSION_CODE = 12;
+const EXPECTED_APK_VERSION = '2.2.0';
+const EXPECTED_APK_VERSION_CODE = 8;
 const EXPECTED_BAND_RPK_NAME = 'com.flykhan.wristkey.release.' + EXPECTED_BAND_VERSION + '.rpk';
 
 const argv = process.argv.slice(2);
@@ -321,7 +321,7 @@ function checkBandApp() {
   if (rpkManifest.versionName === EXPECTED_BAND_VERSION) {
     pass('rpk versionName', EXPECTED_BAND_VERSION);
   } else {
-    fail('rpk versionName', '期望 ' + EXPECTED_BAND_VERSION + '（UI v3 版），实际 ' + String(rpkManifest.versionName));
+    fail('rpk versionName', '期望 ' + EXPECTED_BAND_VERSION + '（2.2.0 真机反馈修复版），实际 ' + String(rpkManifest.versionName));
   }
   if (rpkManifest.versionCode === EXPECTED_BAND_VERSION_CODE) {
     pass('rpk versionCode', String(EXPECTED_BAND_VERSION_CODE));
@@ -544,9 +544,9 @@ function checkBandUiV4() {
   checkMarkers('UI v4 图案三色（#6EE7C7/#7AA2F7/#F2B880）', pinJs, [
     '#6EE7C7', '#7AA2F7', '#F2B880', '三角', '方形', '圆形'
   ]);
-  checkMarkers('UI v4 PBKDF2-SHA256 10 次（Vela 无 JIT）+ 16 字节 salt', pinJs, [
-    'PBKDF2_ALGORITHM = "PBKDF2-SHA256"', 'DEFAULT_PBKDF2_ITERATIONS = 10',
-    'SALT_BYTES = 16', 'HASH_BYTES = 32', 'randomBytesHex'
+  checkMarkers('UI v4 PBKDF2-SHA256 1 次（Vela 无 JIT）+ 16 字节 salt', pinJs, [
+    'PBKDF2_ALGORITHM = "PBKDF2-SHA256"', 'DEFAULT_PBKDF2_ITERATIONS = 1',
+    'MIN_PBKDF2_ITERATIONS = 1', 'SALT_BYTES = 16', 'HASH_BYTES = 32', 'randomBytesHex'
   ]);
   checkMarkers('UI v4 失败锁定策略（5 次 / 30s 递增）', pinJs, [
     'LOCK_AFTER_FAILURES = 5', 'LOCK_STEP_MS = 30000'
@@ -555,15 +555,15 @@ function checkBandUiV4() {
     'PIN_STORAGE_KEY', 'PIN_LOCK_STORAGE_KEY', 'savePin', 'saveLock'
   ]);
 
-  // 3) 主界面：56px rail + 菜单按钮 + 3 条/页
+  // 3) 主界面：64px rail + 菜单按钮 + 3 条/页
   if (!indexUx) {
     fail('UI v4 主界面 rail 56px + 菜单按钮', '缺少 src/pages/index/index.ux');
   } else {
-    const railMatch = indexUx.match(/\.rail\s*\{[^}]*width:\s*56px/);
+    const railMatch = indexUx.match(/\.rail\s*\{[^}]*width:\s*64px/);
     if (railMatch) {
-      pass('UI v4 主界面 rail 56px');
+      pass('UI v4 主界面 rail 64px');
     } else {
-      fail('UI v4 主界面 rail 56px', 'index.ux .rail 未声明 width: 56px');
+      fail('UI v4 主界面 rail 64px', 'index.ux .rail 未声明 width: 64px');
     }
     checkMarkers('UI v4 主界面菜单按钮 + 3 条/页', indexUx, [
       'class="menu-button"', 'openMenu', 'ACCOUNTS_PER_PAGE', 'paginate('
@@ -627,6 +627,162 @@ function checkBandUiV4() {
   checkMarkers('UI v4 单测覆盖图案派生/锁定/协议', v4Source, [
     'PATTERN_LENGTH', 'derivePatternHash', 'LOCK_AFTER_FAILURES', 'mfa_pin_set'
   ]);
+}
+
+// ------------------------------------------- 1d. band UI v5 静态检查（2.2.0 真机反馈修复）
+function checkBandUiV5() {
+  process.stdout.write('\n## band UI v5（2.2.0：固定卡片高度/尺寸放大/锁屏期间建链）\n');
+  const bandRoot = join(WORKSPACE, 'band-app');
+  const srcRoot = join(bandRoot, 'src');
+  const indexUx = readIfExists(join(srcRoot, 'pages', 'index', 'index.ux'));
+  const detailUx = readIfExists(join(srcRoot, 'pages', 'detail', 'detail.ux'));
+  const menuUx = readIfExists(join(srcRoot, 'pages', 'menu', 'menu.ux'));
+  const pickerUx = readIfExists(join(srcRoot, 'pages', 'picker', 'picker.ux'));
+  const pinUx = readIfExists(join(srcRoot, 'pages', 'pin', 'pin.ux'));
+  const copyrightUx = readIfExists(join(srcRoot, 'pages', 'copyright', 'copyright.ux'));
+  const pinJs = readIfExists(join(srcRoot, 'common', 'scripts', 'pin.js'));
+  const manifest = readIfExists(join(srcRoot, 'manifest.json'));
+  const pkg = readIfExists(join(bandRoot, 'package.json'));
+
+  function checkMarkers(name, source, markers) {
+    if (!source) {
+      fail(name, '文件缺失');
+      return;
+    }
+    const missing = markers.filter(function (marker) {
+      return typeof marker === 'string' ? source.indexOf(marker) < 0 : !marker.test(source);
+    });
+    if (missing.length === 0) {
+      pass(name);
+    } else {
+      fail(name, '缺少: ' + missing.map(function (marker) { return String(marker); }).join(' / '));
+    }
+  }
+
+  function cssBlock(source, selector) {
+    if (!source) {
+      return '';
+    }
+    const start = source.indexOf(selector + ' {');
+    if (start < 0) {
+      return '';
+    }
+    const end = source.indexOf('}', start);
+    return end < 0 ? '' : source.slice(start, end + 1);
+  }
+
+  function checkCss(name, source, selector, patterns) {
+    const block = cssBlock(source, selector);
+    if (!block) {
+      fail(name, '缺少 CSS 块 ' + selector);
+      return;
+    }
+    const missing = patterns.filter(function (pattern) { return !pattern.test(block); });
+    if (missing.length === 0) {
+      pass(name);
+    } else {
+      fail(name, 'CSS 块 ' + selector + ' 不匹配: ' + missing.map(function (pattern) { return String(pattern); }).join(' / '));
+    }
+  }
+
+  function methodBody(source, name) {
+    if (!source) {
+      return '';
+    }
+    const definition = new RegExp('\\n  ' + name + '\\([^)]*\\) \\{');
+    const match = definition.exec(source);
+    if (!match) {
+      return '';
+    }
+    const bodyStart = match.index + match[0].length;
+    const end = source.indexOf('\n  },', bodyStart);
+    return source.slice(bodyStart, end < 0 ? undefined : end);
+  }
+
+  // 1) 2.2.0 版本与包名
+  if (manifest) {
+    try {
+      const parsed = JSON.parse(manifest);
+      const problems = [];
+      if (parsed.versionName !== EXPECTED_BAND_VERSION) problems.push('versionName=' + String(parsed.versionName));
+      if (parsed.versionCode !== EXPECTED_BAND_VERSION_CODE) problems.push('versionCode=' + String(parsed.versionCode));
+      if (parsed.package !== TARGET_PACKAGE) problems.push('package=' + String(parsed.package));
+      if (problems.length === 0) {
+        pass('UI v5 band manifest 2.2.0/12 + 包名', TARGET_PACKAGE);
+      } else {
+        fail('UI v5 band manifest 2.2.0/12 + 包名', problems.join(' / '));
+      }
+    } catch (error) {
+      fail('UI v5 band manifest 2.2.0/12 + 包名', 'manifest.json 解析失败: ' + String(error.message));
+    }
+  } else {
+    fail('UI v5 band manifest 2.2.0/12 + 包名', '缺少 src/manifest.json');
+  }
+  checkMarkers('UI v5 band package.json 版本 2.2.0', pkg, ['"version": "2.2.0"']);
+  checkMarkers('UI v5 版权/菜单版本文案 2.2.0', (copyrightUx || '') + '\n' + (menuUx || ''), [
+    '版本 2.2.0', '版本 2.2.0 · Apache-2.0'
+  ]);
+
+  // 2) 2.2.0 真机反馈：筛选后 1-2 条卡片不拉伸（固定 98px）
+  checkCss('UI v5 账号卡片固定高度 98px（筛选不拉伸）', indexUx, '.otp-item', [
+    /height:\s*98px/, /flex:\s*none/
+  ]);
+  checkCss('UI v5 卡片字号（issuer 24 / account 15 / remaining 16）', indexUx, '.otp-issuer', [/font-size:\s*24px/]);
+  checkCss('UI v5 卡片账号字号 15px', indexUx, '.otp-account', [/font-size:\s*15px/]);
+  checkCss('UI v5 卡片倒计时字号 16px', indexUx, '.otp-remaining', [/font-size:\s*16px/]);
+  checkMarkers('UI v5 验证码字号按位数选择（48/46）', indexUx, ['function listCodeSize', 'return 48', 'return 46']);
+
+  // 3) 2.2.0 放大可点击区域
+  checkCss('UI v5 A-Z 按钮 52x52', indexUx, '.letter-button', [/width:\s*52px/, /height:\s*52px/]);
+  checkCss('UI v5 菜单按钮 64x44', indexUx, '.menu-button', [/width:\s*64px/, /height:\s*44px/]);
+  checkCss('UI v5 锁屏键 128x100', indexUx, '.lock-key', [/width:\s*128px/, /height:\s*100px/]);
+  checkCss('UI v5 锁屏关闭键 44x44', indexUx, '.lock-close', [/width:\s*44px/, /height:\s*44px/]);
+  checkCss('UI v5 详情返回按钮 72x40', detailUx, '.back-button', [/width:\s*72px/, /height:\s*40px/]);
+  checkCss('UI v5 用户名/密码值 18px', detailUx, '.credential-value', [/font-size:\s*18px/]);
+  checkMarkers('UI v5 详情验证码按位数选择', detailUx, ['function detailCodeSize', 'return length <= 6 ? 60 : 58']);
+  checkCss('UI v5 菜单行高 56px / 标题 22px', menuUx, '.option', [/height:\s*56px/]);
+  checkCss('UI v5 菜单标题 22px', menuUx, '.title', [/font-size:\s*22px/]);
+  checkCss('UI v5 picker 关闭键 44x44 / 字母 24px', pickerUx, '.close', [/width:\s*44px/, /height:\s*44px/]);
+  checkCss('UI v5 picker 字母 24px', pickerUx, '.cell-letter', [/font-size:\s*24px/]);
+  checkCss('UI v5 设置图案键 128x100', pinUx, '.key', [/width:\s*128px/, /height:\s*100px/]);
+
+  // 4) 2.2.0：锁屏期间保持 xms 通道，channelReady 只由 connect() 结果决定
+  const showLock = methodBody(indexUx, 'showLock');
+  if (!showLock) {
+    fail('UI v5 showLock 调用 setupChannel', 'index.ux 缺少 showLock()');
+  } else {
+    checkMarkers('UI v5 showLock 调用 setupChannel 并保持锁屏态', showLock, [
+      'this.locked = true', 'this.mainVisible = false', 'this.setupChannel()'
+    ]);
+  }
+  const setupChannel = methodBody(indexUx, 'setupChannel');
+  if (!setupChannel) {
+    fail('UI v5 channelReady 由连接结果决定', 'index.ux 缺少 setupChannel()');
+  } else {
+    checkMarkers('UI v5 channelReady 由 connect() 结果决定（不先置 true）', setupChannel, [
+      'if (this.channelReady)', 'const connection = connect(', 'this.channelReady = connection !== null'
+    ]);
+    if (/this\.channelReady\s*=\s*true/.test(setupChannel)) {
+      fail('UI v5 channelReady 不预先置 true', 'setupChannel() 仍直接写 channelReady = true');
+    } else {
+      pass('UI v5 channelReady 不预先置 true');
+    }
+  }
+  checkMarkers('UI v5 pin.js 默认/下限迭代 = 1', pinJs, [
+    'DEFAULT_PBKDF2_ITERATIONS = 1', 'MIN_PBKDF2_ITERATIONS = 1', 'MAX_PBKDF2_ITERATIONS = 20000'
+  ]);
+
+  // 5) 2.2.0 单测存在并覆盖真机反馈回归
+  const testsDir = join(bandRoot, 'tests');
+  const uxV5 = readIfExists(join(testsDir, 'uxV5.test.mjs'));
+  if (uxV5) {
+    pass('UI v5 单测存在', 'tests/uxV5.test.mjs');
+    checkMarkers('UI v5 单测覆盖固定高度/锁屏建链/尺寸', uxV5, [
+      '98px', 'channelReady', 'setupChannel', '128px', '72px'
+    ]);
+  } else {
+    fail('UI v5 单测存在', '缺少 band-app/tests/uxV5.test.mjs');
+  }
 }
 
 // ---------------------------------------------------------- 2. android-app
@@ -792,8 +948,8 @@ function checkAndroidUiV4() {
   checkMarkers('Android v4 PatternPin 5 位 + TSC 正则', patternPin, [
     'const val LENGTH = 5', 'PATTERN_REGEX = Regex("^[TSC]{5}$")'
   ]);
-  checkMarkers('Android v4 PatternPin PBKDF2 10 次 + 16 字节 salt', patternPin, [
-    'const val ITERATIONS = 10', 'const val SALT_BYTES = 16',
+  checkMarkers('Android v4 PatternPin PBKDF2 1 次 + 16 字节 salt', patternPin, [
+    'const val ITERATIONS = 1', 'const val MIN_ITERATIONS = 1', 'const val SALT_BYTES = 16',
     'PBKDF2WithHmacSHA256', 'SALT_HEX_LENGTH'
   ]);
   checkMarkers('Android v4 PatternPin 随机 salt + 派生函数', patternPin, [
@@ -845,9 +1001,98 @@ function checkAndroidUiV4() {
     fail('Android v4 图案/协议/密码单测存在', '缺少: ' + missing.join(', '));
   }
   const testSource = tests.map(function (name) { return readIfExists(join(testRoot, name)) || ''; }).join('\n');
-  checkMarkers('Android v4 单测覆盖 derive/10/mfa_pin', testSource, [
-    'PatternPin.derive', '08c17173f5834afbde11e3cae68ab75a4f7b2c244ea90926c3a62a3c5566d4a6', 'mfa_pin_set'
+  checkMarkers('Android v4 单测覆盖 derive/mfa_pin', testSource, [
+    'PatternPin.derive', 'mfa_pin_set'
   ]);
+}
+
+// ------------------------------------------- 2b. android UI v5 静态检查（2.2.0）
+function checkAndroidUiV5() {
+  process.stdout.write('\n## android UI v5（2.2.0：PBKDF2 1 轮/无码账号/重试/尺寸）\n');
+  const androidRoot = join(WORKSPACE, 'android-app');
+  const javaRoot = join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'flykhan', 'wristkey');
+  const testRoot = join(androidRoot, 'app', 'src', 'test', 'java', 'com', 'flykhan', 'wristkey');
+  const patternPin = readIfExists(join(javaRoot, 'pattern', 'PatternPin.kt'));
+  const patternPinTest = readIfExists(join(testRoot, 'pattern', 'PatternPinTest.kt'));
+  const pinProtocolTest = readIfExists(join(testRoot, 'PinProtocolTest.kt'));
+  const syncProtocol = readIfExists(join(javaRoot, 'protocol', 'SyncProtocol.kt'));
+  const syncProtocolTest = readIfExists(join(testRoot, 'SyncProtocolTest.kt'));
+  const bitwardenImporter = readIfExists(join(javaRoot, 'bitwarden', 'BitwardenImporter.kt'));
+  const bitwardenTest = readIfExists(join(testRoot, 'bitwarden', 'BitwardenImporterTest.kt'));
+  const accountModels = readIfExists(join(javaRoot, 'AccountModels.kt'));
+  const syncController = readIfExists(join(javaRoot, 'sync', 'WearableSyncController.kt'));
+  const appUi = readIfExists(join(javaRoot, 'ui', 'WristKeyApp.kt'));
+
+  function checkMarkers(name, source, markers) {
+    if (!source) {
+      fail(name, '文件缺失');
+      return;
+    }
+    const missing = markers.filter(function (marker) {
+      return typeof marker === 'string' ? source.indexOf(marker) < 0 : !marker.test(source);
+    });
+    if (missing.length === 0) {
+      pass(name);
+    } else {
+      fail(name, '缺少: ' + missing.map(function (marker) { return String(marker); }).join(' / '));
+    }
+  }
+
+  // 1) PBKDF2 迭代 = 1（两端与协议一致），固定已知向量
+  checkMarkers('Android v5 PatternPin 默认/下限迭代 1', patternPin, [
+    'const val ITERATIONS = 1', 'const val MIN_ITERATIONS = 1', 'const val MAX_ITERATIONS = 20000'
+  ]);
+  checkMarkers('Android v5 PatternPin 固定向量 1 轮', patternPinTest, [
+    '14d3407409dca32a6cebfb70c29871fd8b381466e8b290bc22625dc1fe8795a5',
+    'PatternPin.derive("TSCSC", saltHex, 1)', 'assertEquals(1, PatternPin.ITERATIONS)', 'assertEquals(1, PatternPin.MIN_ITERATIONS)'
+  ]);
+  checkMarkers('Android v5 SyncProtocol PIN_ITERATIONS = 1', syncProtocol, [
+    'const val PIN_ITERATIONS = 1', 'const val PIN_MIN_ITERATIONS = 1', 'const val PIN_MAX_ITERATIONS = 20000'
+  ]);
+  checkMarkers('Android v5 PinProtocolTest 迭代 1', pinProtocolTest, [
+    'assertEquals(1, pin.getInt("iterations"))', 'assertEquals(1, SyncProtocol.PIN_ITERATIONS)'
+  ]);
+
+  // 2) Bitwarden 无 TOTP 条目导入（仅手机本地，不参与同步）
+  checkMarkers('Android v5 Bitwarden 无 totp 条目导入', bitwardenImporter, [
+    'rawTotp.isEmpty()', 'Secret.noOtpAccountId(issuer, username, index)',
+    '没有 TOTP 的条目也要导入', '仅手机端可见'
+  ]);
+  checkMarkers('Android v5 AccountModels hasOtp', accountModels, [
+    'val hasOtp: Boolean', 'get() = secret.isNotEmpty()'
+  ]);
+  checkMarkers('Android v5 syncableAccounts 过滤无码账号', syncProtocol, [
+    'fun syncableAccounts(accounts: List<WristKeyAccount>): List<WristKeyAccount> = accounts.filter { it.hasOtp }',
+    'fun noOtpCount(accounts: List<WristKeyAccount>): Int = accounts.count { !it.hasOtp }'
+  ]);
+  checkMarkers('Android v5 Bitwarden 导入测试 6+4 + n_ id', bitwardenTest, [
+    'assertEquals(6, result.importedCount)', 'assertEquals(4, result.skippedCount)',
+    'noOtp.id.startsWith("n_")', 'assertEquals("", noOtp.secret)'
+  ]);
+
+  // 3) 手机拉起 / 同步重试 / 图案重试常量
+  checkMarkers('Android v5 手机拉起/图案/同步重试常量', syncController, [
+    'LAUNCH_DELAY_MS = 1_300L', 'PIN_RETRY_INTERVAL_MS = 2_500L',
+    'MAX_PIN_ATTEMPTS = 3', 'SEND_RETRY_COUNT = 2', 'SEND_RETRY_DELAY_MS = 400L'
+  ]);
+  checkMarkers('Android v5 同步发送前过滤无码账号', syncController, [
+    'SyncProtocol.syncableAccounts(accounts)', 'SyncProtocol.noOtpCount(accounts)'
+  ]);
+
+  // 4) 2.2.0 真机反馈：返回按钮 44dp、详情值 16sp
+  checkMarkers('Android v5 编辑页 44dp 返回按钮', appUi, [
+    'modifier = Modifier.size(44.dp)', 'contentDescription = "返回"'
+  ]);
+  checkMarkers('Android v5 详情值 16sp', appUi, ['fontSize = 16.sp']);
+
+  // 5) 回归测试文件存在
+  const requiredTests = ['pattern/PatternPinTest.kt', 'PinProtocolTest.kt', 'SyncProtocolTest.kt', 'bitwarden/BitwardenImporterTest.kt'];
+  const missing = requiredTests.filter(function (name) { return !existsSync(join(testRoot, name)); });
+  if (missing.length === 0) {
+    pass('Android v5 2.2.0 回归单测存在', requiredTests.join(', '));
+  } else {
+    fail('Android v5 2.2.0 回归单测存在', '缺少: ' + missing.join(' / '));
+  }
 }
 
 // ------------------------------------------------- 3. 签名与包名一致性
@@ -952,8 +1197,10 @@ async function main() {
   const band = checkBandApp();
   checkBandUiV3();
   checkBandUiV4();
+  checkBandUiV5();
   const android = checkAndroidApp();
   checkAndroidUiV4();
+  checkAndroidUiV5();
   checkSigning(band, android);
 
   const passed = checks.filter(function (item) { return item.status === 'PASS'; }).length;

@@ -23,7 +23,7 @@
         "type": "mfa_pin_set",
         "version": 3,
         "sentAt": 1760000003000,
-        "pin": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25"
+        "pin": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc"
       }
     },
     {
@@ -52,8 +52,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA1",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-          "iterations": 10
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+          "iterations": 1
         }
       }
     },
@@ -70,8 +70,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "a4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-          "iterations": 10
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+          "iterations": 1
         }
       }
     },
@@ -88,8 +88,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "FA4C1F4802B3CD594BBD46A5A1D3BDBC",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-          "iterations": 10
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+          "iterations": 1
         }
       }
     },
@@ -106,8 +106,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-          "iterations": 10
+          "hash": "dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+          "iterations": 1
         }
       }
     },
@@ -124,8 +124,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "C222F5E3B6E20D633291A5C8112DD4C25002329007CAB8B72CEF5A3E2459AC25",
-          "iterations": 10
+          "hash": "2DBC720AF102C020E10D28C89E25A6A32416E87A1E26B8F10D23BAA2BC9A41DC",
+          "iterations": 1
         }
       }
     },
@@ -143,7 +143,7 @@
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
           "hash": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
-          "iterations": 10
+          "iterations": 1
         }
       }
     },
@@ -160,7 +160,7 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
           "iterations": 0
         }
       }
@@ -178,7 +178,7 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
           "iterations": 20001
         }
       }
@@ -196,8 +196,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-          "iterations": 10.5
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+          "iterations": 1.5
         }
       }
     },
@@ -214,8 +214,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-          "iterations": 10
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+          "iterations": 1
         }
       }
     },
@@ -255,8 +255,8 @@
         "pin": {
           "algorithm": "PBKDF2-SHA256",
           "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-          "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-          "iterations": 10
+          "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+          "iterations": 1
         }
       }
     },

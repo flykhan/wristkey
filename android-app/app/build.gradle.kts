@@ -21,8 +21,8 @@ android {
         applicationId = "com.flykhan.wristkey"
         minSdk = 28
         targetSdk = 36
-        versionCode = 7
-        versionName = "2.1.2"
+        versionCode = 8
+        versionName = "2.2.0"
     }
 
     signingConfigs {

@@ -1,6 +1,8 @@
 package com.flykhan.wristkey.sync
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.xiaomi.xms.wearable.Wearable
 import com.xiaomi.xms.wearable.auth.AuthApi
@@ -82,6 +84,14 @@ class WearableSyncController(
     private var syncing = false
     private var currentSyncId: String? = null
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** 进行中的入口图案操作（set/clear）；为空表示没有待确认的操作。 */
+    private var pendingPinOperation: String? = null
+    private var pendingPinMessage: String? = null
+    private var pinAttempts = 0
+    private var pinTimeout: Runnable? = null
+
     private val incomingListener = OnMessageReceivedListener { _, bytes ->
         handleIncoming(bytes)
     }
@@ -99,6 +109,11 @@ class WearableSyncController(
             hasDeviceManagerPermission = false
             wearAppInstalled = null
             detachMessageListener()
+            if (pendingPinOperation != null) {
+                failPinOperation("手环连接已断开，请重新连接后重试")
+            } else {
+                cancelPinOperation()
+            }
             publishConnection("服务已断开")
         }
     }
@@ -110,6 +125,7 @@ class WearableSyncController(
 
     fun stop() {
         runCatching { serviceApi.unregisterServiceConnectionListener(serviceConnectionListener) }
+        cancelPinOperation()
         detachMessageListener()
     }
 
@@ -178,7 +194,7 @@ class WearableSyncController(
             listener.onPinError("未授权设备管理权限，无法设置入口图案")
             return
         }
-        sendPinMessage(connected, SyncProtocol.buildPinSet(saltHex, hashHex, iterations))
+        beginPinOperation(connected, PIN_OPERATION_SET, SyncProtocol.buildPinSet(saltHex, hashHex, iterations))
     }
 
     /** 关闭入口图案（v3）。 */
@@ -192,7 +208,7 @@ class WearableSyncController(
             listener.onPinError("未授权设备管理权限，无法关闭入口图案")
             return
         }
-        sendPinMessage(connected, SyncProtocol.buildPinClear())
+        beginPinOperation(connected, PIN_OPERATION_CLEAR, SyncProtocol.buildPinClear())
     }
 
     /** 连接上手环后查询入口图案状态（v3）；结果经 [Listener.onPinState] 返回。 */
@@ -207,11 +223,97 @@ class WearableSyncController(
     private fun sendPinMessage(connected: Node, message: String) {
         messageApi.sendMessage(connected.id, message.toByteArray(Charsets.UTF_8))
             .addOnSuccessListener {
-                Log.d(TAG, "已发送入口图案消息")
+                Log.d(TAG, "已发送入口图案查询消息")
             }
             .addOnFailureListener { error ->
-                listener.onPinError("发送失败：${describeError(error)}")
+                listener.onPinError("发送失败：" + describeError(error))
             }
+    }
+
+    /**
+     * 入口图案可靠性（v2.2）：先拉起手环应用并等待其切到前台，再发送 pin_set / pin_clear；
+     * 发送失败或 2.5 秒内没有 pin_ack 时自动重发，最多 3 次（约 10 秒）。
+     */
+    private fun beginPinOperation(connected: Node, operation: String, message: String) {
+        cancelPinOperation()
+        pendingPinOperation = operation
+        pendingPinMessage = message
+        pinAttempts = 0
+        if (wearAppInstalled != false) {
+            nodeApi.launchWearApp(connected.id, WEAR_APP_HOME_PATH)
+                .addOnFailureListener { error ->
+                    Log.d(TAG, "打开手环应用失败（继续发送入口图案）：" + describeError(error))
+                }
+        }
+        // 手环应用从后台切到前台需要时间，等它在前台后再发。
+        mainHandler.postDelayed({ sendPinAttempt() }, LAUNCH_DELAY_MS)
+    }
+
+    private fun sendPinAttempt() {
+        val operation = pendingPinOperation ?: return
+        val message = pendingPinMessage ?: return
+        val connected = node
+        if (connected == null) {
+            failPinOperation("未连接手环，无法" + pinOperationLabel(operation))
+            return
+        }
+        pinAttempts += 1
+        messageApi.sendMessage(connected.id, message.toByteArray(Charsets.UTF_8))
+            .addOnSuccessListener {
+                Log.d(TAG, "已发送入口图案消息（第 " + pinAttempts + " 次）")
+                armPinTimeout()
+            }
+            .addOnFailureListener { error ->
+                Log.d(TAG, "发送入口图案消息失败：" + describeError(error))
+                if (pinAttempts < MAX_PIN_ATTEMPTS) {
+                    mainHandler.postDelayed({ sendPinAttempt() }, PIN_RETRY_INTERVAL_MS)
+                } else {
+                    failPinOperation("发送失败：" + describeError(error))
+                }
+            }
+    }
+
+    private fun armPinTimeout() {
+        cancelPinTimeout()
+        val runnable = Runnable { onPinTimeout() }
+        pinTimeout = runnable
+        mainHandler.postDelayed(runnable, PIN_RETRY_INTERVAL_MS)
+    }
+
+    private fun onPinTimeout() {
+        pinTimeout = null
+        if (pendingPinOperation == null) {
+            return
+        }
+        if (pinAttempts < MAX_PIN_ATTEMPTS) {
+            Log.d(TAG, "入口图案未收到 pin_ack，第 " + pinAttempts + " 次重试")
+            sendPinAttempt()
+        } else {
+            failPinOperation(PIN_TIMEOUT_MESSAGE)
+        }
+    }
+
+    private fun failPinOperation(message: String) {
+        cancelPinOperation()
+        listener.onPinError(message)
+    }
+
+    private fun cancelPinOperation() {
+        pendingPinOperation = null
+        pendingPinMessage = null
+        pinAttempts = 0
+        cancelPinTimeout()
+    }
+
+    private fun cancelPinTimeout() {
+        pinTimeout?.let { mainHandler.removeCallbacks(it) }
+        pinTimeout = null
+    }
+
+    private fun pinOperationLabel(operation: String): String = when (operation) {
+        PIN_OPERATION_SET -> "设置入口图案"
+        PIN_OPERATION_CLEAR -> "关闭入口图案"
+        else -> "操作入口图案"
     }
 
     /** 全量替换语义：把当前账号列表整体发送给手环（协议 v3，全量替换）。 */
@@ -236,22 +338,35 @@ class WearableSyncController(
             return
         }
 
-        val session = SyncProtocol.buildSession(accounts)
+        // 无验证码账号（secret 为空）无法在协议里编码，只保留在手机端。
+        val syncable = SyncProtocol.syncableAccounts(accounts)
+        val missingOtp = SyncProtocol.noOtpCount(accounts)
+        val session = SyncProtocol.buildSession(syncable)
         currentSyncId = session.syncId
         syncing = true
         attachMessageListener(connected)
+        val startMessage = if (missingOtp > 0) {
+            "开始同步 " + syncable.size + " 个账号（协议 v3）…（另有 " + missingOtp + " 个无验证码账号仅手机可见）"
+        } else {
+            "开始同步 " + syncable.size + " 个账号（协议 v3）…"
+        }
         listener.onSyncProgress(
             SyncProgress(
                 running = true,
                 sent = 0,
                 total = session.messages.size,
-                message = "开始同步 ${accounts.size} 个账号（协议 v3）…",
+                message = startMessage,
             ),
         )
         sendAt(connected, session, 0)
     }
 
-    private fun sendAt(connected: Node, session: SyncProtocol.SyncSession, index: Int) {
+    private fun sendAt(
+        connected: Node,
+        session: SyncProtocol.SyncSession,
+        index: Int,
+        retriesLeft: Int = SEND_RETRY_COUNT,
+    ) {
         if (!syncing) {
             return
         }
@@ -283,17 +398,28 @@ class WearableSyncController(
                 sendAt(connected, session, sent)
             }
             .addOnFailureListener { error ->
-                syncing = false
-                listener.onSyncProgress(
-                    SyncProgress(
-                        running = false,
-                        sent = index,
-                        total = session.messages.size,
-                        message = "同步失败：${describeError(error)}",
-                        finished = true,
-                        failed = true,
-                    ),
-                )
+                if (!syncing) {
+                    return@addOnFailureListener
+                }
+                if (retriesLeft > 0) {
+                    Log.d(TAG, "第 " + (index + 1) + " 条消息发送失败，重试：" + describeError(error))
+                    mainHandler.postDelayed(
+                        { sendAt(connected, session, index, retriesLeft - 1) },
+                        SEND_RETRY_DELAY_MS,
+                    )
+                } else {
+                    syncing = false
+                    listener.onSyncProgress(
+                        SyncProgress(
+                            running = false,
+                            sent = index,
+                            total = session.messages.size,
+                            message = "同步失败：" + describeError(error) + "（已重试 " + SEND_RETRY_COUNT + " 次）",
+                            finished = true,
+                            failed = true,
+                        ),
+                    )
+                }
             }
     }
 
@@ -323,8 +449,23 @@ class WearableSyncController(
             }
 
             is SyncProtocol.Incoming.Request -> listener.onSyncRequest(incoming.request.requestId)
-            is SyncProtocol.Incoming.PinAck -> listener.onPinAck(incoming.info)
-            is SyncProtocol.Incoming.PinState -> listener.onPinState(incoming.info)
+            is SyncProtocol.Incoming.PinAck -> {
+                if (pendingPinOperation == null) {
+                    // 上一轮操作的迟到 ack：不覆盖当前 UI 状态。
+                    Log.d(TAG, "忽略迟到的 pin_ack")
+                } else {
+                    cancelPinOperation()
+                    listener.onPinAck(incoming.info)
+                }
+            }
+
+            is SyncProtocol.Incoming.PinState -> {
+                if (pendingPinOperation != null) {
+                    Log.d(TAG, "入口图案操作进行中，忽略 pin_state")
+                } else {
+                    listener.onPinState(incoming.info)
+                }
+            }
             is SyncProtocol.Incoming.Ignored -> Log.d(TAG, "忽略手环消息: ${incoming.reason}")
         }
     }
@@ -393,6 +534,25 @@ class WearableSyncController(
     companion object {
         private const val TAG = "WristKeySync"
         private const val WEAR_APP_HOME_PATH = "/home"
+
+        /** 拉起手环应用后等待其切到前台的时长。 */
+        private const val LAUNCH_DELAY_MS = 1_300L
+
+        /** 等待 pin_ack 的时间，也是无 ack 时的重发间隔。 */
+        private const val PIN_RETRY_INTERVAL_MS = 2_500L
+
+        /** pin_set / pin_clear 最多发送次数。 */
+        private const val MAX_PIN_ATTEMPTS = 3
+
+        /** 同步单条消息失败后的重试次数（v2.2）。 */
+        private const val SEND_RETRY_COUNT = 2
+        private const val SEND_RETRY_DELAY_MS = 400L
+
+        private const val PIN_OPERATION_SET = "set"
+        private const val PIN_OPERATION_CLEAR = "clear"
+
+        private const val PIN_TIMEOUT_MESSAGE =
+            "未收到手环确认：请保持手环腕证在前台并重试（旧版手环应用需升级）"
 
         /** 把 xms 异常转成可读文案（尤其签名不一致）。 */
         fun describeError(error: Throwable?): String = when (error) {

@@ -58,6 +58,10 @@ data class WristKeyAccount(
     val isSteam: Boolean
         get() = normalizedOtpType == OTP_TYPE_STEAM
 
+    /** 是否设置了验证码；false 表示 Bitwarden 导入的无 TOTP 条目（仅手机端可见）。 */
+    val hasOtp: Boolean
+        get() = secret.isNotEmpty()
+
     val categoryLabel: String
         get() = category.trim().ifBlank { DEFAULT_CATEGORY }
 
@@ -78,17 +82,19 @@ data class WristKeyAccount(
     val updatedAtLabel: String
         get() = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(updatedAt))
 
-    /** 计算当前验证码（手机端用于核对）：TOTP 为 6-10 位数字，Steam 为 5 位字母数字。 */
-    fun currentCode(timeMillis: Long = System.currentTimeMillis()): String =
-        if (isSteam) {
-            SteamOtp.generate(secret, timeMillis)
-        } else {
-            Totp.generate(secret, timeMillis, period = period, digits = digits, algorithm = algorithm)
-        }
+    /** 计算当前验证码（手机端用于核对）：TOTP 为 6-10 位数字，Steam 为 5 位字母数字；无验证码返回空串。 */
+    fun currentCode(timeMillis: Long = System.currentTimeMillis()): String = when {
+        !hasOtp -> ""
+        isSteam -> SteamOtp.generate(secret, timeMillis)
+        else -> Totp.generate(secret, timeMillis, period = period, digits = digits, algorithm = algorithm)
+    }
 
-    /** 当前周期的剩余秒数（Steam 固定 30 秒周期）。 */
-    fun remainingSeconds(timeMillis: Long = System.currentTimeMillis()): Int =
-        if (isSteam) SteamOtp.remainingSeconds(timeMillis) else Totp.remainingSeconds(timeMillis, period)
+    /** 当前周期的剩余秒数（Steam 固定 30 秒周期）；无验证码返回 0。 */
+    fun remainingSeconds(timeMillis: Long = System.currentTimeMillis()): Int = when {
+        !hasOtp -> 0
+        isSteam -> SteamOtp.remainingSeconds(timeMillis)
+        else -> Totp.remainingSeconds(timeMillis, period)
+    }
 }
 
 /** 手动新增/编辑表单的草稿。 */
@@ -150,12 +156,15 @@ fun AccountDraft.validate(now: Long = System.currentTimeMillis()): DraftValidati
         return DraftValidationResult(errorMessage = "分类不能超过 ${MAX_CATEGORY_LENGTH} 个字符")
     }
 
+    // v2.2：无验证码条目（secret 为空但已有 id）允许保存名称/用户名/密码；
+    // 新增账号仍必须有 secret，补齐 secret 后自动从 n_ id 切换为 s_ id。
     val normalizedSecret = Secret.normalize(secret)
-    if (normalizedSecret.isEmpty()) {
-        return DraftValidationResult(errorMessage = "Secret 不能为空")
-    }
-    if (!Secret.isNormalizedBase32(normalizedSecret)) {
+    val hasOtp = normalizedSecret.isNotEmpty()
+    if (hasOtp && !Secret.isNormalizedBase32(normalizedSecret)) {
         return DraftValidationResult(errorMessage = "Secret 必须是 Base32（A-Z、2-7）")
+    }
+    if (!hasOtp && id == null) {
+        return DraftValidationResult(errorMessage = "Secret 不能为空")
     }
 
     val parsedDigits: Int
@@ -181,10 +190,16 @@ fun AccountDraft.validate(now: Long = System.currentTimeMillis()): DraftValidati
         }
     }
 
+    val accountId = when {
+        // 补齐 secret 后由无验证码 id（n_）切换为 secret 派生 id（s_），保证同步/合并稳定。
+        hasOtp && (id == null || id.startsWith("n_")) -> Secret.accountIdForSecret(normalizedSecret)
+        id != null -> id
+        else -> Secret.accountIdForSecret(normalizedSecret)
+    }
+
     return DraftValidationResult(
         account = WristKeyAccount(
-            // id 由 secret 派生，跨次导入/手动新增都稳定，用于去重。
-            id = id ?: Secret.accountIdForSecret(normalizedSecret),
+            id = accountId,
             issuer = normalizedIssuer,
             accountName = normalizedAccountName,
             category = normalizedCategory,

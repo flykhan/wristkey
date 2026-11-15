@@ -246,7 +246,7 @@ function buildBitwardenExport() {
           totp: 'otpauth://totp/邮件:邮箱用户?secret=' + makeSecret('bw-email', 20) + '&issuer=邮件&digits=8'
         }
       },
-      // ---- 跳过：普通密码条目（无 totp）----
+      // ---- 无 totp 的登录条目：2.2.0 起导入为空 secret 的本地账号（不同步）----
       {
         id: 'bw-nototp', folderId: null, type: 1, name: 'PlainLogin', notes: null,
         login: { username: 'plain', password: 'fake-password-plain', totp: null }
@@ -535,7 +535,7 @@ async function main() {
 
   const pinMessages = buildPinMessages();
   writeJson(join(v3Dir, 'pin-set.json'), {
-    description: '合法 mfa_pin_set：PBKDF2-SHA256、salt 32 hex、hash 64 hex、iterations 10；手环 ack 成功并广播 enabled=true',
+    description: '合法 mfa_pin_set：PBKDF2-SHA256、salt 32 hex、hash 64 hex、iterations 1；手环 ack 成功并广播 enabled=true',
     pattern: PIN_PATTERN,
     pin: {
       algorithm: PIN_ALGORITHM,
@@ -640,7 +640,7 @@ async function main() {
     { name: 'iterations-20001', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
       Object.assign({}, validPinPayload, { iterations: 20001 })) },
     { name: 'iterations-fraction', expected: { status: 'rejected', error: 'invalid_pin_payload' }, message: rawPinSet(
-      Object.assign({}, validPinPayload, { iterations: 10.5 })) },
+      Object.assign({}, validPinPayload, { iterations: 1.5 })) },
     { name: 'version-2-set', expected: { status: 'rejected', error: 'invalid_version' }, message: rawPinSet(validPinPayload, 2) },
     { name: 'version-2-query', expected: { status: 'rejected', error: 'invalid_version' }, message: {
       type: 'mfa_pin_query', version: 2, sentAt: PIN_NOW, requestId: 'legacy-query'
@@ -665,7 +665,7 @@ async function main() {
   writeJson(join(HERE, 'bitwarden-export.json'), bitwardenExport);
   writeJson(join(HERE, 'bitwarden-encrypted-export.json'), buildBitwardenEncryptedExport());
   const bitwardenMapped = mapBitwardenToAccounts(bitwardenExport, { updatedAt: FIXTURE_UPDATED_AT });
-  if (bitwardenMapped.stats.total !== 10 || bitwardenMapped.stats.imported !== 6 || bitwardenMapped.stats.skipped !== 4) {
+  if (bitwardenMapped.stats.total !== 10 || bitwardenMapped.stats.imported !== 7 || bitwardenMapped.stats.skipped !== 3) {
     throw new Error('Bitwarden 夹具条目数不符合预期：' + JSON.stringify(bitwardenMapped.stats));
   }
   writeJson(join(HERE, 'bitwarden-expected-import.json'), {

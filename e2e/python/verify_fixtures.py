@@ -13,7 +13,7 @@
   4. 明文夹具中的 3 个 RFC 6238 账号在 T=59/1111111109/1111111111/1234567890 的 TOTP 与 RFC 表一致；
      并独立实现 Steam Guard 5 位字母数字码，对 6 组公开向量验证；
   5. 加密参数与 docs/stratum-format.md 的常量一致（头部/长度/迭代次数）；
-  6. Bitwarden 未加密 Vault JSON 独立解析（docs/bitwarden-format.md）：6 导入 / 4 跳过、Steam 识别、
+  6. Bitwarden 未加密 Vault JSON 独立解析（docs/bitwarden-format.md）：7 导入 / 3 跳过（含 1 个无 TOTP 本地条目）、Steam 识别、
      加密导出负例拒绝；
   7. 协议 v3（docs/protocol.md）夹具跨语言对拍：tools/fixtures/protocol-v3.json（Python 生成）与
      e2e Node 夹具的 account.id/sha1、pin PBKDF2-SHA256 hash、password 合并语义、v2 兼容与回归。
@@ -337,10 +337,19 @@ def main():
                 skipped.append(("NOT_LOGIN_TYPE", name))
                 continue
             totp = (login.get("totp") or "").strip()
-            if not totp:
-                skipped.append(("NO_TOTP", name))
-                continue
             issuer = name or "Bitwarden"
+            # 2.2.0：无 TOTP 的登录条目导入为空 secret 本地账号，仅手机端可见，不同步。
+            if not totp:
+                imported.append({
+                    "issuer": issuer,
+                    "accountName": username or issuer,
+                    "secret": "",
+                    "digits": 6,
+                    "period": 30,
+                    "algorithm": "SHA1",
+                    "otpType": "totp",
+                })
+                continue
             if totp.lower().startswith("otpauth://"):
                 parsed = urlparse(totp)
                 params = parse_qs(parsed.query, keep_blank_values=True)
@@ -391,11 +400,11 @@ def main():
 
         check("Bitwarden 内容嗅探：vault / encrypted / Stratum 不误判", lambda: _bitwarden_detect_cases(
             bitwarden_detect, bitwarden_export, bitwarden_encrypted, plain))
-        check("Bitwarden 独立解析：6 导入 / 4 跳过", lambda: _assert_bitwarden_counts(bw_imported, bw_skipped))
+        check("Bitwarden 独立解析：7 导入 / 3 跳过（含 1 个无 TOTP 本地条目）", lambda: _assert_bitwarden_counts(bw_imported, bw_skipped))
         check("Bitwarden Steam 条目：otpType=steam / digits=5 / period=30 / SHA1", lambda: _assert_bitwarden_steam(bw_imported))
         check("Bitwarden 字段兜底：name 空 → Bitwarden，username 空 → otpauth label", lambda: _assert_bitwarden_fallbacks(bw_imported))
         check("Bitwarden 加密导出必须拒绝", lambda: _assert_bitwarden_encrypted(bitwarden_detect(bitwarden_encrypted)))
-        check("bitwarden-expected-import.json 统计 6/4/10", lambda: _assert_bitwarden_stats(bitwarden_expected))
+        check("bitwarden-expected-import.json 统计 7/3/10", lambda: _assert_bitwarden_stats(bitwarden_expected))
     else:
         print("  NOTE bitwarden-export.json 不存在，跳过")
 
@@ -520,13 +529,16 @@ def _bitwarden_detect_cases(detect, vault, encrypted, stratum_plain):
 
 
 def _assert_bitwarden_counts(imported, skipped):
-    if len(imported) != 6 or len(skipped) != 4:
-        raise AssertionError("Bitwarden 映射应为 6 导入 / 4 跳过，实际 " + str(len(imported)) + "/" + str(len(skipped)))
+    if len(imported) != 7 or len(skipped) != 3:
+        raise AssertionError("Bitwarden 映射应为 7 导入 / 3 跳过，实际 " + str(len(imported)) + "/" + str(len(skipped)))
     codes = sorted(code for code, _ in skipped)
-    expected_codes = sorted(["NO_TOTP", "NOT_LOGIN_TYPE", "INVALID_TOTP", "TYPE_NOT_TOTP"])
+    expected_codes = sorted(["NOT_LOGIN_TYPE", "INVALID_TOTP", "TYPE_NOT_TOTP"])
     if codes != expected_codes:
         raise AssertionError("跳过原因不符: " + str(codes))
-    return "6/4"
+    no_otp = [item for item in imported if item.get("secret") == ""]
+    if len(no_otp) != 1 or no_otp[0]["issuer"] != "PlainLogin" or no_otp[0]["accountName"] != "plain":
+        raise AssertionError("无 TOTP 条目应导入为 PlainLogin/plain 空 secret 账号: " + json.dumps(no_otp, ensure_ascii=False))
+    return "7/3（含 1 无码）"
 
 
 def _assert_bitwarden_steam(imported):
@@ -559,9 +571,9 @@ def _assert_bitwarden_encrypted(kind):
 
 def _assert_bitwarden_stats(expected):
     stats = expected["stats"]
-    if stats.get("imported") != 6 or stats.get("skipped") != 4 or stats.get("total") != 10:
+    if stats.get("imported") != 7 or stats.get("skipped") != 3 or stats.get("total") != 10:
         raise AssertionError("Bitwarden 期望统计不符: " + json.dumps(stats))
-    return "6/4/10"
+    return "7/3/10"
 
 
 def _assert_expected_stats(expected):
@@ -576,7 +588,7 @@ PROTOCOL_V3 = 3
 PROTOCOL_V2 = 2
 MAX_MESSAGE_BYTES = 1024
 PIN_ALGORITHM = "PBKDF2-SHA256"
-PIN_ITERATIONS = 10
+PIN_ITERATIONS = 1
 PIN_PATTERN = "TSCCT"
 
 
@@ -672,7 +684,7 @@ def _protocol_v3_pin(document):
         raise AssertionError("pin_set.pin 载荷与 expected 不一致")
     if not (len(PIN_PATTERN) == 5 and all(ch in "TSC" for ch in PIN_PATTERN)):
         raise AssertionError("图案应为 5 位 T/S/C")
-    return "PBKDF2-SHA256 10 次复算一致"
+    return "PBKDF2-SHA256 " + str(PIN_ITERATIONS) + " 次复算一致"
 
 
 def _protocol_v3_pin_messages(document):

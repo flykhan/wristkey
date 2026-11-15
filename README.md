@@ -3,12 +3,15 @@
 在 **小米手环 10 Pro** 上离线查看 TOTP / Steam 验证码。手机端从 **Stratum**（stratum-auth，Aegis 分支）
 或 **Bitwarden** 未加密导出中导入 OTP，再通过小米穿戴服务同步到手环；手环端本地计算验证码，
 不依赖手机在线。v2.0 起支持账号详情中的 **用户名/密码**、全屏字母网格筛选与手机 App 重设计；
-**v2.1.2 起启动时恢复 5 位图形图案门禁**（入口页内联显示，不再跳转路由）。
+**v2.1.2 起启动时恢复 5 位图形图案门禁**（入口页内联显示，不再跳转路由）；
+**v2.2.0 起**锁屏期间也保持与手机的互联，图案派生降到 1 轮（Vela 无 JIT），
+手机设置图案会先拉起手环应用并自动重试确认。
 
-> 状态：**v2.1.2** 已构建并通过全量自动化验收。包名统一为 **`com.flykhan.wristkey`**（域名 example.com）。
-> 从 2.0.x 升级需**先卸载旧包名 `dev.wristkey.app` 的两端应用**；从 2.1.0 升级可直接覆盖安装。
-> 2.1.2 的关键变化：**恢复入口图案门禁**，并在 Vela 工具链模拟器（VVD）中复现、修复了
-> “输入图案后无法进入主界面”的两个根因（路由 replace 清空页面栈 / 门禁回调把手动锁屏自动解锁）。
+> 状态：**v2.2.0** 已构建并通过全量自动化验收。包名统一为 **`com.flykhan.wristkey`**（域名 example.com）。
+> 从 2.0.x 升级需**先卸载旧包名 `dev.wristkey.app` 的两端应用**；从 2.1.x 升级可直接覆盖安装。
+> 2.2.0 的关键变化：修复真机反馈的“解锁/设图案卡顿、手机下发 8 秒无确认、验证码没同步”；
+> 锁屏期间也建立 xms 通道，手机设图案先拉起手环并重试，PBKDF2 降到 1 轮；
+> Bitwarden 无验证码条目也可导入查看详情（仅手机本地）；手环卡片固定高度、字号/按钮整体放大。
 > 仓库：[github.com/flykhan/wristkey](https://github.com/flykhan/wristkey)；
 > 安装与同步流程见 [docs/build-install.md](docs/build-install.md)，日常使用见 [docs/usage.md](docs/usage.md)。
 
@@ -26,13 +29,13 @@
 1. **导入 Stratum 备份**：支持 Strong（Argon2id + AES-256-GCM）、Legacy（PBKDF2-SHA1 + AES-256-CBC）、
    明文 JSON 备份、`otpauth://` 文本列表；
 2. **导入 Bitwarden 未加密 JSON**：读取 `items[].login.totp`（otpauth URI 或纯 Base32），
-   同时导入用户名与密码；忽略文件夹/分类；
+   同时导入用户名与密码；**没有验证码的条目也会导入**（仅手机可见，补充 Secret 后可同步）；忽略文件夹/分类；
 3. **支持 TOTP 与 Steam Guard**：TOTP SHA1/256/512、6–10 位；Steam Guard 5 位字母数字（`otpType: "steam"`）；
 4. **协议 v3 分片同步**：begin/account×N/commit + ack/request，staging + 原子提交；密码字段、图案下发/查询；
-5. **手环 UI v4**：每页 3 个大号验证码、右侧 A-Z 筛选 + 页码 + 菜单、全屏 4×4×3 字母数字网格、
+5. **手环 UI**：每页 3 个固定高度的大号验证码卡片、右侧 A-Z 筛选 + 页码 + 菜单、全屏 4×4×3 字母数字网格、
    详情页用户名/密码（10 秒遮罩显示）；5 位图形锁屏内联在入口页，冷启动与 2 分钟闲置后上锁；
-6. **手机 App v2.0**：深色薄荷绿 3 Tab（账号/同步/设置）、大号验证码卡、导入预览、底部弹层详情、
-   全屏编辑器；入口图案设置页可设置/修改/关闭并下发到手环。
+6. **手机 App**：深色薄荷绿 3 Tab（账号/同步/设置）、大号验证码卡、导入预览、底部弹层详情、
+   全屏编辑器；入口图案设置页可设置/修改/关闭并下发到手环，带拉起手环与自动重试。
 
 ## 架构
 
@@ -81,24 +84,24 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 **两端包名（`com.flykhan.wristkey`）+ 签名证书必须一致**，否则 `system.interconnect` 无法建立连接。
 需要按规范命名的安装包时，直接运行 `bash scripts/release.sh`，见下文「发布命名规范」。
 
-## 验证状态（2026-11-10，无真机 UI 验证）
+## 验证状态（2026-11-15，无真机 UI 验证）
 
 | 检查 | 结果 |
 | --- | --- |
-| 手环端 `npm test`（TOTP/Steam 向量、协议 v2/v3、pin、UI v4 结构、分页/字号/筛选、页面栈回归） | **106/106** |
-| 手机端 `./gradlew testDebugUnitTest`（Stratum/Bitwarden、密码、TOTP/Steam、协议 v3、图案、合并） | **106/106** |
+| 手环端 `npm test`（TOTP/Steam 向量、协议 v2/v3、pin、UI v5 结构、固定卡高/字号、页面栈回归） | **116/116** |
+| 手机端 `./gradlew testDebugUnitTest`（Stratum/Bitwarden、无验证码条目、密码、TOTP/Steam、协议 v3、图案、合并） | **112/112** |
 | e2e Node 验证（跨实现加解密、协议回放、Bitwarden 映射、band 模块对拍、协议 v3/pin） | **171/171** |
 | e2e Python 独立验证（第三方实现解密 + RFC/Steam/Bitwarden/pin 向量） | **40/40** |
-| 构建 / 包名 / 版本 / 权限 / 签名 / UI v4 静态检查（`--with-tests`） | **82 PASS / 0 FAIL** |
+| 构建 / 包名 / 版本 / 权限 / 签名 / UI v5 静态检查（`--with-tests`） | **121 PASS / 0 FAIL** |
 | APK 与 .rpk 同证书 | ✅ `SHA-256 b7cfba…85c4`（= `signing/rpk-sign/certificate.pem` = rpk 内嵌 DER） |
-| VVD 模拟器（启动锁屏/正确图案/错误 5 次锁定/解锁进主界面） | ✅ 2.1.2 已验证（见 [reports/e2e-report.md](reports/e2e-report.md)） |
-| 真机（安装、interconnect、xms、480×336 UI、详情密码） | **待验证**：v1.0 启动闪退、Steam、入口图案问题均由真机反馈定位；2.1.2 门禁已在 VVD 修复，仍需真机确认 |
+| VVD 模拟器（启动锁屏/正确图案/错误 5 次锁定/解锁进主界面） | ✅ 2.1.2 已验证（见 [reports/e2e-report.md](reports/e2e-report.md)）；2.2.0 的 1 轮派生按 VVD 实测 212 ms/轮推算约 0.2 秒，待真机确认 |
+| 真机（安装、interconnect、xms、480×336 UI、详情密码） | **待验证**：v1.0 启动闪退、Steam、入口图案、解锁卡顿、无验证码导入均由真机反馈定位；2.2.0 仍需真机确认 |
 
 产物：
 
-- 手环：`releases/v2.1.2/wristkey-band-v2.1.2.rpk`（109,130 B，sha256 `b52686a4abe23f63f9350b74b83a9b56d6e924b1b7e0aade31b06230d2295ca4`，2.1.2 / versionCode 11）
-- 手机：`releases/v2.1.2/wristkey-android-v2.1.2.apk`（26,492,669 B，sha256 `0f169b25e0ef8b50866b9f0aef2f869eef289dca6e97cc942ef7be4d6f9283b0`，2.1.2 / versionCode 7，无 INTERNET 权限）
-- 发布归档：`releases/v2.1.2/` 与根目录 `成功/`（规范命名 + `SHA256SUMS`）
+- 手环：`releases/v2.2.0/wristkey-band-v2.2.0.rpk`（109,172 B，sha256 `f0ff609c5e076619b012b6e69ae1d9ef2b9f97488dbbc57542aaec0f26218584`，2.2.0 / versionCode 12）
+- 手机：`releases/v2.2.0/wristkey-android-v2.2.0.apk`（26,509,053 B，sha256 `87314829d034f033c9ae29bbeb7f74c130caa00e7328819c635b609456989cc9`，2.2.0 / versionCode 8，无 INTERNET 权限）
+- 发布归档：`releases/v2.2.0/` 与根目录 `成功/`（规范命名 + `SHA256SUMS`）
 - 验收报告：[reports/e2e-report.md](reports/e2e-report.md)；调研证据：[research/notes/](research/notes/)
 
 ## 发布命名规范
@@ -106,7 +109,7 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 - **包名**：`com.flykhan.wristkey`（对应域名 example.com；两端必须完全一致）；
 - **语义化版本**：`MAJOR.MINOR.PATCH`，三处同步修改：`band-app/package.json`、
   `band-app/src/manifest.json`、`android-app/app/build.gradle.kts`；
-- **Git 标签**：`v<version>`，例如 `v2.1.2`；
+- **Git 标签**：`v<version>`，例如 `v2.2.0`；
 - **GitHub Release 标题**：`WristKey v<version>`；
 - **Release 资产**（固定小写 kebab-case，带端与版本）：
   - `wristkey-band-v<version>.rpk`
@@ -116,7 +119,7 @@ cd android-app && export JAVA_HOME=~/.jdks/jdk-21.0.13+9
 - **一键发布**：
 
 ```bash
-bash scripts/release.sh 2.1.2
+bash scripts/release.sh 2.2.0
 ```
 
 脚本会校验三处版本一致、跑两端测试、构建、重命名归档并生成 `SHA256SUMS`；
@@ -174,5 +177,11 @@ TOTP Secret 与账号密码等同于账号凭证。请仅在自己信任的设�
     全程不动路由页面栈），`evaluateGate` 在已锁时直接返回；菜单恢复“入口密码”。同时把 PBKDF2
     迭代从 1200 降至 10（Vela 无 JIT，1200 轮在模拟器实测阻塞 2 分钟以上；真正防护是失败锁定），
     两端与协议下限统一为 1。手环 2.1.2 / versionCode 11，手机 2.1.2 / versionCode 7。
+11. **2026-11-15 v2.2.0：修复真机反馈的同步/解锁问题并放大 UI**：真机日志显示手环未运行时手机发送的
+    消息返回 `quickapp_proxy_server_send ... failed: -6`，手机 8 秒后报“未收到手环确认”。2.2.0 让锁屏期间也
+    建立互联、手机设图案先 `launchWearApp` 并每 2.5 秒重试（最多 3 次），同步单条失败重试 2 次；PBKDF2
+    再降到 1 轮（按 VVD 实测 212 ms/轮约 0.2 秒）。Bitwarden 无验证码条目改为“仅手机本地”账号（`n_` id，补 Secret
+    后转 `s_`）；手环卡片固定 98px、筛选 1–2 条不拉伸，详情/按钮/提示字号整体放大。手环 2.2.0 / versionCode 12，
+    手机 2.2.0 / versionCode 8。
 
 详见 [reports/e2e-report.md](reports/e2e-report.md)。

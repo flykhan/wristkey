@@ -144,9 +144,12 @@ export default {
     this.refreshSlots()
     if (this.input.length === PATTERN_LENGTH) {
       this.verifying = true
+      // Paint the feedback before doing any synchronous PBKDF2 work.
+      this.hintText = "正在校验…"
+      this.hintColor = this.theme.secondary
       setTimeout(() => {
         this.handleComplete()
-      }, 150)
+      }, 40)
     }
   },
 
@@ -155,7 +158,13 @@ export default {
     this.input = []
     this.refreshSlots()
     this.verifying = false
+    // One more frame so "正在校验…" stays visible while derive/save runs.
+    setTimeout(() => {
+      this.processPattern(pattern)
+    }, 40)
+  },
 
+  processPattern(pattern) {
     if (this.mode === "verify") {
       this.verifyCurrent(pattern)
       return
@@ -334,31 +343,31 @@ export default {
 }
 
 .back {
-  width: 62px;
-  height: 32px;
-  border-radius: 12px;
+  width: 72px;
+  height: 40px;
+  border-radius: 14px;
   align-items: center;
   justify-content: center;
 }
 
 .back-text {
-  font-size: 14px;
+  font-size: 17px;
 }
 
 .top-spacer {
-  width: 62px;
-  height: 32px;
+  width: 72px;
+  height: 40px;
 }
 
 .title {
-  font-size: 19px;
+  font-size: 22px;
   font-weight: bold;
   text-align: center;
 }
 
 .subtitle {
-  height: 18px;
-  font-size: 12px;
+  height: 22px;
+  font-size: 14px;
   text-align: center;
   lines: 1;
 }
@@ -373,24 +382,24 @@ export default {
 }
 
 .slot {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   margin-left: 5px;
   margin-right: 5px;
-  border-radius: 21px;
+  border-radius: 22px;
   align-items: center;
   justify-content: center;
 }
 
 .slot-glyph {
-  font-size: 20px;
+  font-size: 22px;
   text-align: center;
 }
 
 .hint {
-  height: 20px;
+  height: 24px;
   margin-top: 2px;
-  font-size: 13px;
+  font-size: 16px;
   text-align: center;
   lines: 1;
 }
@@ -404,8 +413,8 @@ export default {
 }
 
 .key {
-  width: 112px;
-  height: 82px;
+  width: 128px;
+  height: 100px;
   margin-left: 8px;
   margin-right: 8px;
   border-radius: 20px;
@@ -416,13 +425,13 @@ export default {
 }
 
 .key-glyph {
-  font-size: 30px;
+  font-size: 42px;
   text-align: center;
 }
 
 .key-label {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 15px;
   text-align: center;
 }
 
@@ -446,14 +455,14 @@ export default {
 }
 
 .manage-title {
-  font-size: 19px;
+  font-size: 22px;
   font-weight: bold;
   lines: 1;
 }
 
 .manage-copy {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 14px;
   lines: 1;
 }
 </style>

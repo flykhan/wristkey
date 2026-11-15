@@ -1110,10 +1110,15 @@ async function main() {
     assertDeepEqual(bitwardenMapped.skipped, bitwardenExpected.skipped);
     assertDeepEqual(bitwardenMapped.stats, bitwardenExpected.stats);
   });
-  r.test('映射统计 6 导入 / 4 跳过（共 10 个 item）', function () {
+  r.test('映射统计 7 导入 / 3 跳过（共 10 个 item，含无 TOTP 本地条目）', function () {
     assertEqual(bitwardenMapped.stats.total, 10);
-    assertEqual(bitwardenMapped.stats.imported, 6);
-    assertEqual(bitwardenMapped.stats.skipped, 4);
+    assertEqual(bitwardenMapped.stats.imported, 7);
+    assertEqual(bitwardenMapped.stats.skipped, 3);
+    const noOtp = bitwardenMapped.accounts.filter(function (account) { return account.secret === ''; });
+    assertEqual(noOtp.length, 1, '2.2.0 应把无 TOTP 登录条目导入为空 secret 账号');
+    assertEqual(noOtp[0].issuer, 'PlainLogin');
+    assertEqual(noOtp[0].accountName, 'plain');
+    assert(/^n_[0-9a-f]{12}$/.test(noOtp[0].id), '无 TOTP 条目 id 应为稳定 n_ 前缀');
   });
   r.test('totp 三种形态：otpauth TOTP / Steam encoder / 纯 Base32', function () {
     const byIssuer = new Map(bitwardenMapped.accounts.map(function (account) { return [account.issuer, account]; }));
@@ -1142,17 +1147,21 @@ async function main() {
     }
     return bitwardenMapped.accounts.length + ' 条';
   });
-  r.test('每个导入账号 id = s_ + sha1(secret)[0:12]（独立复算）', function () {
+  r.test('导入账号 id：有码 s_ + sha1(secret)[0:12]，无码 n_ 稳定 id', function () {
     for (const account of bitwardenMapped.accounts) {
+      if (account.secret === '') {
+        assert(/^n_[0-9a-f]{12}$/.test(account.id), '无验证码账号 id 格式');
+        continue;
+      }
       const canonical = normalizeProtocolSecret(account.secret);
       const hex = createHash('sha1').update(canonical, 'utf8').digest('hex').slice(0, 12);
       assertEqual(account.id, 's_' + hex);
     }
     return bitwardenMapped.accounts.length + ' 个';
   });
-  r.test('跳过原因：NO_TOTP / NOT_LOGIN_TYPE / INVALID_TOTP / TYPE_NOT_TOTP', function () {
+  r.test('跳过原因：NOT_LOGIN_TYPE / INVALID_TOTP / TYPE_NOT_TOTP', function () {
     const codes = bitwardenMapped.skipped.map(function (item) { return item.code; }).sort();
-    assertDeepEqual(codes, ['INVALID_TOTP', 'NOT_LOGIN_TYPE', 'NO_TOTP', 'TYPE_NOT_TOTP']);
+    assertDeepEqual(codes, ['INVALID_TOTP', 'NOT_LOGIN_TYPE', 'TYPE_NOT_TOTP']);
     for (const item of bitwardenMapped.skipped) {
       assert(!('secret' in item), '跳过报告不应包含 secret');
     }
@@ -1170,18 +1179,23 @@ async function main() {
     assertEqual(thrown.message, bitwarden.BITWARDEN_ENCRYPTED_MESSAGE);
     assert(String(thrown.message).indexOf('未加密') >= 0);
   });
-  r.test('Bitwarden 映射账号可经协议 v2 同步并提交', function () {
-    const session = protocol.buildSyncSession(bitwardenMapped.accounts, {
+  r.test('Bitwarden 有码账号可经协议 v2 同步并提交，无码账号不同步', function () {
+    const syncable = bitwardenMapped.accounts.filter(function (account) { return account.secret !== ''; });
+    const noOtp = bitwardenMapped.accounts.filter(function (account) { return account.secret === ''; });
+    assertEqual(syncable.length, 6, '有码账号数');
+    assertEqual(noOtp.length, 1, '无码账号数');
+    const session = protocol.buildSyncSession(syncable, {
       sentAt: FIXED_NOW,
       syncId: 'sync-bitwarden-fixture'
     });
     const receiver = new protocol.BandSyncReceiver({ now: function () { return FIXED_NOW; } });
     const results = session.messages.map(function (message) { return receiver.receive(message); });
     assertEqual(results[results.length - 1].status, 'committed');
-    assertDeepEqual(receiver.snapshot.accounts, bitwardenMapped.accounts);
+    assertDeepEqual(receiver.snapshot.accounts, syncable);
     assert(receiver.snapshot.accounts.some(function (account) { return account.otpType === 'steam'; }), '同步快照应保留 Steam 类型');
+    assert(!receiver.snapshot.accounts.some(function (account) { return account.secret === ''; }), '无码账号不得进入手环快照');
   });
-  r.test('Android 单测 Bitwarden 夹具对拍（5 导入 / 5 跳过 & Steam 5 位码）', function () {
+  r.test('Android 单测 Bitwarden 夹具对拍（6 导入 / 4 跳过 & 无码本地账号）', function () {
     const fixtureCandidates = [
       join(WORKSPACE, 'android-app', 'app', 'src', 'test', 'resources', 'fixtures', 'bitwarden-export.json'),
       join(WORKSPACE, 'android-app', 'app', 'src', 'test', 'resources', 'bitwarden-export.json')
@@ -1197,8 +1211,8 @@ async function main() {
       updatedAt: stratum.FIXTURE_UPDATED_AT
     });
     assertEqual(androidMapped.stats.total, 10, 'Android 夹具 item 数');
-    assertEqual(androidMapped.stats.imported, 5, 'Android 夹具应 5 导入');
-    assertEqual(androidMapped.stats.skipped, 5, 'Android 夹具应 5 跳过');
+    assertEqual(androidMapped.stats.imported, 6, 'Android 夹具应 6 导入');
+    assertEqual(androidMapped.stats.skipped, 4, 'Android 夹具应 4 跳过');
     const byIssuer = new Map(androidMapped.accounts.map(function (account) { return [account.issuer, account]; }));
 
     const github = byIssuer.get('GitHub');
@@ -1233,6 +1247,12 @@ async function main() {
     assertEqual(labelOnly.digits, 8);
     assertEqual(labelOnly.period, 60);
 
+    const noTotp = byIssuer.get('NoTotp');
+    assert(noTotp, '无 TOTP 的 NoTotp 条目也应导入');
+    assertEqual(noTotp.accountName, 'carol');
+    assertEqual(noTotp.secret, '');
+    assertEqual(noTotp.id, bitwarden.noOtpAccountId('NoTotp', 'carol', 3));
+
     const fallback = byIssuer.get(bitwarden.BITWARDEN_ISSUER);
     assert(fallback, 'name 为空的条目应回退 issuer=Bitwarden');
     if (fallback.accountName !== '') {
@@ -1243,7 +1263,7 @@ async function main() {
     }
 
     const codes = androidMapped.skipped.map(function (item) { return item.code; }).sort();
-    assertDeepEqual(codes, ['DUPLICATE_SECRET', 'INVALID_TOTP', 'NOT_LOGIN_TYPE', 'NO_TOTP', 'TYPE_NOT_TOTP']);
+    assertDeepEqual(codes, ['DUPLICATE_SECRET', 'INVALID_TOTP', 'NOT_LOGIN_TYPE', 'TYPE_NOT_TOTP']);
 
     // 加密导出负例（Android 资源）
     const encryptedCandidates = [
@@ -1271,8 +1291,8 @@ async function main() {
     if (existsSync(testPath)) {
       const testSource = readFileSync(testPath, 'utf8');
       for (const marker of [
-        'assertEquals(5, result.importedCount)',
-        'assertEquals(5, result.skippedCount)',
+        'assertEquals(6, result.importedCount)',
+        'assertEquals(4, result.skippedCount)',
         'OTP_TYPE_STEAM',
         '3DP36',
         bitwarden.BITWARDEN_ENCRYPTED_MESSAGE
@@ -1280,7 +1300,7 @@ async function main() {
         assert(testSource.indexOf(marker) >= 0, 'Android 单测缺少期望标记: ' + marker);
       }
     }
-    return '5/5 + Steam(3DP36) + 加密负例，与 Android 单测断言一致';
+    return '6/4 + Steam(3DP36) + 无码本地账号 + 加密负例，与 Android 单测断言一致';
   });
 
   // ------------------------------------------------ K. 协议 v3（密码 / pin / 兼容）
@@ -1525,12 +1545,12 @@ async function main() {
   const invalidPinFixture = readJson(join(v3Dir, 'invalid-pin.json'));
   const pinNow = pinSetFixture.expected.stored.updatedAt;
 
-  r.test('pin_set 夹具：pattern/SHA-256 hash/32+64 hex/iterations 10，消息 <1KB', function () {
+  r.test('pin_set 夹具：pattern/SHA-256 hash/32+64 hex/iterations 1，消息 <1KB', function () {
     const pin = pinSetFixture.pin;
     assertEqual(pin.algorithm, 'PBKDF2-SHA256');
     assertEqual(pin.salt.length, 32);
     assertEqual(pin.hash.length, 64);
-    assertEqual(pin.iterations, 10);
+    assertEqual(pin.iterations, 1);
     assert(protocol.validatePinPattern(pinSetFixture.pattern).ok);
     assertEqual(
       protocol.derivePinHash(pinSetFixture.pattern, pin.salt, pin.iterations),

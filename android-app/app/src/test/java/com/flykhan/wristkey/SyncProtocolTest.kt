@@ -251,4 +251,31 @@ class SyncProtocolTest {
         assertTrue(SyncProtocol.validateAccountPayload(payload("issuer" to "A", "secret" to TestFixtures.SHA1_SEED, "algorithm" to "MD5"), 0) != null)
         assertTrue(SyncProtocol.validateAccountPayload(payload("issuer" to "A", "secret" to TestFixtures.SHA1_SEED, "id" to "x".repeat(65)), 0) != null)
     }
+
+    @Test
+    fun syncableAccountsFiltersAccountsWithoutTotp() {
+        val noOtp = WristKeyAccount(
+            id = "n_8d68002a15ee",
+            issuer = "NoTotp",
+            accountName = "carol",
+            secret = "",
+            password = "pw",
+        )
+        val all = accounts + noOtp
+        val syncable = SyncProtocol.syncableAccounts(all)
+        assertEquals(2, syncable.size)
+        assertTrue(syncable.all { it.hasOtp })
+        assertEquals(1, SyncProtocol.noOtpCount(all))
+        assertEquals(0, SyncProtocol.noOtpCount(accounts))
+
+        // 无验证码账号绝不能进 buildSession：协议 secret 必须是 Base32。
+        val session = SyncProtocol.buildSession(SyncProtocol.syncableAccounts(all), sentAt = now, syncId = "sync-1")
+        assertEquals(4, session.messages.size)
+        assertEquals(2, session.accountCount)
+        assertEquals(2, JSONObject(session.messages.first()).getInt("accountCount"))
+        session.messages.forEach { message ->
+            assertTrue(SyncProtocol.isWithinSizeLimit(message))
+            assertTrue("无验证码账号不能出现在同步消息里", !message.contains("n_8d68002a15ee"))
+        }
+    }
 }

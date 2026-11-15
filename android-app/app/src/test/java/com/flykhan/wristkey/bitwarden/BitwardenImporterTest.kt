@@ -50,25 +50,26 @@ class BitwardenImporterTest {
         val result = importFixture()
 
         assertEquals(StratumFormat.BITWARDEN, result.format)
-        assertEquals(5, result.importedCount)
-        assertEquals(5, result.skippedCount)
+        // v2.2：NoTotp 现在也导入（仅手机可见），跳过项只剩 4 个。
+        assertEquals(6, result.importedCount)
+        assertEquals(4, result.skippedCount)
 
         assertEquals(
-            listOf("GitHub", "Steam", "RawBase32", "LabelOnly", "Bitwarden"),
+            listOf("GitHub", "Steam", "RawBase32", "NoTotp", "LabelOnly", "Bitwarden"),
             result.accounts.map { it.issuer },
         )
         assertEquals(
-            listOf("dev@example.com", "alice", "bob", "labelacct", ""),
+            listOf("dev@example.com", "alice", "bob", "carol", "labelacct", ""),
             result.accounts.map { it.accountName },
         )
         assertTrue(result.accounts.all { it.category == "默认分类" })
 
         assertEquals(
-            listOf("NO_TOTP", "INVALID_BASE32", "TYPE_NOT_TOTP", "NO_TOTP", "DUPLICATE_SECRET"),
+            listOf("INVALID_BASE32", "TYPE_NOT_TOTP", "NOT_LOGIN", "DUPLICATE_SECRET"),
             result.skipped.map { it.code },
         )
         assertEquals(
-            listOf("NoTotp", "BadSecret", "BadUri", "NoLogin", "Duplicate"),
+            listOf("BadSecret", "BadUri", "NoLogin", "Duplicate"),
             result.skipped.map { it.issuer },
         )
         assertTrue(result.skipped.all { it.reason.isNotBlank() })
@@ -108,6 +109,15 @@ class BitwardenImporterTest {
         val fallback = result.accounts.first { it.issuer == "Bitwarden" }
         assertEquals("", fallback.accountName)
         assertEquals(OTP_TYPE_TOTP, fallback.otpType)
+
+        // v2.2：login.totp 为空的条目也导入：只有名称/用户名/密码，id 稳定且不以空 secret 派生。
+        val noOtp = result.accounts.first { it.issuer == "NoTotp" }
+        assertEquals(Secret.noOtpAccountId("NoTotp", "carol", 3), noOtp.id)
+        assertEquals("carol", noOtp.accountName)
+        assertEquals("pw", noOtp.password)
+        assertEquals("", noOtp.secret)
+        assertTrue(!noOtp.hasOtp)
+        assertTrue(noOtp.id.startsWith("n_"))
     }
 
     @Test

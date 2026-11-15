@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-14T03:47:26.935Z",
+  "generatedAt": "2026-11-15T15:29:36.169Z",
   "node": "v22.22.2",
   "platform": "linux x64",
   "flags": {
@@ -7,14 +7,14 @@
     "withTests": true
   },
   "artifacts": {
-    "rpk": "band-app/dist/com.flykhan.wristkey.release.2.1.2.rpk",
+    "rpk": "band-app/dist/com.flykhan.wristkey.release.2.2.0.rpk",
     "apk": "android-app/app/build/outputs/apk/release/app-release.apk"
   },
   "summary": {
-    "passed": 82,
+    "passed": 121,
     "failed": 0,
     "skipped": 0,
-    "total": 82
+    "total": 121
   },
   "checks": [
     {
@@ -68,19 +68,19 @@
     {
       "name": "band-app npm test",
       "status": "PASS",
-      "detail": "退出码 0，106 个用例通过",
+      "detail": "退出码 0，116 个用例通过",
       "command": "npm test"
     },
     {
       "name": "band-app dist/*.rpk 存在",
       "status": "PASS",
-      "detail": "band-app/dist/com.flykhan.wristkey.release.2.1.2.rpk (109130B)",
+      "detail": "band-app/dist/com.flykhan.wristkey.release.2.2.0.rpk (109172B)",
       "command": ""
     },
     {
       "name": "band-app release rpk 文件名",
       "status": "PASS",
-      "detail": "com.flykhan.wristkey.release.2.1.2.rpk",
+      "detail": "com.flykhan.wristkey.release.2.2.0.rpk",
       "command": ""
     },
     {
@@ -98,13 +98,13 @@
     {
       "name": "rpk versionName",
       "status": "PASS",
-      "detail": "2.1.2",
+      "detail": "2.2.0",
       "command": ""
     },
     {
       "name": "rpk versionCode",
       "status": "PASS",
-      "detail": "11",
+      "detail": "12",
       "command": ""
     },
     {
@@ -194,7 +194,7 @@
     {
       "name": "UI v3 字母桶/筛选测试存在",
       "status": "PASS",
-      "detail": "picker.test.mjs, settings.test.mjs, uxStructure.test.mjs, uxV4.test.mjs",
+      "detail": "picker.test.mjs, settings.test.mjs, uxStructure.test.mjs, uxV4.test.mjs, uxV5.test.mjs",
       "command": ""
     },
     {
@@ -240,7 +240,7 @@
       "command": ""
     },
     {
-      "name": "UI v4 PBKDF2-SHA256 10 次（Vela 无 JIT）+ 16 字节 salt",
+      "name": "UI v4 PBKDF2-SHA256 1 次（Vela 无 JIT）+ 16 字节 salt",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -258,7 +258,7 @@
       "command": ""
     },
     {
-      "name": "UI v4 主界面 rail 56px",
+      "name": "UI v4 主界面 rail 64px",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -336,6 +336,162 @@
       "command": ""
     },
     {
+      "name": "UI v5 band manifest 2.2.0/12 + 包名",
+      "status": "PASS",
+      "detail": "com.flykhan.wristkey",
+      "command": ""
+    },
+    {
+      "name": "UI v5 band package.json 版本 2.2.0",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 版权/菜单版本文案 2.2.0",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 账号卡片固定高度 98px（筛选不拉伸）",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 卡片字号（issuer 24 / account 15 / remaining 16）",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 卡片账号字号 15px",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 卡片倒计时字号 16px",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 验证码字号按位数选择（48/46）",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 A-Z 按钮 52x52",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 菜单按钮 64x44",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 锁屏键 128x100",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 锁屏关闭键 44x44",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 详情返回按钮 72x40",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 用户名/密码值 18px",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 详情验证码按位数选择",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 菜单行高 56px / 标题 22px",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 菜单标题 22px",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 picker 关闭键 44x44 / 字母 24px",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 picker 字母 24px",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 设置图案键 128x100",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 showLock 调用 setupChannel 并保持锁屏态",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 channelReady 由 connect() 结果决定（不先置 true）",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 channelReady 不预先置 true",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 pin.js 默认/下限迭代 = 1",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "UI v5 单测存在",
+      "status": "PASS",
+      "detail": "tests/uxV5.test.mjs",
+      "command": ""
+    },
+    {
+      "name": "UI v5 单测覆盖固定高度/锁屏建链/尺寸",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
       "name": "android-app 存在",
       "status": "PASS",
       "detail": "android-app/gradlew",
@@ -350,13 +506,13 @@
     {
       "name": "android gradle testDebugUnitTest",
       "status": "PASS",
-      "detail": "退出码 0，106 个用例通过（16 个测试类）",
+      "detail": "退出码 0，112 个用例通过（16 个测试类）",
       "command": "cd android-app && JAVA_HOME=/home/lsl/.jdks/jdk-21.0.13+9 ./gradlew testDebugUnitTest"
     },
     {
       "name": "android APK 存在",
       "status": "PASS",
-      "detail": "android-app/app/build/outputs/apk/release/app-release.apk (26492669B)",
+      "detail": "android-app/app/build/outputs/apk/release/app-release.apk (26509053B)",
       "command": ""
     },
     {
@@ -374,13 +530,13 @@
     {
       "name": "APK versionName",
       "status": "PASS",
-      "detail": "2.1.2",
+      "detail": "2.2.0",
       "command": ""
     },
     {
       "name": "APK versionCode",
       "status": "PASS",
-      "detail": "7",
+      "detail": "8",
       "command": ""
     },
     {
@@ -402,7 +558,7 @@
       "command": ""
     },
     {
-      "name": "Android v4 PatternPin PBKDF2 10 次 + 16 字节 salt",
+      "name": "Android v4 PatternPin PBKDF2 1 次 + 16 字节 salt",
       "status": "PASS",
       "detail": "",
       "command": ""
@@ -468,9 +624,87 @@
       "command": ""
     },
     {
-      "name": "Android v4 单测覆盖 derive/10/mfa_pin",
+      "name": "Android v4 单测覆盖 derive/mfa_pin",
       "status": "PASS",
       "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 PatternPin 默认/下限迭代 1",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 PatternPin 固定向量 1 轮",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 SyncProtocol PIN_ITERATIONS = 1",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 PinProtocolTest 迭代 1",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 Bitwarden 无 totp 条目导入",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 AccountModels hasOtp",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 syncableAccounts 过滤无码账号",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 Bitwarden 导入测试 6+4 + n_ id",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 手机拉起/图案/同步重试常量",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 同步发送前过滤无码账号",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 编辑页 44dp 返回按钮",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 详情值 16sp",
+      "status": "PASS",
+      "detail": "",
+      "command": ""
+    },
+    {
+      "name": "Android v5 2.2.0 回归单测存在",
+      "status": "PASS",
+      "detail": "pattern/PatternPinTest.kt, PinProtocolTest.kt, SyncProtocolTest.kt, bitwarden/BitwardenImporterTest.kt",
       "command": ""
     },
     {
@@ -494,14 +728,14 @@
     {
       "name": "RPK 内嵌证书 DER",
       "status": "PASS",
-      "detail": "命中 offset 105104",
+      "detail": "命中 offset 105146",
       "command": ""
     },
     {
       "name": "scripts/check-signing.sh",
       "status": "PASS",
       "detail": "PASS: 包名 com.flykhan.wristkey，APK 与 RPK 使用同一证书（SHA-256 b7cfba158655bd329acc30a81cb6f5a62815b74df93db4c4931e608851da85c4）",
-      "command": "bash scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.apk band-app/dist/com.flykhan.wristkey.release.2.1.2.rpk"
+      "command": "bash scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.apk band-app/dist/com.flykhan.wristkey.release.2.2.0.rpk"
     },
     {
       "name": "APK 与 RPK 包名一致",

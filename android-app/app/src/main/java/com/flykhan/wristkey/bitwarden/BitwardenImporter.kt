@@ -66,8 +66,23 @@ object BitwardenImporter {
                 skipped += StratumSkip(issuer = issuer, accountName = username, code = code, reason = reason)
             }
 
+            if (login == null) {
+                skip("NOT_LOGIN", "该条目没有 login（登录信息），跳过")
+                continue
+            }
+
             if (rawTotp.isEmpty()) {
-                skip("NO_TOTP", "该条目没有 login.totp，跳过")
+                // v2.2：没有 TOTP 的条目也要导入（名称/用户名/密码仅手机端可见）。
+                // id 不能由空 secret 派生，否则所有无验证码条目会撞成同一个 s_ id。
+                accounts += WristKeyAccount(
+                    id = Secret.noOtpAccountId(issuer, username, index),
+                    issuer = issuer,
+                    accountName = username,
+                    category = DEFAULT_CATEGORY,
+                    secret = "",
+                    updatedAt = updatedAt,
+                    password = password,
+                )
                 continue
             }
 

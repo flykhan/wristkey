@@ -11,22 +11,24 @@ import java.security.SecureRandom
 /**
  * 入口图案派生（docs/protocol.md v3 mfa_pin_set）单元测试。
  *
- * 固定向量由 Node crypto.pbkdf2Sync("TSCSC", 16 字节盐, 10, 32, "sha256") 生成，
+ * 固定向量由 Node crypto.pbkdf2Sync("TSCSC", 16 字节盐, 1, 32, "sha256") 生成，
  * 与本实现的 PBKDF2WithHmacSHA256 结果一致；Android 侧同一规范串必须得到同一 hash。
  */
 class PatternPinTest {
 
     private val saltHex = "000102030405060708090a0b0c0d0e0f"
-    private val expectedHash = "08c17173f5834afbde11e3cae68ab75a4f7b2c244ea90926c3a62a3c5566d4a6"
+    private val expectedHash = "14d3407409dca32a6cebfb70c29871fd8b381466e8b290bc22625dc1fe8795a5"
 
     @Test
     fun derivesKnownPbkdf2Sha256Vector() {
-        assertEquals(expectedHash, PatternPin.derive("TSCSC", saltHex, 10))
+        assertEquals(expectedHash, PatternPin.derive("TSCSC", saltHex, 1))
     }
 
     @Test
     fun defaultIterationsMatchProtocol() {
-        assertEquals(10, PatternPin.ITERATIONS)
+        // v2.2：Vela 快应用无 JIT，10 轮 PBKDF2 在手表上仍会卡顿，固定为 1 轮（下限 1）。
+        assertEquals(1, PatternPin.ITERATIONS)
+        assertEquals(1, PatternPin.MIN_ITERATIONS)
         assertEquals(expectedHash, PatternPin.derive("TSCSC", saltHex))
     }
 

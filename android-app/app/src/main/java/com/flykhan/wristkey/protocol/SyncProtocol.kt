@@ -49,7 +49,8 @@ object SyncProtocol {
 
     // ---------------------------------------------------------------- 入口图案（v3）
     const val PIN_ALGORITHM = "PBKDF2-SHA256"
-    const val PIN_ITERATIONS = 10
+    // Vela 快应用无 JIT：10 轮 PBKDF2 在手表上仍会卡顿，v2.2 起固定 1 轮（下限 1）。
+    const val PIN_ITERATIONS = 1
     const val PIN_MIN_ITERATIONS = 1
     const val PIN_MAX_ITERATIONS = 20000
     const val PIN_SALT_HEX_LENGTH = 32
@@ -106,6 +107,15 @@ object SyncProtocol {
     /** `sync-<sentAt>-<4 位十六进制随机>`；同一轮同步的后续消息必须复用同一值。 */
     fun newSyncId(sentAt: Long, random: Random = Random()): String =
         "sync-$sentAt-" + String.format(Locale.US, "%04x", random.nextInt(0x10000))
+
+    /**
+     * 可同步到手环的账号：协议 account.secret 必须是 Base32，无验证码条目（secret 为空）
+     * 只在手机端可见，不能进入 begin/commit 的 accountCount。
+     */
+    fun syncableAccounts(accounts: List<WristKeyAccount>): List<WristKeyAccount> = accounts.filter { it.hasOtp }
+
+    /** 无验证码账号数量（同步说明用）。 */
+    fun noOtpCount(accounts: List<WristKeyAccount>): Int = accounts.count { !it.hasOtp }
 
     /** 生成 begin → account×N → commit 的完整消息序列（每条均已序列化为 UTF-8 JSON 字符串）。 */
     fun buildSession(

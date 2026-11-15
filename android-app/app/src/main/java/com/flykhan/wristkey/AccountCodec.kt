@@ -34,12 +34,13 @@ object AccountCodec {
 
     private fun decodeAccount(item: JSONObject): WristKeyAccount? {
         val id = item.optString("id")
-        val secret = Secret.normalize(item.optString("secret"))
-        if (id.isBlank() || secret.isEmpty()) {
+        if (id.isBlank()) {
             return null
         }
+        // v2.2：无验证码条目 secret 为空但必须保留（Bitwarden login.totp 缺失），仅 id 为空才丢弃。
+        val secret = Secret.normalize(item.optString("secret"))
         val otpType = normalizeOtpType(item.optString("otpType", OTP_TYPE_TOTP))
-        val isSteam = otpType == OTP_TYPE_STEAM
+        val isSteam = otpType == OTP_TYPE_STEAM && secret.isNotEmpty()
         return WristKeyAccount(
             id = id,
             issuer = item.optString("issuer"),

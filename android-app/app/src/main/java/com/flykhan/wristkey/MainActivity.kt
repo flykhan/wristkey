@@ -81,20 +81,6 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
         }
     }
 
-    private val pinWatchdog = Runnable {
-        if (pinOperation.isNotEmpty()) {
-            val operation = pinOperation
-            pinOperation = ""
-            update { state ->
-                val message = "8 秒内未收到手环确认，请确认手环应用版本为 2.0 及以上。"
-                state.copy(
-                    pattern = state.pattern.copy(saving = false, error = message),
-                    lastEvent = message,
-                )
-            }
-            Log.d(TAG, "入口图案操作超时: " + operation)
-        }
-    }
 
     private val actions: AppActions by lazy {
         AppActions(
@@ -432,8 +418,10 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
         repository.saveAll(summary.accounts)
         pendingBackupBytes = null
         pendingBackupLabel = ""
+        val noOtpCount = summary.accounts.count { !it.hasOtp }
         val message = "导入完成：新增 " + summary.added.size + " · 更新 " + summary.updated.size +
-            " · 跳过 " + summary.skipped.size
+            " · 跳过 " + summary.skipped.size +
+            if (noOtpCount > 0) "（其中 " + noOtpCount + " 个无验证码，仅手机可见）" else ""
         update {
             it.copy(
                 accounts = summary.accounts,
@@ -594,9 +582,8 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
                 val hashHex = PatternPin.derive(pattern.input, saltHex, PatternPin.ITERATIONS)
                 runOnUiThread {
                     pinOperation = "set"
+                    // 控制器内部会先拉手环应用到前台，再发送并在无 pin_ack 时自动重试。
                     controller.setPin(saltHex, hashHex, PatternPin.ITERATIONS)
-                    mainHandler.removeCallbacks(pinWatchdog)
-                    mainHandler.postDelayed(pinWatchdog, PIN_TIMEOUT_MS)
                 }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -612,8 +599,6 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
 
     private fun disablePin() {
         pinOperation = "clear"
-        mainHandler.removeCallbacks(pinWatchdog)
-        mainHandler.postDelayed(pinWatchdog, PIN_TIMEOUT_MS)
         update { it.copy(lastEvent = "正在关闭入口图案…") }
         controller.clearPin()
     }
@@ -702,7 +687,10 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
     }
 
     override fun onPinAck(info: com.flykhan.wristkey.protocol.SyncProtocol.PinAckInfo) {
-        mainHandler.removeCallbacks(pinWatchdog)
+        if (pinOperation.isEmpty()) {
+            // 迟到的 ack：不覆盖当前 UI。
+            return
+        }
         val operation = pinOperation
         pinOperation = ""
         if (info.ok) {
@@ -729,7 +717,10 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
     }
 
     override fun onPinState(info: com.flykhan.wristkey.protocol.SyncProtocol.PinStateInfo) {
-        pinOperation = ""
+        if (pinOperation.isNotEmpty()) {
+            // 设置/关闭入口图案进行中，忽略过期的状态广播。
+            return
+        }
         update { state ->
             state.copy(
                 sync = state.sync.copy(
@@ -740,7 +731,6 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
     }
 
     override fun onPinError(message: String) {
-        mainHandler.removeCallbacks(pinWatchdog)
         pinOperation = ""
         update {
             it.copy(
@@ -753,6 +743,5 @@ class MainActivity : ComponentActivity(), WearableSyncController.Listener {
     companion object {
         private const val TAG = "WristKeyMain"
         private const val ACK_TIMEOUT_MS = 8_000L
-        private const val PIN_TIMEOUT_MS = 8_000L
     }
 }

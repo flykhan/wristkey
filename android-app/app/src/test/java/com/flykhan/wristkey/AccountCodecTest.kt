@@ -79,7 +79,11 @@ class AccountCodecTest {
         assertTrue(AccountCodec.decode("").isEmpty())
         assertTrue(AccountCodec.decode("not json").isEmpty())
         assertTrue(AccountCodec.decode("[{\"id\":\"\",\"secret\":\"ABC\"}]").isEmpty())
-        assertTrue(AccountCodec.decode("[{\"id\":\"s_1\",\"secret\":\"\"}]").isEmpty())
+        // v2.2：无验证码条目（Bitwarden login.totp 为空）secret 为空但 id 稳定，必须保留。
+        val noOtp = AccountCodec.decode("[{\"id\":\"s_1\",\"secret\":\"\"}]").single()
+        assertEquals("s_1", noOtp.id)
+        assertEquals("", noOtp.secret)
+        assertTrue(!noOtp.hasOtp)
     }
 
     @Test
@@ -89,5 +93,24 @@ class AccountCodecTest {
             "password":"$longPassword"}]"""
         val account = AccountCodec.decode(raw).single()
         assertEquals(MAX_PASSWORD_LENGTH, account.password.length)
+    }
+
+    @Test
+    fun roundTripsNoOtpAccountWithEmptySecret() {
+        val account = WristKeyAccount(
+            id = "n_8d68002a15ee",
+            issuer = "NoTotp",
+            accountName = "carol",
+            secret = "",
+            updatedAt = 11L,
+            password = "pw",
+        )
+        val decoded = AccountCodec.decode(AccountCodec.encode(listOf(account))).single()
+        assertEquals("n_8d68002a15ee", decoded.id)
+        assertEquals("", decoded.secret)
+        assertTrue(!decoded.hasOtp)
+        assertEquals("NoTotp", decoded.issuer)
+        assertEquals("carol", decoded.accountName)
+        assertEquals("pw", decoded.password)
     }
 }

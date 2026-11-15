@@ -16,7 +16,7 @@
       </div>
       <div class="option" onclick="openCopyright" style="background-color: {{ theme.cardBackground }}">
         <text class="option-title" style="color: {{ theme.title }}">关于</text>
-        <text class="option-value" style="color: {{ theme.secondary }}">版本 2.1.2 · Apache-2.0</text>
+        <text class="option-value" style="color: {{ theme.secondary }}">版本 2.2.0 · Apache-2.0</text>
       </div>
       <div class="option" onclick="exitApp" style="background-color: {{ theme.cardBackground }}">
         <text class="option-title exit-text" style="color: {{ theme.progressDanger }}">退出应用</text>
@@ -154,14 +154,14 @@ export default {
 }
 
 .title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: bold;
   text-align: center;
 }
 
 .subtitle {
   margin-top: 1px;
-  font-size: 12px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -173,8 +173,9 @@ export default {
 }
 
 .option {
-  flex: 1;
+  flex: none;
   width: 100%;
+  height: 56px;
   margin-top: 6px;
   padding: 6px 14px;
   border-radius: 14px;
@@ -183,26 +184,26 @@ export default {
 }
 
 .option-title {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: bold;
   lines: 1;
 }
 
 .option-value {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 14px;
   lines: 1;
   text-overflow: ellipsis;
 }
 
 .exit-text {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: bold;
 }
 
 .hint {
-  height: 16px;
-  font-size: 12px;
+  height: 18px;
+  font-size: 14px;
   text-align: center;
 }
 </style>

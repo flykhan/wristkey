@@ -63,4 +63,11 @@ object Secret {
 
     /** 协议账号 id：`"s_" + sha1(归一化 secret 的 UTF-8)[0:12]`，跨次导入稳定。 */
     fun accountIdForSecret(rawSecret: String): String = "s_" + sha1Hex(normalize(rawSecret)).take(12)
+
+    /**
+     * 无验证码条目（Bitwarden 导出里 login.totp 为空的条目）的稳定 id：
+     * `"n_" + sha1(名称|用户名|条目序号)[0:12]`。不能用空 secret 派生 s_ id，否则所有空 secret 条目会同 id。
+     */
+    fun noOtpAccountId(issuer: String, accountName: String, index: Int): String =
+        "n_" + sha1Hex(issuer.trim() + "|" + accountName.trim() + "|" + index).take(12)
 }

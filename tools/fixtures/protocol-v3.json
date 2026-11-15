@@ -83,8 +83,8 @@
       "pin": {
         "algorithm": "PBKDF2-SHA256",
         "salt": "000102030405060708090a0b0c0d0e0f",
-        "hash": "f28fc96d9862d996a09c1e519f369ce76fd25295f5536742691dfe75e7c5854f",
-        "iterations": 10
+        "hash": "d3ce8cc5d572a3bed0494e6e3c0d4f3bee8736379361e99b8fa9303adbdd3fb6",
+        "iterations": 1
       }
     },
     {
@@ -115,8 +115,8 @@
       "pattern": "TSCCT",
       "algorithm": "PBKDF2-SHA256",
       "salt": "000102030405060708090a0b0c0d0e0f",
-      "hash": "f28fc96d9862d996a09c1e519f369ce76fd25295f5536742691dfe75e7c5854f",
-      "iterations": 10,
+      "hash": "d3ce8cc5d572a3bed0494e6e3c0d4f3bee8736379361e99b8fa9303adbdd3fb6",
+      "iterations": 1,
       "storedAt": 1760000015000
     },
     "pinAck": {

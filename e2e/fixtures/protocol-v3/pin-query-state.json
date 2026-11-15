@@ -7,8 +7,8 @@
     "pin": {
       "algorithm": "PBKDF2-SHA256",
       "salt": "fa4c1f4802b3cd594bbd46a5a1d3bdbc",
-      "hash": "c222f5e3b6e20d633291a5c8112dd4c25002329007cab8b72cef5a3e2459ac25",
-      "iterations": 10
+      "hash": "2dbc720af102c020e10d28c89e25a6a32416e87a1e26b8f10d23baa2bc9a41dc",
+      "iterations": 1
     }
   },
   "queryMessage": {

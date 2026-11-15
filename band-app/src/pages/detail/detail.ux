@@ -55,11 +55,17 @@ import {
   DARK_THEME,
   DEFAULT_DARK_MODE,
   THEME_STORAGE_KEY,
-  detailCodeFontSize,
   parseDarkMode,
   progressColor,
   themeFor
 } from "../../common/scripts/settings"
+
+// Detail code: 5-6 chars -> 60 px, 8/10 -> 58 px. 10 digits at 58 px still fit
+// inside the 436 px card body (12 characters incl. the group gap).
+function detailCodeSize(groupedCode) {
+  const length = String(groupedCode || "").replace(/\s/g, "").length
+  return length <= 6 ? 60 : 58
+}
 
 export default {
   protected: {
@@ -144,7 +150,7 @@ export default {
         issuer: "未找到账号",
         accountName: "可能已被新的同步替换",
         groupedCode: "-- --",
-        codeFontSize: detailCodeFontSize("-- --"),
+        codeFontSize: detailCodeSize("-- --"),
         code: "--",
         remaining: 0,
         progress: 0,
@@ -162,7 +168,7 @@ export default {
     }
 
     const token = buildTokenState(this.account, Date.now())
-    token.codeFontSize = detailCodeFontSize(token.groupedCode)
+    token.codeFontSize = detailCodeSize(token.groupedCode)
     this.token = token
     this.refreshPassword()
     this.progressColor = progressColor(token.remaining, this.theme)
@@ -287,7 +293,7 @@ export default {
 }
 
 .issuer {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: bold;
   lines: 1;
   text-overflow: ellipsis;
@@ -301,16 +307,16 @@ export default {
 }
 
 .back-button {
-  width: 60px;
-  height: 32px;
+  width: 72px;
+  height: 40px;
   margin-left: 8px;
-  border-radius: 12px;
+  border-radius: 14px;
   align-items: center;
   justify-content: center;
 }
 
 .back-text {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: bold;
 }
 
@@ -322,20 +328,20 @@ export default {
 
 .credential-row {
   width: 100%;
-  height: 20px;
+  height: 26px;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
 }
 
 .credential-label {
-  width: 52px;
-  font-size: 13px;
+  width: 58px;
+  font-size: 15px;
 }
 
 .credential-value {
   flex: 1;
-  font-size: 14px;
+  font-size: 18px;
   text-align: right;
   lines: 1;
   text-overflow: ellipsis;
@@ -373,14 +379,14 @@ export default {
 
 .countdown {
   margin-top: 4px;
-  font-size: 18px;
+  font-size: 16px;
   text-align: center;
 }
 
 .rows {
   flex: 1;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 4px;
   flex-direction: column;
   justify-content: center;
 }
@@ -394,12 +400,12 @@ export default {
 }
 
 .label {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .value {
   width: 64%;
-  font-size: 15px;
+  font-size: 14px;
   text-align: right;
   lines: 1;
   text-overflow: ellipsis;

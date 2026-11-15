@@ -18,7 +18,8 @@ class BitwardenPasswordTest {
         assertEquals("not-a-real-password", byIssuer.getValue("GitHub").password)
         assertEquals("not-a-real-password", byIssuer.getValue("Steam").password)
         assertEquals("", byIssuer.getValue("RawBase32").password)
+        assertEquals("pw", byIssuer.getValue("NoTotp").password)
         assertEquals("", byIssuer.getValue("LabelOnly").password)
-        assertEquals(2, result.accounts.count { it.password.isNotEmpty() })
+        assertEquals(3, result.accounts.count { it.password.isNotEmpty() })
     }
 }

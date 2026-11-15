@@ -10,8 +10,10 @@
 //   login.username       → accountName；空 → otpauth label 账号部分；仍空 → issuer
 //   login.totp           → otpauth URI 或纯 Base32（SHA1/6/30）
 //   folders/folderId     → 忽略，分类统一 "默认分类"
-//   非登录 type(≠1)      → 跳过；无 totp/非法 totp → 跳过并报告
+//   非登录 type(≠1)      → 跳过；无 totp 的登录条目 → 导入为空 secret 的本地账号（2.2.0，不同步）；
+//   非法 totp            → 跳过并报告
 
+import { createHash } from 'node:crypto';
 import { isValidProtocolSecret, normalizeProtocolSecret } from './encoding.mjs';
 import {
   DEFAULT_CATEGORY,
@@ -22,6 +24,12 @@ import {
 
 export const BITWARDEN_ISSUER = 'Bitwarden';
 export const BITWARDEN_ENCRYPTED_MESSAGE = 'Bitwarden 加密导出暂不支持，请导出未加密 JSON';
+
+/** 无验证码条目的稳定 id：n_ + sha1(issuer|accountName|itemIndex)[0:12]（与 Android Secret.noOtpAccountId 一致）。 */
+export function noOtpAccountId(issuer, accountName, index) {
+  const material = String(issuer).trim() + '|' + String(accountName).trim() + '|' + String(index);
+  return 'n_' + createHash('sha1').update(material, 'utf8').digest('hex').slice(0, 12);
+}
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -153,8 +161,23 @@ export function mapBitwardenToAccounts(value, options) {
     }
     const totp = readField(loginObject, 'totp');
     const totpText = asString(totp).trim();
+    const issuer = itemName || BITWARDEN_ISSUER;
+
+    // 2.2.0：没有 TOTP 的登录条目也导入，但 secret 为空、仅手机本地可见，不同步到手环。
     if (!totpText) {
-      skip('NO_TOTP', 'login.totp 为空或缺失（普通密码条目）');
+      const accountName = username || issuer;
+      accounts.push({
+        id: noOtpAccountId(issuer, accountName, index),
+        issuer,
+        accountName,
+        category: DEFAULT_CATEGORY,
+        secret: '',
+        algorithm: 'SHA1',
+        digits: 6,
+        period: 30,
+        otpType: 'totp',
+        updatedAt
+      });
       return;
     }
     const parsed = parseTotpField(totpText);
@@ -163,7 +186,6 @@ export function mapBitwardenToAccounts(value, options) {
       return;
     }
 
-    const issuer = itemName || BITWARDEN_ISSUER;
     const accountName = username || parsed.parsed.accountName || issuer;
     const secret = parsed.parsed.secret;
     if (seenSecrets.has(secret)) {

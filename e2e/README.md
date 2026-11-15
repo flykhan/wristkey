@@ -8,6 +8,9 @@
 2. **验证**：Node 端 verify.mjs（RFC 向量、解密、映射、协议状态机、跨实现对拍）、
    Python 端独立解密验证、构建产物（.rpk / APK）与签名一致性检查。
 
+> 本轮（2.2.0）验收：band-app 116、android-app 112、Node 171、Python 40；
+> check-build 121 PASS / 0 FAIL。构建产物版本 2.2.0/12 与 2.2.0/8。
+>
 > 所有 secret 均为**公开测试值**（RFC 6238 Appendix B 种子、GitHub 官方示例 secret 等）。
 > 禁止把真实 TOTP secret 写入本目录或任何测试文件。
 
@@ -32,7 +35,7 @@ e2e/
 │   ├── strong.stratum           Strong 加密夹具（密码 test-password）
 │   ├── legacy.stratum           Legacy 加密夹具（密码 test-password）
 │   ├── uri-list.txt             otpauth:// 列表（8 导入 + 2 跳过，含 3 种 Steam 形式）
-│   ├── bitwarden-export.json    Bitwarden 未加密 Vault 夹具（10 item → 6 导入 + 4 跳过）
+│   ├── bitwarden-export.json    Bitwarden 未加密 Vault 夹具（10 item → 7 导入 + 3 跳过，含无验证码本地账号）
 │   ├── bitwarden-encrypted-export.json  加密导出负例（识别并拒绝）
 │   ├── bitwarden-expected-import.json   参考映射结果（供 Android 单测对拍）
 │   ├── manifest.json            文件哈希、加密参数、覆盖矩阵
@@ -118,11 +121,12 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 
 ## Bitwarden 未加密 Vault 夹具（docs/bitwarden-format.md）
 
-- bitwarden-export.json：10 个 item → **6 导入 + 4 跳过**（确定性、密码字段为 fake-* 占位）；
+- bitwarden-export.json：10 个 item → **7 导入 + 3 跳过**（确定性、密码字段为 fake-* 占位）；
   - 导入：otpauth TOTP（SHA1/6/30）、SHA256/8/60、Steam（encoder=steam → otpType=steam/5/30）、
     纯 Base32 secret（SHA1/6/30）、name 空 → issuer 兜底为 Bitwarden、username 空 → 取 otpauth label；
-    文件夹/folderId 一律忽略（分类=默认分类）；
-  - 跳过：无 login.totp（NO_TOTP）、非登录 type=2（NOT_LOGIN_TYPE）、非法 totp（INVALID_TOTP）、
+    **login.totp 为空**的登录条目 2.2.0 起也导入为无验证码本地账号（hasOtp=false、id 前缀 n_，
+    仅手机可见、不同步手环；补 secret 后转 s_）；文件夹/folderId 一律忽略（分类=默认分类）；
+  - 跳过：非登录 type=2（NOT_LOGIN_TYPE）、非法 totp（INVALID_TOTP）、
     HOTP URI（TYPE_NOT_TOTP）；跳过报告只含 name/原因（不含 secret）。
 - bitwarden-encrypted-export.json：encrypted=true 负例，参考实现识别为 encrypted 并拒绝，
   提示“Bitwarden 加密导出暂不支持，请导出未加密 JSON”。
@@ -165,7 +169,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - protocol-v3/v2-compat-session.json：v2 手机消息（version=2、无 password）→ v3 手环；
   旧密码按“缺省=保留”处理，快照 version=2，但写入活动存储键 `mfa_snapshot_v3`。
 - protocol-v3/pin-set.json：合法 mfa_pin_set（PBKDF2-SHA256、salt 32 hex、hash 64 hex、
-  iterations 10、图案 TSCCT）；expected.ack={ok:true,enabled:true}，state enabled=true。
+  iterations 1、图案 TSCCT）；expected.ack={ok:true,enabled:true}，state enabled=true。
 - protocol-v3/pin-ack.json：成功不得带 error、失败原因码必须在
   invalid_pin_payload/invalid_version/storage_error 白名单内，共 10 例。
 - protocol-v3/pin-query-state.json / pin-clear.json：pin_query → pin_state（requestId 回填、
@@ -187,7 +191,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 | G | 字段边界：最大字段消息 < 1KB（含 Steam）、13 类非法 account + 4 类非法 Steam account 丢弃、未知字段忽略、小写算法/otpType 容忍 |
 | H | 回放 invalid-cases.json 的 25 个用例（含 Steam / duplicate_index / 非法 begin / 失败 ack 原因码） |
 | I | **跨端 TOTP/Steam**：band-app 纯模块 vs 独立实现（RFC 向量、HOTP、3×5×5×5 矩阵、夹具 TOTP 账号、**Steam 6 向量 + Steam 账号跨端对拍**） |
-| J | **Bitwarden 未加密 Vault**：内容嗅探（vault/encrypted/非 Bitwarden）、otpauth TOTP / Steam encoder / 纯 Base32 三类、name/username 兜底、文件夹忽略、加密导出拒绝、映射账号经协议同步、Android 单测夹具对拍（若已复制） |
+| J | **Bitwarden 未加密 Vault**：内容嗅探（vault/encrypted/非 Bitwarden）、otpauth TOTP / Steam encoder / 纯 Base32 三类、10 item → 7 导入/3 跳过、**无 totp 条目导入为 n_ 本地账号且不同步**、name/username 兜底、文件夹忽略、加密导出拒绝、Android 单测夹具对拍（若已复制） |
 | K | **协议 v3**：v3 会话结构与大小、13 账号 id 复算、password 边界（无/空串/128/129/控制字符/非字符串/Unicode）、4 个密码合并场景、v2→v3 兼容（旧密码保留、快照 version=2、storageKey=mfa_snapshot_v3）、旧手环 supportedVersions=[2] 忽略 v3、8s ack 超时提示“升级手环应用”、pin_set/pin_ack/pin_query/pin_state/pin_clear、图案格式与 PBKDF2 复算、非法 pin 17 例（失败不覆盖旧图案） |
 
 ## 交叉验证证据（双向、非自证）
@@ -213,7 +217,7 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - band-app/dist/*.rpk 存在，manifest.package == com.flykhan.wristkey、name == 腕证、
   deviceTypeList 含 watch、features 含 system.router/system.storage/system.interconnect；
 - Android APK 存在，包名 com.flykhan.wristkey、应用名 腕证；
-- 版本号：rpk 2.1.2 / versionCode 11（入口图案内联在 index，门禁已恢复），APK 2.1.2 / versionCode 7（同版号，便于两端配套）；
+- 版本号：rpk 2.2.0 / versionCode 12（入口图案内联在 index），APK 2.2.0 / versionCode 8（同版号，便于两端配套）；
 - APK 无 INTERNET；权限列表仅允许 *DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION；
 - APK 签名证书 SHA-256 == signing/rpk-sign/certificate.pem；
 - .rpk 字节流内嵌同一证书 DER（aiot-toolkit 签名块）；
@@ -226,15 +230,24 @@ PERIOD_OUT_OF_RANGE、DIGITS_OUT_OF_RANGE、EMPTY_ISSUER_AND_USERNAME、INVALID_
 - **band UI v4 静态检查**（docs/design/ui-v4-analysis.md）：
   **v2.1.2 入口内联门禁**：index 含 if="{{ locked }}"/if="{{ mainVisible }}"、coldStart、shouldRelock、
   markUnlocked、verifyPattern、nextLockAfterFailure、tapLockSymbol；app.ux 不承担门禁；
-  pages/pin 与 5 位 TSC 图案、三色 #6EE7C7/#7AA2F7/#F2B880、PBKDF2-SHA256 10 次/16 B salt、
+  pages/pin 与 5 位 TSC 图案、三色 #6EE7C7/#7AA2F7/#F2B880、PBKDF2-SHA256 1 次/16 B salt、
   失败 5 次锁 30 s 递增、只存派生值 + 锁计数持久化；
-  主界面 56px rail + 菜单 + 3 条/页、picker 4×4×3 分页、详情 username/password/code、
+  主界面 64px rail + 菜单 + 3 条/页、picker 4×4×3 分页、详情 username/password/code、
   密码遮罩 10 s、菜单 4 项（入口密码/立即同步/关于/退出）、协议 v3 password/pin 消息、mfa_snapshot_v3、单测覆盖；
   **页面栈回归**：所有页面不使用 router.replace，启动流程不 push/pages/lock；
 - **Android UI v4 静态检查**（docs/design/android-v2-spec.md）：
-  PatternPin 5 位/TSC/PBKDF2 10/16 B 随机 salt、入口图案设置页、set/clear/query pin、
+  PatternPin 5 位/TSC/PBKDF2 1/16 B 随机 salt、入口图案设置页、set/clear/query pin、
   3 Tab、FAB + ModalBottomSheet、密码 10 s 遮罩、详情/入口图案卡、深色 token、
   协议 v3 password/pin、图案/协议/密码单测存在；
+- **band UI v5 静态检查（2.2.0）**：账号卡片固定 98px（筛选 1–2 条不拉伸）、
+  卡片字号（issuer 24 / account 15 / remaining 16）、验证码 48/46、A-Z 52×52、菜单 64×44、
+  锁屏键 128×100、详情返回 72×40、用户名/密码 18px、菜单 56/22、picker 44/24、
+  showLock 调用 setupChannel、channelReady 由 connect() 结果决定且不预置 true、
+  pin.js 默认/下限迭代 1、uxV5 单测覆盖；
+- **Android UI v5 静态检查（2.2.0）**：PatternPin/SyncProtocol PIN_ITERATIONS=1 与固定向量
+  14d34074…795a5、Bitwarden 无 totp 导入（hasOtp / noOtpAccountId / n_）、
+  syncableAccounts 过滤无码账号、拉起/图案/同步重试常量（1300/2500/3、400 ms/2 次）、
+  44dp 返回按钮、16sp 详情值、2.2.0 回归单测存在；
 - 结果写入 ../reports/e2e-build-result.json，退出码 0 = 无 FAIL（SKIP 可接受）。
 
 ## 协议/格式的确定性约定（与 docs/protocol.md 对齐）

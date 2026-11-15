@@ -141,4 +141,59 @@ class AccountModelsTest {
         )
         assertEquals("94287082", account.currentCode(59_000L))
     }
+
+    @Test
+    fun noOtpAccountHasNoCodeAndKeepsStableId() {
+        val account = WristKeyAccount(
+            id = "n_8d68002a15ee",
+            issuer = "NoTotp",
+            accountName = "carol",
+            secret = "",
+            password = "pw",
+        )
+        assertTrue(!account.hasOtp)
+        assertEquals("", account.currentCode(59_000L))
+        assertEquals(0, account.remainingSeconds(59_000L))
+        assertEquals("", account.maskedSecret)
+        assertEquals("NoTotp · carol", account.displayTitle)
+    }
+
+    @Test
+    fun validateAllowsEditingExistingNoOtpAccount() {
+        // 只改名称/密码、不填 Secret：沿用原 n_ id，可以保存。
+        val draft = AccountDraft(
+            id = "n_8d68002a15ee",
+            issuer = "NoTotp",
+            accountName = "carol",
+            secret = "",
+            password = "pw2",
+        )
+        val result = draft.validate(now = 1L)
+        assertNull(result.errorMessage)
+        val account = result.account!!
+        assertEquals("n_8d68002a15ee", account.id)
+        assertEquals("", account.secret)
+        assertTrue(!account.hasOtp)
+        assertEquals("pw2", account.password)
+    }
+
+    @Test
+    fun validateSwitchesNoOtpIdToSecretIdWhenSecretFilled() {
+        val draft = AccountDraft(
+            id = "n_8d68002a15ee",
+            issuer = "NoTotp",
+            accountName = "carol",
+            secret = TestFixtures.SHA1_SEED,
+        )
+        val account = draft.validate(now = 1L).account!!
+        assertTrue(account.hasOtp)
+        assertEquals("s_9bb1d7340577", account.id)
+    }
+
+    @Test
+    fun validateStillRequiresSecretForNewAccounts() {
+        val result = AccountDraft(issuer = "New", accountName = "user", secret = "").validate()
+        assertNull(result.account)
+        assertEquals("Secret 不能为空", result.errorMessage)
+    }
 }

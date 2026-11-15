@@ -3,8 +3,8 @@
   "note": "参考映射结果（e2e/lib/bitwarden.mjs mapBitwardenToAccounts，依据 docs/bitwarden-format.md）",
   "stats": {
     "total": 10,
-    "imported": 6,
-    "skipped": 4
+    "imported": 7,
+    "skipped": 3
   },
   "accounts": [
     {
@@ -78,16 +78,21 @@
       "period": 30,
       "otpType": "totp",
       "updatedAt": 1760000000000
+    },
+    {
+      "id": "n_752d154f3d5b",
+      "issuer": "PlainLogin",
+      "accountName": "plain",
+      "category": "默认分类",
+      "secret": "",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "otpType": "totp",
+      "updatedAt": 1760000000000
     }
   ],
   "skipped": [
-    {
-      "itemIndex": 6,
-      "name": "PlainLogin",
-      "username": "plain",
-      "code": "NO_TOTP",
-      "reason": "login.totp 为空或缺失（普通密码条目）"
-    },
     {
       "itemIndex": 7,
       "name": "SecureNote",

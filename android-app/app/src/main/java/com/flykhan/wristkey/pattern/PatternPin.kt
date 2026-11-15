@@ -10,7 +10,8 @@ import javax.crypto.spec.PBEKeySpec
  *
  * 手机端只发送派生结果，不发送图案明文，也不在本地保存图案：
  * - 图案规范串：固定 5 位，每位 `T`（三角）/`S`（方形）/`C`（圆形），按点击顺序拼接；
- * - 派生：PBKDF2-HMAC-SHA256(图案规范串, salt 16 字节, iterations=10) 的 32 字节结果（64 位小写 hex）。
+ * - 派生：PBKDF2-HMAC-SHA256(图案规范串, salt 16 字节, iterations=1) 的 32 字节结果（64 位小写 hex）。
+ *   Vela 快应用没有 JIT，10 轮 PBKDF2 在手表上仍会卡顿，v2.2 起协议固定 1 轮。
  *
  * 纯 JVM 实现（PBKDF2WithHmacSHA256 在 JDK 与 Android API 26+ 均可用），单元测试可直接验证。
  */
@@ -22,7 +23,7 @@ object PatternPin {
     val SHAPES: List<String> = listOf(SHAPE_TRIANGLE, SHAPE_SQUARE, SHAPE_CIRCLE)
 
     const val LENGTH = 5
-    const val ITERATIONS = 10
+    const val ITERATIONS = 1
     const val MIN_ITERATIONS = 1
     const val MAX_ITERATIONS = 20000
     const val SALT_BYTES = 16

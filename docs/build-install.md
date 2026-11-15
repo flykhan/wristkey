@@ -73,9 +73,9 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
 2. AstroBox 连接手环：打开 App → 授予附近设备/蓝牙权限 → 连接设备（工具内"AuthKey 读取工具"
    按提示跳转"小米健康研究"授权，或使用账号方式）→ 确认设备型号为 `xmb10p`；
 3. **2.0.x 先卸载旧包名** `dev.wristkey.app` 的手环快应用与手机 App（2.1.0 起包名改为 `com.flykhan.wristkey`）；
-   已是 2.1.0/2.1.1 的可直接覆盖安装 2.1.2，数据保留；
-4. AstroBox → 快应用 → 「+」选择 `releases/v2.1.2/wristkey-band-v2.1.2.rpk`（或 `band-app/dist/com.flykhan.wristkey.release.*.rpk`）→ 安装（原文件直传，不重签名）；
-5. 手机安装 `releases/v2.1.2/wristkey-android-v2.1.2.apk`（与 rpk 同包名同证书）；打开 App → 授予"设备管理"权限；
+   已是 2.1.x 的可直接覆盖安装 2.2.0，数据保留；覆盖后从应用列表彻底退出「腕证」再重开；
+4. AstroBox → 快应用 → 「+」选择 `releases/v2.2.0/wristkey-band-v2.2.0.rpk`（或 `band-app/dist/com.flykhan.wristkey.release.*.rpk`）→ 安装（原文件直传，不重签名）；
+5. 手机安装 `releases/v2.2.0/wristkey-android-v2.2.0.apk`（与 rpk 同包名同证书）；打开 App → 授予"设备管理"权限；
 6. 导入 Stratum/Bitwarden 备份 → 在「同步」页同步（或先在手环打开一次「腕证」，再回到 App 同步）；
 7. 在手环应用列表打开「腕证」：默认直接进入主界面；如需门禁，在手环菜单「入口密码」或手机「设置 → 入口图案」设置 5 位图案，之后冷启动/闲置 2 分钟会先显示锁屏；
 8. 检查 3 条/页、A-Z 筛选、详情密码与验证码；输入正确图案应进入主界面，输错 5 次锁定 30 秒并递增。
@@ -90,7 +90,9 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
 - [ ] App 能发现手环并授予设备管理权限；
 - [ ] 导入加密/明文/URI 列表三种备份均成功，跳过项报告正确；
 - [ ] 同步后手环显示 N 个账号，分类正确；
-- [ ] 2.1.2 未设图案时打开手环直接进账号列表；设置图案后冷启动显示锁屏，正确图案可进入，错误 5 次锁定；菜单为「入口密码/立即同步/关于/退出」；
+- [ ] 2.2.0 未设图案时打开手环直接进账号列表；设置图案后冷启动显示锁屏，正确图案约 0.2 秒进入，错误 5 次锁定；菜单为「立即同步/入口密码/关于/退出」；
+- [ ] 筛选到只剩 1–2 个账号时卡片保持固定高度、不拉伸；详情用户名/密码可读；
+- [ ] Bitwarden 无验证码条目导入后可在手机详情查看用户名/密码，且不参与手环同步；
 - [ ] 手环端验证码与手机端（或 oathtool）对同一时刻一致；
 - [ ] 手机关蓝牙/离开后，手环仍可离线显示验证码；
 - [ ] 删除账号后重新同步，手环端同步移除。
@@ -107,4 +109,5 @@ scripts/check-signing.sh android-app/app/build/outputs/apk/release/app-release.a
 | 验证码不一致 | 手环时间是否准确；算法/位数/周期是否导入正确 |
 | Gradle 构建失败 | JAVA_HOME 是否为 17+；SDK 平台/build-tools 是否安装；网络能否访问 Google Maven |
 | 手环图案与手机不一致 | 手机设置页改图案会自动下发；若失败，手机「同步」页确认连接后重新设置；手环端本地改需旧图案 |
-| 解锁很慢/卡住 | 2.1.2 起 PBKDF2 迭代为 10（Vela 无 JIT，1200 轮在 VVD 实测阻塞 2 分钟以上）；确认两端都是 2.1.2，旧版手环请覆盖安装 |
+| 解锁很慢/卡住 | 2.2.0 起 PBKDF2 迭代为 1（1 轮在 VVD 实测约 0.2 秒；旧版 10/1200 轮更慢）；确认两端都是 2.2.0，旧版手环请覆盖安装 |
+| 手机设图案仍提示未收到手环确认 | 2.2.0 会先拉起手环并重试 3 次；确认手环已安装 2.2.0、在应用列表打开过「腕证」、蓝牙连接正常 |

@@ -222,13 +222,13 @@ function pageOfFilter(filter) {
 
 .header {
   width: 100%;
-  height: 34px;
+  height: 44px;
   flex-direction: row;
   align-items: center;
 }
 
 .title {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: bold;
   lines: 1;
 }
@@ -236,20 +236,20 @@ function pageOfFilter(filter) {
 .hint {
   flex: 1;
   margin-left: 10px;
-  font-size: 11px;
+  font-size: 12px;
   lines: 1;
 }
 
 .close {
-  width: 30px;
-  height: 30px;
-  border-radius: 15px;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
   align-items: center;
   justify-content: center;
 }
 
 .close-text {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: bold;
 }
 
@@ -276,7 +276,7 @@ function pageOfFilter(filter) {
 }
 
 .cell-letter {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: bold;
   text-align: center;
   lines: 1;
@@ -284,24 +284,24 @@ function pageOfFilter(filter) {
 
 .cell-count {
   margin-top: 1px;
-  font-size: 10px;
+  font-size: 13px;
   text-align: center;
   lines: 1;
 }
 
 .dots {
   width: 100%;
-  height: 16px;
+  height: 18px;
   flex-direction: row;
   align-items: center;
   justify-content: center;
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   margin-left: 4px;
   margin-right: 4px;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 </style>

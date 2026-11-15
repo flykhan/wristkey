@@ -330,9 +330,10 @@ private fun AccountCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasOtp = account.hasOtp
     val period = if (account.isSteam) SteamOtp.PERIOD else account.period
-    val remaining = account.remainingSeconds(now)
-    val progress = if (period <= 0) 0f else remaining.toFloat() / period.toFloat()
+    val remaining = if (hasOtp) account.remainingSeconds(now) else 0
+    val progress = if (!hasOtp || period <= 0) 0f else remaining.toFloat() / period.toFloat()
 
     Surface(
         onClick = onClick,
@@ -366,27 +367,44 @@ private fun AccountCard(
                         )
                     }
                 }
-                Text(
-                    remaining.toString() + "s",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextDim,
-                    fontFamily = FontFamily.Monospace,
-                )
+                if (hasOtp) {
+                    Text(
+                        remaining.toString() + "s",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextDim,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                } else {
+                    Text(
+                        "无验证码",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextDim,
+                    )
+                }
             }
             Spacer(Modifier.height(8.dp))
-            Text(
-                account.currentCode(now),
-                style = CodeTextStyle,
-                color = Mint,
-                maxLines = 1,
-            )
-            Spacer(Modifier.height(12.dp))
-            LinearProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(3.dp)),
-                color = Mint,
-                trackColor = OutlineColor,
-            )
+            if (hasOtp) {
+                Text(
+                    account.currentCode(now),
+                    style = CodeTextStyle,
+                    color = Mint,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(3.dp)),
+                    color = Mint,
+                    trackColor = OutlineColor,
+                )
+            } else {
+                Text(
+                    "未设置验证码（仅手机可见）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextDim,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -564,6 +582,15 @@ private fun ImportPreviewSheet(state: AppUiState, actions: AppActions) {
                 StatCell("可导入", result.accounts.size.toString(), Mint, Modifier.weight(1f))
                 StatCell("跳过", result.skipped.size.toString(), Warning, Modifier.weight(1f))
                 StatCell("现有", state.accountCount.toString(), TextPrimary, Modifier.weight(1f))
+            }
+            val noOtpCount = result.accounts.count { !it.hasOtp }
+            if (noOtpCount > 0) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "其中 " + noOtpCount + " 个无验证码（仅手机可见，不参与手环同步）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextDim,
+                )
             }
             if (importState.error != null) {
                 Spacer(Modifier.height(12.dp))
@@ -770,7 +797,11 @@ private fun AccountDetailSheet(account: WristKeyAccount, state: AppUiState, acti
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        account.categoryLabel + " · " + if (account.isSteam) "Steam Guard" else "TOTP",
+                        account.categoryLabel + " · " + when {
+                            !account.hasOtp -> "无验证码"
+                            account.isSteam -> "Steam Guard"
+                            else -> "TOTP"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = TextDim,
                     )
@@ -807,33 +838,47 @@ private fun AccountDetailSheet(account: WristKeyAccount, state: AppUiState, acti
             }
 
             Spacer(Modifier.height(20.dp))
-            Surface(shape = RoundedCornerShape(20.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp)) {
-                    Text("验证码", style = MaterialTheme.typography.bodySmall, color = TextDim)
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(account.currentCode(now), style = CodeTextStyleSmall, color = Mint)
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            account.remainingSeconds(now).toString() + "s",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextDim,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        IconButton(onClick = { actions.onCopy(account.currentCode(now)) }) {
-                            Icon(Icons.Default.Add, contentDescription = "复制验证码", tint = Mint)
+            if (account.hasOtp) {
+                Surface(shape = RoundedCornerShape(20.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("验证码", style = MaterialTheme.typography.bodySmall, color = TextDim)
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(account.currentCode(now), style = CodeTextStyleSmall, color = Mint)
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                account.remainingSeconds(now).toString() + "s",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextDim,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            IconButton(onClick = { actions.onCopy(account.currentCode(now)) }) {
+                                Icon(Icons.Default.Add, contentDescription = "复制验证码", tint = Mint)
+                            }
                         }
+                        LinearProgressIndicator(
+                            progress = {
+                                val period = if (account.isSteam) 30 else account.period
+                                if (period <= 0) 0f else account.remainingSeconds(now).toFloat() / period.toFloat()
+                            },
+                            modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(3.dp)),
+                            color = Mint,
+                            trackColor = OutlineColor,
+                        )
                     }
-                    LinearProgressIndicator(
-                        progress = {
-                            val period = if (account.isSteam) 30 else account.period
-                            if (period <= 0) 0f else account.remainingSeconds(now).toFloat() / period.toFloat()
-                        },
-                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(3.dp)),
-                        color = Mint,
-                        trackColor = OutlineColor,
-                    )
+                }
+            } else {
+                Surface(shape = RoundedCornerShape(20.dp), color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("没有验证码", style = MaterialTheme.typography.bodySmall, color = TextDim)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "该条目只保存了名称/用户名/密码。点「编辑」填写 Secret 后即可显示验证码并同步到手环。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary,
+                        )
+                    }
                 }
             }
 
@@ -912,6 +957,7 @@ private fun DetailField(
                 Text(
                     value,
                     style = MaterialTheme.typography.bodyLarge,
+                    fontSize = 16.sp,
                     color = contentColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -944,8 +990,16 @@ private fun EditorScreen(state: AppUiState, actions: AppActions) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = actions.onEditorClose) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = TextPrimary)
+            IconButton(
+                onClick = actions.onEditorClose,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Icon(
+                    Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp),
+                )
             }
             Text(
                 if (draft.isEditing) "编辑账号" else "新增账号",
@@ -1049,6 +1103,14 @@ private fun EditorScreen(state: AppUiState, actions: AppActions) {
                     },
                     colors = fieldColors(),
                 )
+            }
+            if (draft.isEditing && draft.secret.isEmpty()) {
+                Text(
+                    "该条目目前没有验证码：填写 Secret 后即可显示验证码并同步到手环。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Warning,
+                )
+                Spacer(Modifier.height(6.dp))
             }
             LabeledField("Secret（Base32）") {
                 OutlinedTextField(
@@ -1356,6 +1418,15 @@ private fun SyncScreen(state: AppUiState, actions: AppActions) {
                             style = MaterialTheme.typography.bodySmall,
                             color = TextDim,
                         )
+                        val noOtpCount = state.accounts.count { !it.hasOtp }
+                        if (noOtpCount > 0) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "有 " + noOtpCount + " 个账号没有验证码，仅保留在手机端，不同步到手环。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextDim,
+                            )
+                        }
                     }
                     if (sync.lastAck.isNotBlank()) {
                         Spacer(Modifier.height(6.dp))
@@ -1715,8 +1786,16 @@ private fun PatternScreen(state: AppUiState, actions: AppActions) {
         Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 20.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = actions.onPatternPageBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = TextPrimary)
+            IconButton(
+                onClick = actions.onPatternPageBack,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Icon(
+                    Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp),
+                )
             }
             Text(
                 "入口图案",
@@ -1740,6 +1819,7 @@ private fun PatternScreen(state: AppUiState, actions: AppActions) {
                 "两次输入一致后才能保存"
             },
             style = MaterialTheme.typography.bodySmall,
+            fontSize = 14.sp,
             color = TextDim,
         )
         Spacer(Modifier.height(26.dp))

@@ -79,12 +79,12 @@ test("index is the v3 layout: no top bar, 3 rows, right letter rail", () => {
   assert.ok(source.includes("this.$app.exit"), "左滑应退出应用")
 })
 
-// 2.1.2: the gate is an inline view inside pages/index. The previous design
+// 2.2.0: the gate is an inline view inside pages/index. The previous design
 // pushed pages/lock and returned with router.back(); on Vela a cold start made
 // index push the lock twice and the resulting empty page stack crashed with
 // "PageNavigator getState error: empty stack!" right after the pattern was
 // accepted. The lock must never be a route again.
-test("index gates startup inline without touching the router page stack (2.1.2)", () => {
+test("index gates startup inline without touching the router page stack (2.2.0)", () => {
   const index = read("src/pages/index/index.ux")
   assert.match(index, /if="\{\{ locked \}\}"/, "index 应内联渲染锁屏视图")
   assert.match(index, /if="\{\{ mainVisible \}\}"/, "主界面应与锁屏条件互斥")
@@ -123,8 +123,8 @@ test("menu exposes sync, entry password, about and exit", () => {
 
 test("picker page is registered and renders the 3-page 4x4 grid", () => {
   const manifest = JSON.parse(read("src/manifest.json"))
-  assert.equal(manifest.versionName, "2.1.2")
-  assert.equal(manifest.versionCode, 11)
+  assert.equal(manifest.versionName, "2.2.0")
+  assert.equal(manifest.versionCode, 12)
   assert.ok(manifest.router.pages["pages/picker"], "manifest 缺少 pages/picker 路由")
   assert.equal(manifest.router.pages["pages/picker"].component, "picker")
 
